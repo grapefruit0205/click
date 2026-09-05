@@ -3,12 +3,17 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 
-from scripts.validate_distribution import _release_notes_error, validate
+from scripts.validate_distribution import (
+    _release_notes_error,
+    _release_version,
+    validate,
+)
 
 
 ROOT = Path(__file__).parents[1]
@@ -17,6 +22,39 @@ ROOT = Path(__file__).parents[1]
 class DistributionValidationTests(unittest.TestCase):
     def test_public_distribution_is_self_consistent(self) -> None:
         self.assertEqual(validate(ROOT), [])
+
+    def test_installed_codex_cache_version_keeps_release_metadata_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            installed = Path(temporary) / "click"
+            shutil.copytree(
+                ROOT,
+                installed,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+            )
+            manifest_path = installed / ".codex-plugin" / "plugin.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["version"] = (
+                f"{manifest['version']}+codex.20260905161627"
+            )
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+            )
+
+            self.assertEqual(validate(installed), [])
+
+    def test_only_codex_timestamp_build_metadata_is_accepted(self) -> None:
+        self.assertEqual(_release_version("0.81.1"), "0.81.1")
+        self.assertEqual(
+            _release_version("0.81.1+codex.20260905161627"), "0.81.1"
+        )
+        for invalid in (
+            "0.81.1+codex.latest",
+            "0.81.1+codex.20260905",
+            "0.81.1+build.1",
+            "0.81.1-rc.1",
+        ):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(_release_version(invalid), "")
 
     def test_source_and_antigravity_gate_load_only_sibling_runtime_modules(self) -> None:
         hook_directories = (
