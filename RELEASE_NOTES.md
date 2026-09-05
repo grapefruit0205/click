@@ -1,5 +1,14 @@
 # Release notes
 
+## v0.81.1 — 2026-09-06
+
+- Distribution validation now recognizes the exact
+  `+codex.<14-digit timestamp>` metadata used by installed Codex cache builds,
+  while continuing to validate release notes, README labels, and immutable
+  marketplace refs against the underlying stable release.
+- Regression coverage reproduces the installed-cache manifest rewrite and keeps
+  prerelease, generic build, malformed, and shortened Codex metadata rejected.
+
 ## v0.81.0 — 2026-09-05
 
 - Verification runners now persist each verification-group completion and duration

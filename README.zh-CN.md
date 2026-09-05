@@ -108,7 +108,7 @@ Evidence 模式下直接提出普通请求即可：
 
 ## 更新
 
-当前版本：**v0.81.0**
+当前版本：**v0.81.1**
 
 ~~~bash
 codex plugin marketplace upgrade click

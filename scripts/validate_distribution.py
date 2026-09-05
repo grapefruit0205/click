@@ -24,9 +24,19 @@ except ModuleNotFoundError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+SEMVER = re.compile(
+    r"^(?P<release>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))"
+    r"(?:\+codex\.[0-9]{14})?$"
+)
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 README_NAMES = ("README.md", "README.ko.md", "README.zh-CN.md")
+
+
+def _release_version(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    match = SEMVER.fullmatch(value)
+    return match.group("release") if match is not None else ""
 
 
 def _release_notes_error(release_notes: str, version: str) -> str:
@@ -204,11 +214,14 @@ def validate(root: Path = ROOT) -> list[str]:
     if not isinstance(manifest, dict):
         return errors
     version = manifest.get("version")
+    release_version = _release_version(version)
     if manifest.get("name") != "click":
         errors.append("plugin name must be `click`")
-    if not isinstance(version, str) or SEMVER.fullmatch(version) is None:
-        errors.append("plugin version must be strict stable semver")
-        version = "invalid"
+    if not release_version:
+        errors.append(
+            "plugin version must be stable semver with optional Codex cache metadata"
+        )
+        release_version = "invalid"
     if manifest.get("license") != "MIT":
         errors.append("plugin license must be MIT")
     if _contains_todo(manifest):
@@ -233,8 +246,10 @@ def validate(root: Path = ROOT) -> list[str]:
             errors.append("marketplace plugin name must be `click`")
         if source.get("url") != "https://github.com/grapefruit0205/click.git":
             errors.append("marketplace must use Click's canonical Git URL")
-        if source.get("ref") != f"v{version}":
-            errors.append(f"marketplace ref must be immutable `v{version}`")
+        if source.get("ref") != f"v{release_version}":
+            errors.append(
+                f"marketplace ref must be immutable `v{release_version}`"
+            )
 
     for skill_name in ("click", "fix"):
         _validate_skill(root, skill_name, errors)
@@ -253,13 +268,13 @@ def validate(root: Path = ROOT) -> list[str]:
         errors.append("hooks/hooks.json must meter the canonical Browser MCP tool")
 
     release_notes = (root / "RELEASE_NOTES.md").read_text(encoding="utf-8")
-    release_error = _release_notes_error(release_notes, str(version))
+    release_error = _release_notes_error(release_notes, release_version)
     if release_error:
         errors.append(release_error)
     for readme_name in README_NAMES:
         readme = (root / readme_name).read_text(encoding="utf-8")
-        if f"v{version}" not in readme:
-            errors.append(f"{readme_name} must identify v{version}")
+        if f"v{release_version}" not in readme:
+            errors.append(f"{readme_name} must identify v{release_version}")
 
     for json_path in root.rglob("*.json"):
         _json(json_path, errors, root)

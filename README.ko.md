@@ -106,7 +106,7 @@ Guarded를 직접 선택할 수도 있습니다.
 
 ## 업데이트
 
-현재 릴리스: **v0.81.0**
+현재 릴리스: **v0.81.1**
 
 ~~~bash
 codex plugin marketplace upgrade click

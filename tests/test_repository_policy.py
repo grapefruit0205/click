@@ -46,7 +46,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
             (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "click")
-        self.assertEqual(manifest["version"], "0.81.0")
+        self.assertEqual(manifest["version"], "0.81.1")
         self.assertEqual(manifest["license"], "MIT")
         combined_copy = " ".join(
             (
@@ -72,7 +72,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         self.assertEqual(marketplace["name"], "click")
         self.assertEqual(marketplace["plugins"][0]["name"], "click")
         self.assertEqual(
-            marketplace["plugins"][0]["source"]["ref"], "v0.81.0"
+            marketplace["plugins"][0]["source"]["ref"], "v0.81.1"
         )
 
     def test_readmes_lead_with_incremental_verification_positioning(self) -> None:
@@ -353,13 +353,14 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
 
     def test_release_documents_identify_current_and_preserve_release_history(self) -> None:
         for readme in _readmes().values():
-            self.assertIn("v0.81.0", readme)
+            self.assertIn("v0.81.1", readme)
             self.assertIn("codex plugin marketplace upgrade click", readme)
             self.assertIn("codex plugin add click@click", readme)
             self.assertIn("RELEASE_NOTES.md", readme)
 
         notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
         for marker in (
+            "## v0.81.1",
             "## v0.81.0",
             "## v0.80.0",
             "## v0.70.0",
