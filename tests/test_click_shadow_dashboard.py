@@ -28,7 +28,13 @@ class ClickShadowDashboardTests(ClickGateTestCase):
         node = shutil.which("node")
         if node is None:
             self.skipTest("Node syntax check unavailable; browser verification remains separate")
-        result = subprocess.run([node, "--check"], input=CLICK_SHADOW_DASHBOARD.JS, text=True, capture_output=True)
+        result = subprocess.run(
+            [node, "--check"],
+            input=CLICK_SHADOW_DASHBOARD.JS,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         share = CLICK_SHADOW_DASHBOARD.JS.split("function shareReport()", 1)[1].split("function standaloneReport", 1)[0]
         self.assertNotIn("snapshot.task.promises", share)
