@@ -1011,7 +1011,13 @@ def _successor_binding_reason(
     executable_digest: str,
     host_coverage: dict[str, Any],
 ) -> str:
-    """Validate a prior Evidence fact without pretending it is this lifecycle."""
+    """Validate prior facts against the current lifecycle's bindings."""
+    if (
+        previous.get("dependency_patterns", []) != current.get("dependency_patterns", [])
+        or previous.get("dependency_declaration_digest", "")
+        != current.get("dependency_declaration_digest", "")
+    ):
+        return "contract-binding-changed"
     if previous.get("verified_check_digest") != group_digest:
         return "check-binding-changed"
     if previous.get("verified_root") != git_root:
@@ -1058,6 +1064,8 @@ def _requalify_successor_baseline(
 ) -> None:
     """Create a new-lifecycle baseline only after explicit binding checks."""
     current_shard = current.get("shard")
+    current_patterns = list(current.get("dependency_patterns", []))
+    current_declaration = current.get("dependency_declaration_digest", "")
     preserved = json.loads(json.dumps(previous))
     current.clear()
     current.update(preserved)
@@ -1066,6 +1074,8 @@ def _requalify_successor_baseline(
     else:
         current["shard"] = current_shard
     current.update(
+        dependency_patterns=current_patterns,
+        dependency_declaration_digest=current_declaration,
         status="passed" if exact_tree else "stale",
         verified_revision=revision if exact_tree else max(0, revision - 1),
         attempts=0,
@@ -1095,6 +1105,7 @@ def _requalify_successor_baseline(
         last_successor_reused_at=0,
         last_successor_origin_batch_id="",
         last_successor_origin_evidence_session_id="",
+        last_successor_origin_contract_id="",
         last_successor_candidate_digest="",
         last_successor_origin_revision=-1,
         last_successor_mode="",
@@ -1109,9 +1120,8 @@ def _mark_successor_reuse(
     ) + 1
     source["last_successor_reused_at"] = int(time.time()) or 1
     source["last_successor_origin_batch_id"] = metadata["batch_id"]
-    source["last_successor_origin_evidence_session_id"] = metadata[
-        "evidence_session_id"
-    ]
+    source["last_successor_origin_evidence_session_id"] = metadata.get("evidence_session_id", "")
+    source["last_successor_origin_contract_id"] = metadata.get("contract_id", "")
     source["last_successor_candidate_digest"] = metadata["candidate_digest"]
     source["last_successor_origin_revision"] = metadata["origin_revision"]
     source["last_successor_mode"] = mode
@@ -1889,6 +1899,7 @@ def _prepare_verification(
     # A preparation hook and its runner are different processes. Measure their
     # local elapsed segments, not a subtraction of cross-process clock origins.
     started = time.perf_counter_ns()
+    request_started = time.monotonic_ns()
     trace: dict[str, Any] = {}
     result = _prepare_verification_impl(
         event, raw, runner_script=runner_script, render_command=render_command,
@@ -1910,21 +1921,35 @@ def _prepare_verification(
             if isinstance(tool_id, str) and tool_id else secrets.token_hex(16)
         )
         previous_id = verification.get(click_incremental.CURRENT_BATCH_FIELD)
+        previous_clock = verification.get("incremental_request_clock")
         previous_batch = click_incremental.current_batch(verification)
         batch = click_incremental.new_batch(
             trace.get("plan"), batch_id=request_id,
             revision=int(verification.get("mutation_revision", 0)), prepared_ms=elapsed,
             requested=trace.get("requested"), labels=trace.get("labels"),
             reuse_origins=trace.get("reuse_origins"),
+            task={
+                "mode": state.get("runtime_mode"),
+                "id": state.get("contract_id") if state.get("runtime_mode") == "guarded" else state.get("evidence_session_id"),
+                "name": click_incremental.sanitize_presentation(state.get("presentation"))["name"],
+            },
         )
         if click_incremental.store_batch(verification, batch):
+            click_incremental.start_request_clock(verification, request_id, started_ns=request_started)
             if result[1]:
+                click_incremental.record_control_event(state, event, "verification-request-rejected")
                 click_incremental.reject_batch(verification)
                 if previous_batch and previous_batch["status"] in {"planned", "running"}:
                     verification[click_incremental.CURRENT_BATCH_FIELD] = previous_id
+                    if previous_clock is not None:
+                        verification["incremental_request_clock"] = previous_clock
             elif trace.get("all_reused"):
                 click_incremental.finish_reuse(verification)
+            if result[2]:
+                click_incremental.record_control_event(state, event, "verification-guidance")
             _save_contract_state(event, state)
+            if trace.get("all_reused"):
+                result = (result[0], result[1], "\n".join(filter(None, (result[2], click_incremental.host_summary(verification)))))
     except Exception:
         # Measurements cannot admit/reject a command or grant reuse authority.
         pass
@@ -2140,11 +2165,15 @@ def _prepare_verification_impl(
             source["reserved_check_digest"] = group_digests[source_key]
 
     successor_candidates: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
-    if runtime.evidence:
+    if runtime.evidence or runtime.guarded_approved:
         scope_digest = click_evidence.successor_scope_digest(
             str(click_state.contract_path(event).resolve())
         )
         for source_key in requested_keys:
+            # A current-lifecycle execution (especially a failure) supersedes a
+            # prior candidate. Never resurrect A over B's observed result.
+            if sources[source_key].get("attempts", 0) or sources[source_key].get("verified_contract_digest"):
+                continue
             candidate = click_evidence.successor_candidate(
                 state,
                 source_key,
@@ -2636,10 +2665,13 @@ def _prepare_verification_impl(
     if measurement is not None:
         measurement["plan"] = incremental_plan
         measurement["labels"] = {
+            **click_incremental.sanitize_presentation(state.get("presentation"))["evidence_labels"],
+            **{
             key: str(source["shard"]["shard_id"])
             for key, source in sources.items()
             if isinstance(source, dict)
             and click_evidence_shards.source_metadata_is_valid(source.get("shard"))
+            },
         }
         measurement["reuse_origins"] = {
             key: successor_origins[key]
@@ -3044,6 +3076,7 @@ def _record_verification_result(
                 source_ran = source_results.get(source_key, {}).get("started") is True
             was_current = _evidence_is_current(source, previous_revision)
             if check_positions and source_ran:
+                click_evidence.clear_successor_receipt(source)
                 source["status"] = "failed"
                 source["attempts"] = int(source.get("attempts", 0)) + 1
                 source["unchanged_failure_retries"] = 1
@@ -3083,6 +3116,7 @@ def _record_verification_result(
             if source_results is not None:
                 source_ran = source_results.get(source_key, {}).get("started") is True
             if source_ran:
+                click_evidence.clear_successor_receipt(source)
                 source["attempts"] = int(source.get("attempts", 0)) + 1
             if all(position < succeeded_count for position in check_positions):
                 source["status"] = "passed"
@@ -3948,6 +3982,13 @@ def _run_verification(
     if not recorded:
         sys.stderr.write("Click could not record the verification result safely.\n")
         return exit_code or 2
+    try:
+        result_state = json.loads(state_path.read_text(encoding="utf-8"))
+        message = click_incremental.host_summary(result_state.get("verification"))
+        if message:
+            print(message, flush=True)
+    except (OSError, ValueError, TypeError):
+        pass  # A display failure cannot change the observed verification result.
     return exit_code
 
 

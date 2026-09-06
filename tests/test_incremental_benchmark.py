@@ -10,6 +10,7 @@ import tempfile
 from unittest import mock
 
 from benchmarks.incremental_verification import Fixture, _fixture_runner_argv, comparison_delta, distribution, main
+from benchmarks import incremental_verification as benchmark
 from hooks import click_incremental
 
 
@@ -18,6 +19,42 @@ BENCHMARK = ROOT / "benchmarks" / "incremental_verification.py"
 
 
 class IncrementalVerificationBenchmarkTests(unittest.TestCase):
+    def test_guarded_workflow_compares_three_configs_and_audits_real_successor_reuse(self):
+        result = benchmark.run_guarded_workflow_benchmark(iterations=1, warmups=0, workload_rounds=20)
+        self.assertEqual(result["kind"], "click-guarded-workflow-benchmark")
+        sample = result["samples"][0]
+        self.assertEqual(set(sample["arms"]), {"baseline", "click-default", "explicit-reuse"})
+        digests = [arm["final_input_digest"] for arm in sample["arms"].values()]
+        self.assertEqual(len(set(digests)), 1)
+        for arm in sample["arms"].values():
+            self.assertTrue(all(step["audit_matches"] for step in arm["steps"]))
+            steps = {step["scenario"]: step for step in arm["steps"]}
+            self.assertEqual(steps["failure"]["validation"]["status"], "failed")
+            self.assertEqual(steps["retry"]["validation"]["status"], "passed")
+            self.assertEqual(steps["unchanged"]["audit"]["status"], "passed")
+        explicit = sample["arms"]["explicit-reuse"]
+        steps = {step["scenario"]: step for step in explicit["steps"]}
+        partial = steps["unrelated-code"]["validation"]
+        self.assertEqual((partial["executed_source_count"], partial["reused_source_count"]), (1, 1))
+        reused = next(item for item in partial["batch"]["sources"] if item["status"] == "reused")
+        self.assertEqual(reused["reuse_origin"]["kind"], "successor-contract")
+        self.assertNotEqual(steps["first-run"]["contract_id"], steps["unrelated-code"]["contract_id"])
+        self.assertEqual(steps["related-code"]["validation"]["executed_source_count"], 1)
+        self.assertEqual(steps["environment"]["validation"]["executed_source_count"], 2)
+        failed = next(item for item in steps["failure"]["validation"]["batch"]["sources"] if item["status"] == "failed")
+        self.assertIsNone(failed["reuse_origin"])
+        self.assertEqual(explicit["successor_receipt"]["receipt"]["version"], 5)
+        self.assertTrue(all(item["preapproval_denied"] and item["wrong_id_denied"] and item["separate_turns"] for item in explicit["controls"]))
+        default_steps = sample["arms"]["click-default"]["steps"]
+        self.assertEqual(default_steps[1]["validation"]["reused_source_count"], 0)
+        self.assertNotIn("runner_token", json.dumps(result))
+        report = benchmark.workflow_report_html(result)
+        self.assertIn("<html lang=\"ko\">", report)
+        self.assertIn("음수", report)
+        self.assertNotIn("<script", report)
+        self.assertNotIn("PLUGIN_DATA", report)
+        self.assertNotIn("raw_argv", report)
+
     def test_windows_fixture_runner_keeps_the_preflight_interpreter_and_capability(self) -> None:
         argv = ["py", "-3", str(BENCHMARK), "--encoded-runner", "transport-fixture"]
         with mock.patch("benchmarks.incremental_verification._split", return_value=argv):

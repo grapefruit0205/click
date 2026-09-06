@@ -6,9 +6,11 @@
 
 English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
-> Incremental verification for coding agents.
+> Keep work inside the approved boundary, and keep valid verification reusable.
 
-Click keeps passing checks reusable until the code they depend on actually changes. Its **revision-aware evidence** lets the runtime rerun only the checks affected by the current edit instead of blindly repeating the whole verification set.
+Click provides incremental verification for coding agents. It helps constrain unrequested scope expansion through a reviewed Guarded contract, while **revision-aware evidence** lets valid checks survive a new task. Reuse requires matching execution bindings and, after changes, a complete dependency observation or an explicit policy committed before the baseline. Missing authority means a real rerun, not automatic dependency inference.
+
+Release note: v0.82.0 adds Guarded successor requalification, receipt v5, and the result-first dashboard described here.
 
 Click does not prove that the code is correct or that the selected tests are sufficient. It tracks whether existing verification evidence still applies to the current code.
 
@@ -75,6 +77,8 @@ The original canonical JSON stays hidden unless the user requests the original c
 
 Approve, request changes, cancel, and view original are all available. Approval happens in a later user turn, and work inside the approved boundary continues without repeated approval prompts.
 
+After A completes, B receives a **new contract id and separate approval**. A's successful checks are candidates only: B must request and requalify them. Unrelated code can permit partial reuse under an unchanged precommitted policy; related inputs, changed environment, and new checks run. Approval, runner tokens, unfinished work, and completion do not transfer. The Hook does not semantically prove that every implementation stayed in scope.
+
 ## Install
 
 ~~~bash
@@ -106,7 +110,7 @@ Or explicitly choose Guarded:
 
 ## Update
 
-Current release: **v0.81.1**
+Current release: **v0.82.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -185,7 +189,17 @@ click-gate receipt export
 click-gate receipt verify ./completion-receipt.json
 ~~~
 
-The receipt binds request lineage, mutation revision, final workspace, checks, environment, executable identity, host coverage, and reuse lineage. When a later Evidence task requalifies and applies an earlier success, receipt v4 records `successor-reused` lineage with the origin Evidence session and batch, origin revision, requalification mode, and candidate digest.
+The receipt binds request lineage, mutation revision, final workspace, checks, environment, executable identity, host coverage, and reuse lineage. Evidence successors use v4; an applied Guarded successor uses v5 with the origin contract, batch, revision, requalification mode and candidate digest. Merely retaining candidates does not select v5. Legacy v1–v4 remain readable; v5 retains complete shard provenance when present.
+
+## Reproduce a completed Guarded A → B workflow
+
+~~~sh
+python3 benchmarks/incremental_verification.py --guarded-workflow --iterations 3 --warmups 1 --workload-rounds 40000 --output /tmp/click-workflow.json --html-output /tmp/click-workflow.html
+~~~
+
+This uses independent real Hook/runner fixtures, not approval in your development session. It compares no Click, explicitly selected Guarded with default reuse settings, and Guarded with precommitted shards/sibling-code policy. Evidence remains the product default mode. The fixed flow includes first run, unrelated/related code, environment change, failure, repair and unchanged retry; every step is audited against the same-state full suite. Warmups, rotating execution order, setup/transition/audit costs and negative timing differences are retained. The offline HTML is the v3 three-configuration report; the existing dashboard importer accepts the older v2 paired report. Neither sample results nor unsigned exports prove universal safety or total development-time savings.
+
+The result-first dashboard shows promises and approval, group outcomes, prior-contract provenance, estimated avoided rerun cost and whether a separate comparison exists. A bounded local display copy of contract summaries is retained; it is not an authority source or guaranteed secret redactor. Shared exports omit contract prose, raw commands, input paths and environment values. Request timing is partial (`hook-entry-to-result-recording`), not the full host wait. [Detailed measurement and privacy boundaries](VERIFICATION_EFFICIENCY.md).
 
 Receipt verification currently reports **unsigned-integrity-only**. It detects accidental or uncoordinated changes to the receipt, but it does not yet prove the publisher's identity.
 

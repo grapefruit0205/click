@@ -7,9 +7,11 @@
 [![CI](https://github.com/grapefruit0205/click/actions/workflows/ci.yml/badge.svg)](https://github.com/grapefruit0205/click/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> 코드가 조금 바뀔 때마다 전체 검증 대신 영향을 받은 검사만 다시 실행합니다.
+> 시키지 않은 범위 확장은 억제하고, 유효한 검증은 다시 기다리지 않도록.
 
-Click의 핵심은 **Incremental verification for coding agents**입니다. 통과한 검사가 의존하는 코드가 실제로 바뀔 때까지 그 결과를 재사용할 수 있게 관리합니다. 이 판단은 모델의 추측이 아니라 **revision-aware evidence**에 남습니다.
+Click은 코딩 에이전트를 위한 증분 검증(Incremental verification)을 제공합니다. Guarded 계약으로 승인 범위를 명확히 하고, **revision-aware evidence**로 새 작업에서도 유효한 검증을 이어갑니다. 변경 뒤 재사용하려면 실행 조건 일치와 완전한 의존성 관찰 또는 기준 실행 전에 커밋한 명시적 정책이 필요합니다. 근거가 없으면 실제로 다시 실행하며 의존성을 자동 발견했다고 주장하지 않습니다.
+
+릴리스 안내: v0.82.0에는 여기 설명한 Guarded 후속 계약 재검증·영수증 v5·결과 중심 대시보드가 포함됩니다.
 
 Click은 코드가 올바르거나 선택한 테스트가 충분하다고 증명하지 않습니다. 기존 검증 결과가 현재 코드에도 적용되는지만 추적합니다.
 
@@ -106,7 +108,7 @@ Guarded를 직접 선택할 수도 있습니다.
 
 ## 업데이트
 
-현재 릴리스: **v0.81.1**
+현재 릴리스: **v0.82.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -184,7 +186,19 @@ click-gate receipt export
 click-gate receipt verify ./completion-receipt.json
 ~~~
 
-영수증에는 요청 흐름, mutation revision, 최종 workspace, 검사 결과, 환경, 실행 파일, host coverage, 재사용 이력이 묶입니다. 후속 Evidence 작업에서 재판정해 재사용한 경우 v4 lineage가 원래 Evidence session과 batch, 재판정 방식 및 후보 digest를 기록합니다.
+영수증에는 요청 흐름, mutation revision, 최종 workspace, 검사 결과, 환경, 실행 파일, host coverage, 재사용 이력이 묶입니다. Evidence 후속 재사용은 v4, Guarded 후속 재사용은 v5로 원본 계약·검증 배치·revision·재판정 방식·후보 digest를 기록합니다. 후보 보관만으로 v5가 되지는 않으며 v1–v4 호환성과 완전한 shard 계보를 유지합니다.
+
+## 새 계약에서도 유효한 검증 이어받기
+
+A가 완전히 끝난 후 B를 새 ID로 stage하고 별도 사용자 턴에서 승인합니다. 과거 성공은 후보일 뿐이며 B의 정확한 요청과 현재 조건으로 재판정합니다. 사전 정책이 허용한 무관 코드 변경에는 일부 재사용, 관련 입력·환경 변경과 신규 검사에는 실제 실행으로 돌아갑니다. 승인·runner token·미완료 작업·완료 상태는 승계하지 않습니다. 의미적 범위 준수나 과추론을 완전히 막는 엔진은 아닙니다.
+
+~~~sh
+python3 benchmarks/incremental_verification.py --guarded-workflow --iterations 3 --warmups 1 --workload-rounds 40000 --output /tmp/click-workflow.json --html-output /tmp/click-workflow.html
+~~~
+
+독립 fixture에서 기존 전체 검증·추가 재사용 설정 없는 Guarded·사전 정책과 샤드를 선언한 Guarded를 비교합니다. 제품의 기본 모드는 여전히 Evidence입니다. 최초 실행, 무관/관련 코드, 환경, 실패/수정/재시도를 모두 수행하며 매 단계 같은 상태의 전체 검증과 대조합니다. v3 세 구성 결과는 독립 HTML로 열고, 기존 dashboard importer는 v2 쌍별 비교 JSON을 받습니다. 워밍업·반복·추가 비용·음수 결과를 숨기지 않으며 개발 세션 승인이나 보편적 안전성 증명이 아닙니다.
+
+첫 화면에는 약속·승인·그룹 결과·재실행 비용 회피 추정·비교 실측 여부를 표시합니다. 로컬에는 제한된 계약 표시 문구가 남지만 권한 판단에 쓰지 않고, 공유본에서는 계약 문구·원시 명령·입력 경로·환경 값을 제외합니다. 표시 필터를 완전한 비밀 탐지기로 간주하지 마세요. 요청 시간은 Hook 진입→결과 기록의 부분 계측이며 호스트 전체 대기가 아닙니다. [계측 조건과 한계](VERIFICATION_EFFICIENCY.md).
 
 현재 검증 결과는 **unsigned-integrity-only**입니다. 영수증이 바뀌었는지는 확인하지만 발행자 신원까지 증명하지는 않습니다.
 

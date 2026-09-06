@@ -91,6 +91,19 @@ Click lifecycle.
 
 ## Evidence Map and ROI projection
 
+Projection v4 first shows the current contract's bounded display summary,
+approval state, requested/executed/reused/failed/unstarted verification groups,
+and the distinction between an avoided-rerun-cost estimate and a separately
+measured comparison. Evidence Map and Shadow remain collapsed details.
+The local display copy is not authority and is not guaranteed secret detection;
+shared JSON/HTML omit contract prose, raw argv, input paths and environment
+values. Engine version and unsigned source-file digest identify the snapshot,
+not publisher authenticity. Observed approval/id denials and advisory guidance
+are distinct telemetry, not semantic scope judgments. Group reuse rates expose
+their retained-history numerator, denominator and time window; missing timing
+stays null. Hook-entry-to-result-recording is partial request timing, excluding
+host queueing and final return. See the capability protocol for reuse authority.
+
 The dashboard receives a separate, strict, bounded projection instead of the
 raw Click state. Its first summary is the authoritative incremental plan:
 total sources, sources actually executed, exact/dependency/safe-change reuse,

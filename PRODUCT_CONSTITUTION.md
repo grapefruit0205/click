@@ -107,6 +107,14 @@ In **Guarded authority**, Core additionally guarantees:
 Host adapters may normalize host events and output formats. They may not weaken
 the Core identity, authorization, runner-binding, or receipt invariants.
 
+Completed Guarded work may carry successful candidates, never approval,
+runner tokens, unfinished work or completion, into a separately approved
+successor contract. Current check/input/environment/coverage and existing
+dependency or precommitted policy bindings must requalify every applied reuse.
+Receipt v5 records that lineage without changing Evidence or legacy authority.
+Local display summaries, observed control-event telemetry and partial timing
+remain HEURISTIC: they neither judge semantic scope nor authorize execution.
+
 ## Outside Core
 
 The following are not Click Core responsibilities:

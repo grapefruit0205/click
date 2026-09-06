@@ -11,6 +11,12 @@ not claim that every hard gate has already been moved to its target layer.
 
 ## CORE
 
+Guarded successor candidate capture and current-contract requalification are
+Core evidence boundaries (`click_lifecycle`, `click_evidence`,
+`click_verification`, receipt v5). They never convey approval or runner claims.
+Display summaries, observed denial/advisory counts, group rates and partial
+timing are non-authoritative telemetry, not semantic scope enforcement.
+
 | Guard or invariant | Current owner | Why it remains Core |
 | --- | --- | --- |
 | Authority-mode identity, Evidence intent/follow-up lineage, and Guarded contract validation, digest, ID, later-turn approval, session and working-directory identity | `hooks/click_contract.py`; typed scalar projection in `hooks/click_runtime_state.py`; mode and authority lifecycle in `hooks/click_lifecycle.py` | Prevents receipts from claiming approval in Evidence and prevents mutation under a substituted or unapproved Guarded intent |

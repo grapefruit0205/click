@@ -1063,7 +1063,7 @@ class ClickGateLifecycleTests(ClickGateTestCase):
             (self.workspace / "generated.txt").read_text(encoding="utf-8"), "ok"
         )
 
-    def test_state_records_a_digest_not_contract_plaintext(self) -> None:
+    def test_state_retains_bounded_display_but_not_full_contract_or_read_content(self) -> None:
         self.approve_contract()
         (self.workspace / "private-marker.txt").write_text(
             "private marker\n", encoding="utf-8"
@@ -1081,7 +1081,13 @@ class ClickGateLifecycleTests(ClickGateTestCase):
         self.assertIn('"scale":"focused"', state_text)
         self.assertIn('"unit_limit":4', state_text)
         self.assertNotIn("inventory write path", state_text)
-        self.assertNotIn("threshold crossing", state_text)
+        # The result-first local viewer deliberately retains a bounded display
+        # copy. It is not the canonical contract and never grants authority.
+        state = json.loads(next((self.plugin_data / "gate-state").glob("session-contract-*.json")).read_text())
+        self.assertIn("threshold crossing", json.dumps(state["presentation"]))
+        self.assertEqual(set(state["presentation"]), {
+            "name", "promises", "in_scope", "out_of_scope", "must_hold", "evidence_labels"
+        })
         self.assertNotIn("existing notification mechanism", state_text)
         self.assertNotIn("재고가 임계값", state_text)
         self.assertNotIn('"E1"', state_text)

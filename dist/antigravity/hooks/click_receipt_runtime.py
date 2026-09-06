@@ -172,6 +172,7 @@ def _evidence_receipts(
                 return None, "The host coverage identity changed after argv evidence completed."
 
         if kind == "argv" and int(source.get("successor_reuse_count", 0)) > 0:
+            guarded_origin = source.get("last_successor_origin_contract_id", "")
             lineage = {
                 "mode": "successor-reused",
                 "from_revision": int(
@@ -185,8 +186,8 @@ def _evidence_receipts(
                 "origin_batch_id": str(
                     source.get("last_successor_origin_batch_id", "")
                 ),
-                "origin_evidence_session_id": str(
-                    source.get("last_successor_origin_evidence_session_id", "")
+                ("origin_contract_id" if guarded_origin else "origin_evidence_session_id"): str(
+                    guarded_origin or source.get("last_successor_origin_evidence_session_id", "")
                 ),
                 "requalification_mode": str(
                     source.get("last_successor_mode", "")
@@ -244,6 +245,7 @@ def _evidence_receipts(
         if receipt_version in {
             click_receipt.SHARD_RECEIPT_VERSION,
             click_receipt.SUCCESSOR_RECEIPT_VERSION,
+            click_receipt.GUARDED_SUCCESSOR_RECEIPT_VERSION,
         }:
             metadata = source.get("shard")
             receipt_source["shard"] = (
@@ -301,7 +303,9 @@ def build_envelope(
         for source in sources.values()
     )
     receipt_version = (
-        click_receipt.SUCCESSOR_RECEIPT_VERSION
+        click_receipt.GUARDED_SUCCESSOR_RECEIPT_VERSION
+        if has_successor and any(source.get("last_successor_origin_contract_id") for source in sources.values())
+        else click_receipt.SUCCESSOR_RECEIPT_VERSION
         if has_successor
         else click_receipt.SHARD_RECEIPT_VERSION
         if any(

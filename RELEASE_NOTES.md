@@ -1,5 +1,32 @@
 # Release notes
 
+## v0.82.0 — 2026-09-06
+
+- A completed Guarded contract can now provide successful verification results
+  as candidates to a separately approved successor contract. The successor
+  receives no inherited approval, runner token, completion state, or unfinished
+  work; every candidate is requalified against its current request, tree,
+  mutation, environment, executable, host coverage, dependency, and committed
+  safe-change bindings before reuse.
+- Completion receipt v5 records strict cross-contract lineage back to the source
+  contract, batch, revision, and requalification authority. Legacy receipt
+  versions v1-v4 and existing Evidence Shards remain compatible.
+- Verification batches now preserve honest per-group outcomes, control events,
+  measured processing segments, command-invocation durations, and partial host
+  request timing. Interrupted, failed, not-run, applied-reuse, and legacy-unknown
+  states remain distinct.
+- The result-first dashboard surfaces the approved promise, actual execution and
+  reuse, successor provenance, failures, estimates, and independently measured
+  comparisons. Local presentation is bounded, shared JSON/HTML exports are
+  sanitized, and older histories retain explicit provenance instead of gaining
+  invented certainty.
+- The real three-configuration Guarded benchmark covers code and environment
+  changes, failure and repair, unchanged reruns, and same-state full-suite audits.
+  Negative results stay visible: the bundled short fixture can be slower when
+  verification-management overhead exceeds avoided execution cost.
+- Documentation, tests, and the generated Antigravity distribution are kept in
+  parity with the canonical Codex implementation.
+
 ## v0.81.1 — 2026-09-06
 
 - Distribution validation now recognizes the exact

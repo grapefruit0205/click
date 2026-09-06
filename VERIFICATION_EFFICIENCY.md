@@ -19,6 +19,9 @@ history-only 상태로 보여줍니다. `dashboard stop`, SessionEnd, 기존 최
 viewer를 종료합니다. 다른 host 세션이나 작업 공간은 별도 바인딩이므로 연결되지 않습니다.
 
 상단은 선택한 배치의 **검증 묶음** 수입니다. 개별 테스트 케이스 수나 시간 절감률이 아닙니다.
+현재 계약의 약속과 승인도 함께 표시하며, 새 계약에 현재 배치가 없으면 이전 배치를
+새 계약의 결과로 선택하지 않습니다. 과거 계약에서 재판정한 결과와 같은 계약 재사용은
+구분합니다. 원시 계약·검증 ID와 Evidence Map·Shadow는 펼치는 상세입니다.
 최근 배치를 선택하면 계획, 실제 시작·완료·통과·실패·중단·미실행, 재사용 적용,
 영어 reason code와 한국어 설명, 이전 성공 실행 표본을 확인할 수 있습니다.
 각 묶음이 끝나는 즉시 다음 묶음이 시작되기 전에 완료 상태와 실행 구간을 저장하므로,
@@ -32,6 +35,10 @@ Evidence Map은 최신 배치의 상세 분석이며 과거 배치의 입력 그
 화면의 **JSON 내보내기**, **독립형 HTML 내보내기**는 선택한 실제 배치와 가져온 비교 측정을
 브라우저 다운로드로 저장합니다. HTML은 외부 스크립트·자산·분석 서비스 없이 열립니다.
 공유본은 원시 명령·파일 내용·입력 파일 경로·절대경로·환경 값·runner/access token을 제외합니다.
+계약 문구도 공유본에서 제외합니다. 로컬 상태에는 제한된 name/promises/범위/불변조건과
+최근 8개 계약의 표시용 이력이 남습니다. 제한·필터는 완전한 비밀 탐지기가 아닙니다.
+공유본에는 현재/원본 계약과 check digest, 계측 조건, 엔진 버전·파일 digest가 남지만
+어느 것도 서명된 발행자 증명은 아닙니다. 표시 데이터는 실행 권한에 역으로 쓰지 않습니다.
 검증을 실행하거나 재사용 권한을 바꾸지 않습니다. 서명이나 발행자 인증이 있는 receipt는 아닙니다.
 사용자 문자열은 DOM textContent로 표시하여 HTML로 실행하지 않습니다.
 
@@ -39,7 +46,7 @@ Evidence Map은 최신 배치의 상세 분석이며 과거 배치의 입력 그
 
 | 값 | 의미와 계측 경계 |
 | --- | --- |
-| 전체 검증 대기시간 `request_wall_ms` | 요청 처리부터 반환까지. 현재 제품의 분리된 Hook/runner 구조는 전체 경계를 관찰하지 못하므로 **null / 측정 정보 없음**. 0ms로 채우지 않습니다. |
+| 부분 요청 구간 `request_wall_ms` | Hook 검증 준비 진입부터 결과 기록까지. 같은 monotonic 구현과 배치 바인딩을 확인할 때만 기록합니다. 호스트 큐·Hook 초기 로딩·최종 저장과 호스트 반환은 제외하므로 전체 대기가 아닙니다. 옛 데이터·시계 불일치·미확정 종료는 **null / 미측정**이며 0ms로 채우지 않습니다. |
 | 부분 처리 구간 `measured_processing_ms` | 준비 함수 진입부터 기존 판정·상태 저장 직후까지, 그리고 runner 진입부터 결과 기록 중 계측 저장 직전까지의 **각 프로세스 로컬 경과시간 합계**. 서로 다른 monotonic 원점을 빼지 않습니다. 호스트 대기·전달, 계측 자체의 최종 저장, host 최종 반환은 제외합니다. |
 | 검사 실행 구간 `executed_duration_ms` | 실제 시작이 관찰된 묶음의 명령 호출 구간 합계. spawn/시작 기록과 Observer 준비·수집·정리 비용이 이 호출 안에 있으면 포함됩니다. 순수 테스트 CPU 시간이 아닙니다. |
 | 생략한 비용 `estimated_avoided_ms` | **실제로 적용된 재사용**의 최근 성공 실행 표본을 합한 추정치. 실행하지 않은 현재 명령의 반사실적 시간은 알 수 없으며 실측 절약이라고 부르지 않습니다. |
@@ -57,6 +64,45 @@ Evidence Map은 최신 배치의 상세 분석이며 과거 배치의 입력 그
 옛 정수 시간 필드만 있는 데이터는 정확한 출처가 없으므로 새 추정 근거로 꾸미지 않습니다.
 Observer overhead는 별도 Shadow 정보이며 위 실행 구간에 다시 더하거나 빼지 않습니다.
 tracing slowdown은 비교 측정하지 않았으며 Shadow 후보를 실제 재사용 수나 실측 절약에 합치지 않습니다.
+
+재사용률은 보관 이력의 **재사용 그룹 요청 수 / 전체 그룹 요청 수**와 기간을 공개합니다.
+별도 재시도는 실제 새 요청이므로 분모에 포함되지만 같은 배치의 재전송과 화면 새로고침은
+중복 누적하지 않습니다. 분모가 불명확하거나 0이면 비율은 null입니다. 시간 표본이 없는
+재사용 그룹 수도 별도로 남깁니다. 승인 전 거부·ID 불일치 등 실제 관측 사건은 blocked,
+검증 지침은 advisory이며 문구 의미 분석이나 숨은 추론 감시로 만든 사건은 없습니다.
+
+## Guarded A → B · 세 구성의 고정 작업 흐름
+
+```sh
+python3 benchmarks/incremental_verification.py --guarded-workflow --iterations 3 --warmups 1 --workload-rounds 40000 --output /tmp/click-workflow.json --html-output /tmp/click-workflow.html
+```
+
+새 출력 파일에만 기록합니다. 이 v3 세 구성 보고서는 독립 HTML로 열고, 아래의 기존
+v2 쌍별 보고서만 현재 dashboard importer에 입력합니다. 새 프레임워크나 서비스가 필요 없습니다.
+
+- baseline: Click Hook 없이 동일한 unittest discover 전체 실행.
+- click-default: Guarded를 명시적으로 선택하고 추가 shard/dependency/reuse 설정 없이 실행.
+- explicit-reuse: 같은 코드와 테스트를 두 샤드로 나누고 서로 독립인 sibling 코드 변경을
+  허용하는 정책을 최초 baseline 전에 커밋. 정책은 관찰기나 자동 의존성 발견이 아닙니다.
+
+제품 기본 모드는 Evidence 그대로입니다. 각 구성은 독립 임시 Git root와 receipt를 사용하며
+첫 실행→beta 코드 변경→alpha 코드 변경→환경 변경→alpha 실패→수정 후 재시도→변경 없음의
+같은 일곱 단계를 진행합니다. 테스트·코드 digest를 매 단계 구성 간 대조합니다. A 완료 뒤
+B를 새 ID로 stage하고 별도 fixture 턴에서 승인합니다. 이후 완료된 단계도 별도 계약을
+사용하고 실패·수정은 같은 미완료 계약 안에서 처리합니다. 승인 전 수정·같은 턴 승인·잘못된
+ID가 실제로 거부되는지 확인합니다. 개발 세션의 승인이나 Hook 설정은 변경하지 않습니다.
+
+각 단계의 primary 요청 뒤 동일 상태의 전체 suite를 직접 실행하여 PASS/FAIL과 exit code를
+대조합니다. 이 감사는 별도 추가 비용이며 Click의 성공 기록을 만들지 않습니다. 마지막 전체
+suite가 통과해야 보고서를 생성합니다. B와 최종 영수증은 실제 export와 오프라인 무결성 검사를
+거친 unsigned envelope입니다. 정상 표본의 일치는 모든 프로젝트에서 안전하다는 증명이 아닙니다.
+
+워밍업은 전체 workflow 반복을 제외하며 반복마다 새 checkout을 만듭니다. 세 구성 실행 순서를
+회전하고 bytecode는 비활성화하지만 OS 캐시·스케줄러는 초기화/제어하지 않습니다. 일곱 요청 합계의
+차이와 비율은 기대된 실패·재시도도 포함하고 음수를 보존합니다. Click 요청에는 Hook·runner
+시작 비용도 포함됩니다. Git·첫 fixture 승인 setup, 이후 승인/수정 transition, 추가 full audit를
+별도 기록합니다. 영수증 export·보고서 직렬화 비용은 제외됩니다. Scripted 승인 시간은 사람의
+의사결정 시간이 아니며 검증 시간 차이를 토큰·요금·전체 개발시간 절감으로 환산하지 않습니다.
 
 ## 실제 비교 벤치마크
 
@@ -131,3 +177,9 @@ history, 공유 리포트와 Shadow record를 authoritative evidence로 역변�
 후속 Evidence 재사용이 있는 completion receipt는 v4 `successor-reused` lineage로 원래 batch와
 Evidence session, 원래 revision, 재판정 방식(exact/dependency/safe-change), 후보 digest를
 기록합니다. 이것은 여전히 `unsigned-integrity-only`이며 발행자 신원 인증은 아닙니다.
+
+Guarded A가 완전히 끝난 뒤 B가 별도 승인되면 같은 조건으로 성공 후보를 재판정할 수 있습니다.
+B의 의존성 선언이 달라지면 A 선언을 물려받지 않고 실제로 다시 실행합니다. 실제 적용된
+Guarded 후속 재사용은 receipt v5에서 원본 contract id를 기록합니다. 실패한 B 결과를 A 후보로
+덮어씌우지 않으며 B에서 다시 실제 실행한 그룹은 과거 successor 표시를 지웁니다. 기존 v1–v4와
+Evidence의 호스트 권한은 보존됩니다.

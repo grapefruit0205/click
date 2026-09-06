@@ -108,7 +108,7 @@ Evidence 模式下直接提出普通请求即可：
 
 ## 更新
 
-当前版本：**v0.81.1**
+当前版本：**v0.82.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -178,6 +178,12 @@ exact/dependency/policy 复用、根据最近运行估算的避免时间，以�
 运行 `python3 benchmarks/incremental_verification.py --iterations 3 --warmups 1 --output /tmp/click-comparison.json` 可通过真实 Hook 和 runner 进行本地配对比较，再在 Dashboard 中选择 JSON。界面按“验证组”区分计划、实际执行、复用和未执行，提供批次时间线与 JSON/独立 HTML 导出；局部实测、未测量的完整等待时间、历史成本估算和 Shadow 分开显示。短检查可能因管理成本而变慢。详见[计量范围与使用说明](VERIFICATION_EFFICIENCY.md)。
 
 ## 完成 receipt
+
+版本说明：v0.82.0 已包含以下 Guarded 后续合约重新验证、receipt v5 和结果优先界面。
+
+Guarded 的已完成合约 A 可以把真实成功结果作为候选交给新合约 B，但 B 必须使用新 ID 并在独立用户轮次中批准。重新核对当前请求、环境与既有策略后才能复用；批准、runner token、未完成工作和完成状态不会继承。实际应用跨合约复用时使用 receipt v5，保留原合约、检查批次、revision 和重新判定来源；旧版 v1–v4 继续兼容。Evidence 仍是默认模式。
+
+运行 `python3 benchmarks/incremental_verification.py --guarded-workflow --iterations 3 --warmups 1 --output /tmp/click-workflow.json --html-output /tmp/click-workflow.html` 可比较不使用 Click、Guarded 默认复用设置与预先提交策略/分片的配置。包含代码与环境变化、失败重试及每步完整验证对照。v3 使用独立 HTML，现有仪表板仍导入 v2 双路径报告。负数差异和额外成本不会隐藏；局部测量与避免重跑成本估计不是总开发时间节省。
 
 当前代码所需的 evidence 完整后，可以导出并验证 receipt：
 

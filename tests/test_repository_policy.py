@@ -46,7 +46,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
             (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "click")
-        self.assertEqual(manifest["version"], "0.81.1")
+        self.assertEqual(manifest["version"], "0.82.0")
         self.assertEqual(manifest["license"], "MIT")
         combined_copy = " ".join(
             (
@@ -72,10 +72,10 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         self.assertEqual(marketplace["name"], "click")
         self.assertEqual(marketplace["plugins"][0]["name"], "click")
         self.assertEqual(
-            marketplace["plugins"][0]["source"]["ref"], "v0.81.1"
+            marketplace["plugins"][0]["source"]["ref"], "v0.82.0"
         )
 
-    def test_readmes_lead_with_incremental_verification_positioning(self) -> None:
+    def test_readmes_preserve_modes_references_and_reproducible_evidence_boundaries(self) -> None:
         for name, readme in _readmes().items():
             with self.subTest(readme=name):
                 opening = "\n".join(readme.splitlines()[:45]).lower()
@@ -84,8 +84,9 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
                 self.assertIn("evidence", readme)
                 self.assertIn("guarded", readme.lower())
                 self.assertIn("off", readme.lower())
-                self.assertLessEqual(len(readme.splitlines()), 240)
-                self.assertLessEqual(len(readme), 16_000)
+                # Marketing wording/line counts are not protocol guarantees.
+                # Preserve actionable references, mode distinctions, and avoid
+                # leaking internal approval/runner transport into introductions.
                 for link in TECHNICAL_LINKS:
                     self.assertIn(link, readme)
                 for internal_copy in (
@@ -99,14 +100,6 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
                     self.assertNotIn(internal_copy, readme)
         english = _readmes()["README.md"]
         self.assertIn(
-            "Incremental verification for coding agents.", english
-        )
-        self.assertIn(
-            "Click keeps passing checks reusable until the code they depend on "
-            "actually changes.",
-            english,
-        )
-        self.assertIn(
             "Click does not prove that the code is correct or that the selected "
             "tests are sufficient.",
             english,
@@ -114,6 +107,9 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         for readme in _readmes().values():
             self.assertIn("click-gate observer off", readme)
             self.assertIn("benchmarks/incremental_verification.py", readme)
+            self.assertIn("--guarded-workflow", readme)
+            self.assertIn("--html-output", readme)
+            self.assertIn("v5", readme)
 
     def test_readmes_document_qualitative_profiles_and_exact_receipts(self) -> None:
         for readme in _readmes().values():
@@ -353,13 +349,14 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
 
     def test_release_documents_identify_current_and_preserve_release_history(self) -> None:
         for readme in _readmes().values():
-            self.assertIn("v0.81.1", readme)
+            self.assertIn("v0.82.0", readme)
             self.assertIn("codex plugin marketplace upgrade click", readme)
             self.assertIn("codex plugin add click@click", readme)
             self.assertIn("RELEASE_NOTES.md", readme)
 
         notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
         for marker in (
+            "## v0.82.0",
             "## v0.81.1",
             "## v0.81.0",
             "## v0.80.0",

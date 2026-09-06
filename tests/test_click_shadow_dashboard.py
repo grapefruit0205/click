@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import subprocess
 from pathlib import Path
 import threading
 import time
@@ -22,6 +24,40 @@ from click_gate_test_support import (
 
 
 class ClickShadowDashboardTests(ClickGateTestCase):
+    def test_dashboard_javascript_parses_and_keeps_contract_prose_out_of_share_report(self) -> None:
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node syntax check unavailable; browser verification remains separate")
+        result = subprocess.run([node, "--check"], input=CLICK_SHADOW_DASHBOARD.JS, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        share = CLICK_SHADOW_DASHBOARD.JS.split("function shareReport()", 1)[1].split("function standaloneReport", 1)[0]
+        self.assertNotIn("snapshot.task.promises", share)
+        self.assertNotIn("snapshot.task.name", share)
+        self.assertIn("projection_version", share)
+        self.assertIn("reuse_origin", share)
+
+    def test_guarded_contract_transition_keeps_viewer_history_without_authority(self) -> None:
+        self.set_default("guarded", "turn-0")
+        self.approve_contract()
+        first_id = self.active_contract_id()
+        self.assertEqual(self.run_rewritten(self.verify_gate([self.verification_argv()])).returncode, 0)
+        self.arm_gate("turn-3")
+        contract = self.contract()
+        contract["outcome"] = "다음 계약의 검증"
+        staged = self.stage_gate(contract, "turn-3")
+        self.assertEqual(staged["hookSpecificOutput"]["permissionDecision"], "allow")
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        projection = CLICK_SHADOW_DASHBOARD.click_dashboard_projection.dashboard_projection(state)
+        self.assertFalse(projection["task"]["approval_bound"])
+        self.assertEqual(projection["task"]["name"], "다음 계약의 검증")
+        self.assertNotEqual(projection["task"]["contract_id"], first_id)
+        self.assertIsNone(projection["history"]["current_batch_id"])
+        self.assertEqual(projection["batches"][-1]["task"]["id"], first_id)
+        self.assertEqual(projection["sources"][0]["execution_status"], "not-run")
+        self.assertEqual(state["verification"]["status"], "ready")
+        self.assertEqual(state["approved_turn_id"], "")
+
     def test_control_parser_accepts_only_explicit_dashboard_actions(self) -> None:
         for action in ("start", "stop", "status"):
             self.assertEqual(
@@ -225,7 +261,10 @@ class ClickShadowDashboardTests(ClickGateTestCase):
         with urllib.request.urlopen(base + "/", timeout=2) as response:
             html = response.read().decode()
             self.assertEqual(response.status, 200)
-            self.assertIn("얼마나 기다렸나요?", html)
+            self.assertIn("약속한 범위 안에서", html)
+            self.assertIn('id="approvalState"', html)
+            self.assertIn('id="contractPromises"', html)
+            self.assertIn('<details class="panel telemetry">', html)
             self.assertIn("실제 재사용", html)
             self.assertIn("독립형 HTML 내보내기", html)
             self.assertIn("default-src 'none'", response.headers["Content-Security-Policy"])
@@ -249,7 +288,10 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             self.assertEqual(payload["summary"]["shadow"]["candidate_count"], 0)
             self.assertNotIn("actual_saved_ms", body)
             self.assertNotIn(str(self.workspace), body)
-            self.assertNotIn("contract_id", body)
+            self.assertEqual(payload["task"]["contract_id"], self.active_contract_id())
+            self.assertNotIn("runner_token", body)
+            self.assertNotIn(access_token, body)
+            self.assertNotIn("raw_argv", body)
 
         wrong_host = urllib.request.Request(
             base + "/", headers={"Host": "attacker.invalid"}

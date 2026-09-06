@@ -90,6 +90,16 @@ def _write_state(
     click_state.write_json(click_state.state_path(event), payload)
 
 
+def record_control_event(event: dict[str, Any], code: str) -> None:
+    """Called within the host's state lock; failures cannot affect admission."""
+    try:
+        state = _read_contract_state(event)
+        if state and click_incremental.record_control_event(state, event, code):
+            _save_contract_state(event, state)
+    except Exception:
+        pass
+
+
 def _read_state(event: dict[str, Any]) -> dict[str, Any]:
     path = click_state.state_path(event)
     try:
@@ -111,9 +121,8 @@ def _write_contract_state(
     event: dict[str, Any], status: str, digest: str, contract: dict[str, Any]
 ) -> str:
     contract_id = f"ctr_{secrets.token_hex(16)}"
-    click_state.write_json(
-        click_state.contract_path(event),
-        {
+    previous = _read_contract_state(event)
+    current = {
             "state_schema_version": CONTRACT_STATE_SCHEMA_VERSION,
             "status": status,
             "contract_digest": digest,
@@ -121,6 +130,7 @@ def _write_contract_state(
             "staged_turn_id": str(event.get("turn_id", "")),
             "approved_turn_id": "",
             "runtime_mode": "guarded",
+            "presentation": click_incremental.contract_presentation(contract),
             "intent_digest": digest,
             "intent_turn_id": str(event.get("turn_id", "")),
             "follow_up_turns": [],
@@ -136,9 +146,52 @@ def _write_contract_state(
                 click_shadow_dashboard.fresh_state()
             ),
             "updated_at": int(time.time()),
-        },
-    )
+        }
+    if (
+        click_runtime_state.view(previous).guarded_approved
+        and _contract_is_completed(previous)
+    ):
+        _carry_completed_candidates(event, previous, current)
+    # Viewer history is deliberately separate from the fresh authority ledger.
+    presentations = previous.get("presentation_history", {})
+    presentations = dict(presentations) if isinstance(presentations, dict) else {}
+    if CONTRACT_ID_PATTERN.fullmatch(str(previous.get("contract_id", ""))):
+        presentations[previous["contract_id"]] = click_incremental.sanitize_presentation(previous.get("presentation"))
+    current["presentation_history"] = dict(list(presentations.items())[-8:])
+    current["verification"][click_incremental.CURRENT_BATCH_FIELD] = None
+    _save_contract_state(event, current)
     return contract_id
+
+
+def _carry_completed_candidates(
+    event: dict[str, Any], previous: dict[str, Any], current: dict[str, Any]
+) -> None:
+    verification = previous.get("verification", {})
+    revision = verification.get("mutation_revision", 0)
+    _, claim_error = click_claims.receipt_entries(previous, settle_through_revision=revision)
+    if claim_error:
+        return
+    sources = _evidence_sources(previous) or {}
+    origins: dict[str, dict[str, str]] = {}
+    for batch in click_incremental.batch_history(previous.get("verification")):
+        for source in batch["sources"]:
+            fact = sources.get(source["source_key"], {})
+            if (
+                source["status"] in {"passed", "reused"}
+                and batch["current_revision"] == revision
+                and source["check_digest"] == fact.get("verified_check_digest")
+            ):
+                origins[source["source_key"]] = {
+                    "batch_id": batch["batch_id"],
+                    "execution_status": source["status"],
+                }
+    click_evidence.carry_successor_evidence(
+        previous, current, origins=origins,
+        scope_digest=click_evidence.successor_scope_digest(
+            str(click_state.contract_path(event).resolve())
+        ),
+        expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+    )
 
 
 def _fresh_evidence_state(
@@ -213,25 +266,7 @@ def _ensure_evidence_state(event: dict[str, Any]) -> tuple[dict[str, Any], bool]
         previous = state
         state = _fresh_evidence_state(event, history_complete=not recovered)
         if completed_evidence:
-            origins: dict[str, dict[str, str]] = {}
-            for batch in click_incremental.batch_history(
-                previous.get("verification")
-            ):
-                for source in batch["sources"]:
-                    if source["status"] in {"passed", "reused"}:
-                        origins[source["source_key"]] = {
-                            "batch_id": batch["batch_id"],
-                            "execution_status": source["status"],
-                        }
-            click_evidence.carry_successor_evidence(
-                previous,
-                state,
-                origins=origins,
-                scope_digest=click_evidence.successor_scope_digest(
-                    str(click_state.contract_path(event).resolve())
-                ),
-                expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
-            )
+            _carry_completed_candidates(event, previous, state)
         _save_contract_state(event, state)
         return state, recovered
     if _append_follow_up(event, state):
@@ -712,6 +747,7 @@ def pass_contract(event: dict[str, Any], contract_id: str) -> tuple[str, str]:
             "it explicitly, then stage and show the contract again.",
         )
     if contract_id != expected_id:
+        record_control_event(event, "contract-id-mismatch")
         return (
             "",
             "The contract_id differs from the proposal staged for user approval. "
