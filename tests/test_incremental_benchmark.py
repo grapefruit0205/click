@@ -19,9 +19,17 @@ BENCHMARK = ROOT / "benchmarks" / "incremental_verification.py"
 
 
 class IncrementalVerificationBenchmarkTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workflow_result = benchmark.run_guarded_workflow_benchmark(
+            iterations=1, warmups=0, workload_rounds=20,
+        )
+
     def test_guarded_workflow_compares_three_configs_and_audits_real_successor_reuse(self):
-        result = benchmark.run_guarded_workflow_benchmark(iterations=1, warmups=0, workload_rounds=20)
+        result = json.loads(json.dumps(self.workflow_result))
         self.assertEqual(result["kind"], "click-guarded-workflow-benchmark")
+        self.assertEqual(result["version"], 4)
+        self.assertTrue(benchmark.workflow_report_is_valid(result))
         sample = result["samples"][0]
         self.assertEqual(set(sample["arms"]), {"baseline", "click-default", "explicit-reuse"})
         digests = [arm["final_input_digest"] for arm in sample["arms"].values()]
@@ -32,6 +40,8 @@ class IncrementalVerificationBenchmarkTests(unittest.TestCase):
             self.assertEqual(steps["failure"]["validation"]["status"], "failed")
             self.assertEqual(steps["retry"]["validation"]["status"], "passed")
             self.assertEqual(steps["unchanged"]["audit"]["status"], "passed")
+            self.assertTrue(all(set(step["full_checks"]) == {"same-shards", "parent-suite"}
+                                for step in arm["steps"]))
         explicit = sample["arms"]["explicit-reuse"]
         steps = {step["scenario"]: step for step in explicit["steps"]}
         partial = steps["unrelated-code"]["validation"]
@@ -40,6 +50,7 @@ class IncrementalVerificationBenchmarkTests(unittest.TestCase):
         self.assertEqual(reused["reuse_origin"]["kind"], "successor-contract")
         self.assertNotEqual(steps["first-run"]["contract_id"], steps["unrelated-code"]["contract_id"])
         self.assertEqual(steps["related-code"]["validation"]["executed_source_count"], 1)
+        self.assertEqual(steps["all-code"]["validation"]["executed_source_count"], 2)
         self.assertEqual(steps["environment"]["validation"]["executed_source_count"], 2)
         failed = next(item for item in steps["failure"]["validation"]["batch"]["sources"] if item["status"] == "failed")
         self.assertIsNone(failed["reuse_origin"])
@@ -47,6 +58,30 @@ class IncrementalVerificationBenchmarkTests(unittest.TestCase):
         self.assertTrue(all(item["preapproval_denied"] and item["wrong_id_denied"] and item["separate_turns"] for item in explicit["controls"]))
         default_steps = sample["arms"]["click-default"]["steps"]
         self.assertEqual(default_steps[1]["validation"]["reused_source_count"], 0)
+        comparisons = result["comparison_samples"]
+        self.assertEqual(len(comparisons), 2 * len(benchmark.WORKFLOW_STEPS) * 2)
+        partial_pairs = [item for item in comparisons if item["configuration"] == "explicit-reuse"
+                         and item["scenario"] == "unrelated-code"]
+        self.assertEqual({item["comparison"] for item in partial_pairs}, {"same-shards", "parent-suite"})
+        self.assertTrue(all(item["eligible"] for item in partial_pairs))
+        self.assertEqual(
+            next(item for item in partial_pairs if item["comparison"] == "same-shards")["click"]["measurement_scope"],
+            "executed-source-command-duration-sum",
+        )
+        self.assertEqual(
+            next(item for item in partial_pairs if item["comparison"] == "parent-suite")["click"]["measurement_scope"],
+            "driver-preflight-through-runner-return",
+        )
+        failures = [item for item in comparisons if item["scenario"] == "failure"]
+        self.assertTrue(failures)
+        self.assertTrue(all(not item["eligible"] for item in failures))
+        self.assertTrue(all(item["excluded_reason"] == "verification-not-passed"
+                            for item in failures if item["scope_equivalent"]))
+        default_same = [item for item in comparisons if item["configuration"] == "click-default"
+                        and item["comparison"] == "same-shards"]
+        self.assertTrue(all(not item["scope_equivalent"] and item["excluded_reason"] == "scope-not-equivalent"
+                            for item in default_same if not item["warmup"]))
+        self.assertGreater(steps["unrelated-code"]["validation"]["click_non_test_interval_ms"], 0)
         self.assertNotIn("runner_token", json.dumps(result))
         report = benchmark.workflow_report_html(result)
         self.assertIn("<html lang=\"ko\">", report)
@@ -54,6 +89,56 @@ class IncrementalVerificationBenchmarkTests(unittest.TestCase):
         self.assertNotIn("<script", report)
         self.assertNotIn("PLUGIN_DATA", report)
         self.assertNotIn("raw_argv", report)
+
+    def test_v4_report_validation_rejects_units_scopes_sources_and_tampered_math(self):
+        result = json.loads(json.dumps(self.workflow_result))
+        for path, bad in (
+            (("unit",), "seconds"),
+            (("source",), "claimed-production"),
+            (("comparison_samples", 0, "unit"), "s"),
+            (("comparison_samples", 0, "baseline", "measurement_scope"), "unknown"),
+            (("comparison_samples", 0, "delta_ms"), 999999),
+        ):
+            changed = json.loads(json.dumps(result))
+            target = changed
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = bad
+            self.assertFalse(benchmark.workflow_report_is_valid(changed), path)
+
+    def test_measurement_order_crosses_positions_and_repository_reference_uses_real_inventory(self):
+        orders = {tuple(benchmark._rotated(benchmark.WORKFLOW_MEASUREMENTS, index)) for index in range(3)}
+        self.assertEqual(len(orders), 3)
+        passed = {"duration_ms": 10.0, "status": "passed", "exit_code": 0,
+                  "executed_command_count": 1, "not_run_command_count": 0}
+        with mock.patch.object(benchmark, "_repository_group", side_effect=[passed, passed, passed, passed]):
+            reference = benchmark.run_repository_bundle_reference(iterations=2, warmups=0)
+        self.assertEqual(reference["source"], "current-repository-test-bundle")
+        self.assertEqual(reference["unit"], "ms")
+        self.assertTrue(benchmark.repository_reference_is_valid(reference))
+        self.assertEqual([item["order"] for item in reference["samples"]],
+                         [["same-shards", "parent-suite"], ["parent-suite", "same-shards"]])
+        tampered = json.loads(json.dumps(reference))
+        tampered["samples"][0]["delta_ms"] = 999
+        self.assertFalse(benchmark.repository_reference_is_valid(tampered))
+        result = json.loads(json.dumps(self.workflow_result))
+        result["repository_reference"] = reference
+        self.assertTrue(benchmark.workflow_report_is_valid(result))
+        self.assertIn("실제 저장소 테스트 번들 참조", benchmark.workflow_report_html(result))
+
+    def test_repository_group_timeout_is_bounded_and_not_eligible(self):
+        with mock.patch.object(
+            benchmark.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(["check"], timeout=1),
+        ):
+            result = benchmark._repository_group(
+                [["check"], ["later"]], timeout_seconds=1
+            )
+        self.assertEqual(result["status"], "timeout")
+        self.assertEqual(result["exit_code"], 124)
+        self.assertEqual(result["executed_command_count"], 1)
+        self.assertEqual(result["not_run_command_count"], 1)
 
     def test_windows_fixture_runner_keeps_the_preflight_interpreter_and_capability(self) -> None:
         argv = ["py", "-3", str(BENCHMARK), "--encoded-runner", "transport-fixture"]

@@ -39,7 +39,9 @@ if __package__:
         click_inspection,
         click_mutation,
         click_observation,
+        click_authoritative_observer,
         click_observer_control,
+        click_observer_runtime,
         click_process,
         click_runtime_state,
         click_shadow_intelligence,
@@ -61,7 +63,9 @@ else:  # Executed directly from the bundled hooks directory.
     import click_inspection
     import click_mutation
     import click_observation
+    import click_authoritative_observer
     import click_observer_control
+    import click_observer_runtime
     import click_process
     import click_runtime_state
     import click_shadow_intelligence
@@ -78,6 +82,8 @@ VERIFICATION_CLASSES = click_verification_meter.VERIFICATION_CLASSES
 RUNNING_TTL_SECONDS = 60 * 60
 VERIFY_RUNNING_TTL_SECONDS = RUNNING_TTL_SECONDS
 PYTHON_VERIFICATION_MODULES = {"coverage", "pytest", "unittest"}
+PYTHON_VERIFICATION_EXECUTABLES = {"python", "python3", "py", "pypy", "pypy3"}
+VERSIONED_PYTHON_EXECUTABLE = re.compile(r"^python3[.][0-9]+$")
 DEEP_VERIFICATION_EXECUTABLES = {
     "bandit", "cargo-audit", "cypress", "k6", "locust", "nox", "playwright",
     "semgrep", "snyk", "tox", "trivy",
@@ -379,6 +385,17 @@ def _verification_environment(*, cwd: Path) -> dict[str, str]:
     }
     environment["PWD"] = str(cwd.resolve())
     return environment
+
+
+def _observer_environment(
+    environment: dict[str, str], verification: Any
+) -> dict[str, str]:
+    """Bind the deterministic Python profile selected by authoritative mode."""
+    normalized = dict(environment)
+    if click_observer_control.mode(verification) == "authoritative":
+        normalized["PYTHONHASHSEED"] = "0"
+        normalized["PYTHONDONTWRITEBYTECODE"] = "1"
+    return normalized
 
 
 def _verification_environment_key(key: str) -> str:
@@ -699,6 +716,53 @@ def _dependency_observations(
                 "paths": list(observation["paths"]),
             }
     return observations
+
+
+def _binding_path_digest(path: Path) -> str:
+    return _capability_digest({"path": os.path.normcase(str(path.resolve()))})
+
+
+def _authoritative_shard_digest(source: dict[str, Any]) -> str:
+    metadata = source.get("shard")
+    return _capability_digest({
+        "shard": metadata if click_evidence_shards.source_metadata_is_valid(metadata) else None
+    })
+
+
+def _authoritative_current_bindings(
+    *,
+    sources: dict[str, Any],
+    source_keys: set[str],
+    group_digests: dict[str, str],
+    cwd: Path,
+    workspace_root: Path,
+    environment_digests: dict[str, str],
+    executable_digests: dict[str, str],
+    host_coverage_digest: str,
+    policy_digests: dict[str, str],
+) -> dict[str, dict[str, Any]]:
+    bindings: dict[str, dict[str, Any]] = {}
+    for source_key in source_keys:
+        source = sources.get(source_key)
+        policy_digest = policy_digests.get(source_key)
+        if (
+            not isinstance(source, dict)
+            or not isinstance(policy_digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", policy_digest) is None
+        ):
+            continue
+        bindings[source_key] = {
+            "evidence_key": source_key,
+            "check_digest": group_digests[source_key],
+            "cwd_digest": _binding_path_digest(cwd),
+            "workspace_root_digest": _binding_path_digest(workspace_root),
+            "environment_digest": environment_digests[source_key],
+            "executable_digest": executable_digests[source_key],
+            "host_coverage_digest": host_coverage_digest,
+            "policy_digest": policy_digest,
+            "shard_digest": _authoritative_shard_digest(source),
+        }
+    return bindings
 
 
 def _dependency_receipt_is_valid(receipt: Any) -> bool:
@@ -1131,6 +1195,10 @@ def _mark_successor_reuse(
 def _observation_nonreuse_reason(observation: Any) -> str:
     if not click_dependency_cache.dependency_observation_is_valid(observation):
         return "observer-incomplete"
+    if observation.get("provider") != (
+        click_dependency_cache.AUTHORITATIVE_OBSERVATION_PROVIDER_NAME
+    ):
+        return "observer-incomplete"
     if observation.get("external_access") is True:
         return "external-input-unmodeled"
     if not click_dependency_cache.dependency_observation_is_complete(observation):
@@ -1160,6 +1228,10 @@ def _canonical_incremental_plan(
     *,
     requested_keys: set[str],
     group_digests: dict[str, str],
+    environment_digests: dict[str, str],
+    executable_digests: dict[str, str],
+    host_coverage_digest: str,
+    observer_mode: str,
     revision: int,
     previous_revisions: dict[str, int],
     reused_keys: set[str],
@@ -1186,9 +1258,22 @@ def _canonical_incremental_plan(
         else:
             selected = "run"
             authority = "runner"
+        timing_binding = click_incremental.timing_binding_digest(
+            source_key=source_key,
+            check_digest=group_digests[source_key],
+            environment_digest=environment_digests[source_key],
+            executable_digest=executable_digests[source_key],
+            host_coverage_digest=host_coverage_digest,
+            observer_mode=observer_mode,
+        )
         baseline = source.get("last_success_duration_baseline")
-        if (not click_incremental.baseline_is_valid(baseline)
-            or baseline["check_digest"] != group_digests[source_key]):
+        if not click_incremental.baseline_is_suitable(
+            baseline,
+            source_key=source_key,
+            check_digest=group_digests[source_key],
+            observer_mode=observer_mode,
+            timing_binding_digest=timing_binding,
+        ):
             baseline = None
         avoided = baseline["duration_ms"] if baseline is not None else None
         decisions.append(
@@ -1278,7 +1363,10 @@ def _minimum_verification_class(
         return None
     if executable in DEEP_VERIFICATION_EXECUTABLES:
         return "deep"
-    if executable in {"python", "python3", "py", "pypy", "pypy3"}:
+    if (
+        executable in PYTHON_VERIFICATION_EXECUTABLES
+        or VERSIONED_PYTHON_EXECUTABLE.fullmatch(executable)
+    ):
         if executable == "py" and arguments and re.fullmatch(
             r"-\d+(?:\.\d+)?(?:-\d+)?", arguments[0]
         ):
@@ -2201,7 +2289,9 @@ def _prepare_verification_impl(
         if not_evaluable:
             not_evaluable_keys.add(source_key)
 
-    prepared_environment = _verification_environment(cwd=workspace)
+    prepared_environment = _observer_environment(
+        _verification_environment(cwd=workspace), verification
+    )
     current_environment_digests: dict[str, str] = {}
     current_executable_digests: dict[str, str] = {}
     for source_key in requested_keys:
@@ -2448,6 +2538,37 @@ def _prepare_verification_impl(
                     source_key: grouped_checks[source_key]
                     for source_key in dependency_candidates
                 }
+                authoritative_runtime = (
+                    click_observer_runtime.state_from_verification(verification)
+                    if click_observer_control.mode(verification) == "authoritative"
+                    else None
+                )
+                if (
+                    authoritative_runtime is not None
+                    and click_observer_runtime.validate(
+                        workspace, authoritative_runtime
+                    ) is None
+                ):
+                    authoritative_runtime = None
+                policy_digests = click_dependency_cache.observation_policy_bindings(
+                    workspace,
+                    candidate_checks,
+                    declarations=_dependency_declarations(
+                        sources, dependency_candidates
+                    ),
+                    git_capture=git_capture,
+                ) if candidate_checks else {}
+                authoritative_bindings = _authoritative_current_bindings(
+                    sources=sources,
+                    source_keys=dependency_candidates,
+                    group_digests=group_digests,
+                    cwd=workspace,
+                    workspace_root=Path(git_root),
+                    environment_digests=current_environment_digests,
+                    executable_digests=current_executable_digests,
+                    host_coverage_digest=str(host_coverage.get("digest", "")),
+                    policy_digests=policy_digests,
+                ) if candidate_checks else {}
                 dependency_receipts = (
                     click_dependency_cache.receipts_for_groups(
                         workspace,
@@ -2458,6 +2579,9 @@ def _prepare_verification_impl(
                         observations=_dependency_observations(
                             sources, dependency_candidates
                         ),
+                        authoritative_only=True,
+                        authoritative_runtime=authoritative_runtime,
+                        authoritative_bindings=authoritative_bindings,
                         git_capture=git_capture,
                     )
                     if candidate_checks
@@ -2642,6 +2766,10 @@ def _prepare_verification_impl(
             sources,
             requested_keys=requested_keys,
             group_digests=group_digests,
+            environment_digests=current_environment_digests,
+            executable_digests=current_executable_digests,
+            host_coverage_digest=str(host_coverage.get("digest", "")),
+            observer_mode=click_observer_control.mode(verification),
             revision=revision,
             previous_revisions=previous_revisions,
             reused_keys=reused_keys,
@@ -2906,10 +3034,12 @@ def _record_verification_result(
     environment_digests: dict[str, str] | None = None,
     source_durations_ms: dict[str, int | float] | None = None,
     dependency_observations: dict[str, dict[str, Any]] | None = None,
+    authoritative_observations: dict[str, dict[str, Any]] | None = None,
     shadow_observer_records: dict[str, dict[str, Any]] | None = None,
     shadow_intelligence_baselines: dict[str, dict[str, Any]] | None = None,
     shadow_source_exit_codes: dict[str, int] | None = None,
     shadow_execution_contexts: dict[str, dict[str, Any]] | None = None,
+    observer_mode: str | None = None,
     *,
     source_results: dict[str, dict[str, Any]] | None = None,
     runner_started_ns: int | None = None,
@@ -2972,6 +3102,27 @@ def _record_verification_result(
         )
     ):
         return False
+    selected_observer_mode = (
+        click_observer_control.mode(verification)
+        if observer_mode is None
+        else observer_mode
+    )
+    measured_batch = click_incremental.current_batch(verification)
+    measured_task = (
+        measured_batch.get("task")
+        if isinstance(measured_batch, dict)
+        else None
+    )
+    origin_task = (
+        {"mode": measured_task["mode"], "id": measured_task["id"]}
+        if click_incremental.batch_task_is_valid(measured_task)
+        else {}
+    )
+    origin_batch_id = (
+        str(measured_batch.get("batch_id", ""))
+        if isinstance(measured_batch, dict)
+        else ""
+    )
     prepared_environment_digests = verification.get(
         "running_environment_digests"
     )
@@ -3026,12 +3177,79 @@ def _record_verification_result(
     grouped_checks, grouping_error = _verification_groups(batch)
     if grouping_error or set(grouped_checks) != running_keys:
         return False
+    authoritative_runtime = (
+        click_observer_runtime.state_from_verification(verification)
+        if selected_observer_mode == "authoritative"
+        else None
+    )
+    if (
+        authoritative_runtime is not None
+        and click_observer_runtime.validate(
+            Path(workspace_root or Path.cwd()), authoritative_runtime
+        ) is None
+    ):
+        authoritative_runtime = None
+    policy_digests = (
+        click_dependency_cache.observation_policy_bindings(
+            Path(workspace_root),
+            grouped_checks,
+            declarations=_dependency_declarations(sources, running_keys),
+            git_capture=git_capture,
+        )
+        if workspace_root and not workspace_changed else {}
+    )
+    current_bindings = (
+        _authoritative_current_bindings(
+            sources=sources,
+            source_keys=running_keys,
+            group_digests={
+                key: _verification_group_digest(checks)
+                for key, checks in grouped_checks.items()
+            },
+            cwd=Path.cwd(),
+            workspace_root=Path(workspace_root),
+            environment_digests=environment_digests,
+            executable_digests=prepared_executable_digests,
+            host_coverage_digest=str(running_host_coverage.get("digest", "")),
+            policy_digests=policy_digests,
+        )
+        if workspace_root and not workspace_changed else {}
+    )
+    trusted_observations: dict[str, dict[str, Any]] = {}
+    if (
+        authoritative_runtime is not None
+        and isinstance(authoritative_observations, dict)
+        and workspace_digest
+        and re.fullmatch(r"[0-9a-f]{64}", workspace_digest)
+    ):
+        for source_key, current_binding in current_bindings.items():
+            envelope = authoritative_observations.get(source_key)
+            if envelope is None:
+                continue
+            verified = click_authoritative_observer.verified_observation(
+                envelope,
+                secret=runner_token,
+                expected_binding={
+                    **current_binding,
+                    "mutation_revision": claimed_revision,
+                    "workspace_tree_digest": workspace_digest,
+                    "contract_digest": str(state.get("contract_digest", "")),
+                },
+            )
+            if verified is not None:
+                trusted_observations[source_key] = verified
     dependency_receipts = (
         click_dependency_cache.receipts_for_groups(
             Path(workspace_root),
             grouped_checks,
             declarations=_dependency_declarations(sources, running_keys),
-            observations=dependency_observations,
+            # Legacy/caller-provided observation JSON is intentionally ignored.
+            # Only a runner-token attestation from this invocation reaches the
+            # authoritative receipt builder.
+            observations=trusted_observations,
+            authoritative_only=True,
+            authoritative_runtime=authoritative_runtime,
+            authoritative_bindings=current_bindings,
             git_capture=git_capture,
         )
         if not workspace_changed and workspace_root and workspace_digest
@@ -3129,15 +3347,7 @@ def _record_verification_result(
                 # Keep the legacy ledger's integer field compatible. Consumers
                 # of precise/unknown timing use the separate, validated baseline.
                 source["last_success_duration_ms"] = int(measured_durations.get(source_key) or 0)
-                batch_id = verification.get(click_incremental.CURRENT_BATCH_FIELD)
-                duration_baseline = {
-                    "duration_ms": measured_durations.get(source_key),
-                    "revision": revision, "check_digest": source.get("last_check_digest"),
-                    "observed_at": int(time.time()), "batch_id": batch_id, "sample_count": 1,
-                }
-                source["last_success_duration_baseline"] = (
-                    duration_baseline if click_incremental.baseline_is_valid(duration_baseline) else None
-                )
+                source["last_success_duration_baseline"] = None
                 environment_digest = str(
                     environment_digests.get(source_key, "")
                 )
@@ -3163,7 +3373,33 @@ def _record_verification_result(
                     source["verified_host_coverage"] = dict(
                         running_host_coverage
                     )
-                    source["verified_at"] = int(time.time())
+                    observed_at = int(time.time()) or 1
+                    source["verified_at"] = observed_at
+                    timing_binding = click_incremental.timing_binding_digest(
+                        source_key=source_key,
+                        check_digest=check_digest,
+                        environment_digest=environment_digest,
+                        executable_digest=str(
+                            prepared_executable_digests.get(source_key, "")
+                        ),
+                        host_coverage_digest=str(
+                            running_host_coverage.get("digest", "")
+                        ),
+                        observer_mode=selected_observer_mode,
+                    )
+                    source["last_success_duration_baseline"] = (
+                        click_incremental.build_duration_baseline(
+                            duration_ms=measured_durations.get(source_key),
+                            source_key=source_key,
+                            revision=revision,
+                            check_digest=check_digest,
+                            observed_at=observed_at,
+                            batch_id=origin_batch_id,
+                            origin_task=origin_task,
+                            observer_mode=selected_observer_mode,
+                            timing_binding_digest=timing_binding,
+                        )
+                    )
                     _store_dependency_receipt(
                         source, dependency_receipts.get(source_key)
                     )
@@ -3379,16 +3615,25 @@ def _claim_verification_run(
         runner_token,
     ):
         return None, "Click verification runner environment binding was malformed."
+    current_environment = _observer_environment(
+        _verification_environment(cwd=Path.cwd()), verification
+    )
     verification_environment, environment_rebound, binding_error = (
         _verification_environment_from_binding(
             running_environment_binding,
             runner_token,
-            _verification_environment(cwd=Path.cwd()),
+            current_environment,
         )
     )
     if binding_error:
         return None, binding_error
     assert verification_environment is not None
+    policy_digests = click_dependency_cache.observation_policy_bindings(
+        Path.cwd(),
+        grouped_checks,
+        declarations=_dependency_declarations(sources, running_keys),
+        git_capture=git_capture,
+    )
     shadow_bindings: dict[str, str] = {}
     for source_key, checks in grouped_checks.items():
         source = sources.get(source_key)
@@ -3467,6 +3712,47 @@ def _claim_verification_run(
             "host_coverage_digest": str(running_host_coverage.get("digest", "")),
         }
         for source_key in sorted(running_keys)
+    }
+    authoritative_runtime = (
+        click_observer_runtime.state_from_verification(verification)
+        if click_observer_control.mode(verification) == "authoritative"
+        else None
+    )
+    if (
+        authoritative_runtime is not None
+        and click_observer_runtime.validate(Path.cwd(), authoritative_runtime) is None
+    ):
+        authoritative_runtime = None
+    root_output = git_capture(Path.cwd(), ["rev-parse", "--show-toplevel"])
+    try:
+        authoritative_root = (
+            Path(os.fsdecode(root_output.strip())).resolve(strict=True)
+            if root_output is not None else None
+        )
+    except (OSError, RuntimeError):
+        authoritative_root = None
+    authoritative_current = (
+        _authoritative_current_bindings(
+            sources=sources,
+            source_keys=running_keys,
+            group_digests=shadow_bindings,
+            cwd=Path.cwd(),
+            workspace_root=authoritative_root,
+            environment_digests=prepared_environment_digests,
+            executable_digests=prepared_executable_digests,
+            host_coverage_digest=str(running_host_coverage.get("digest", "")),
+            policy_digests=policy_digests,
+        )
+        if authoritative_root is not None else {}
+    )
+    batch["_click_authoritative_runtime"] = authoritative_runtime
+    batch["_click_authoritative_contexts"] = {
+        source_key: {
+            **authoritative_current[source_key],
+            "mutation_revision": int(verification.get("mutation_revision", 0)),
+            "contract_digest": str(state.get("contract_digest", "")),
+        }
+        for source_key in sorted(authoritative_current)
     }
     batch["_click_mutation_revision"] = int(
         verification.get("mutation_revision", 0)
@@ -3625,6 +3911,8 @@ def _run_verification(
     git_capture: Callable[[Path, list[str]], bytes | None] = _git_capture,
     shadow_execute: Callable[..., click_dependency_trace.ShadowExecution]
     | None = None,
+    authoritative_execute: Callable[..., click_authoritative_observer.AuthoritativeExecution]
+    | None = None,
 ) -> int:
     if len(arguments) != 4:
         sys.stderr.write(
@@ -3672,10 +3960,16 @@ def _run_verification(
     )
     shadow_bindings = batch.pop("_click_shadow_bindings", {})
     shadow_contexts = batch.pop("_click_shadow_contexts", {})
+    authoritative_runtime = batch.pop("_click_authoritative_runtime", None)
+    authoritative_contexts = batch.pop("_click_authoritative_contexts", {})
     shadow_revision = batch.pop("_click_mutation_revision", -1)
     observer_mode = batch.pop("_click_observer_mode", "off")
     shadow_enabled = observer_mode == "shadow"
+    authoritative_enabled = observer_mode == "authoritative"
     active_shadow_execute = shadow_execute or click_dependency_trace.run_command
+    active_authoritative_execute = (
+        authoritative_execute or click_authoritative_observer.run_command
+    )
     if environment_rebound:
         print(
             "[Click] Verification runner environment changed after preparation; "
@@ -3704,6 +3998,7 @@ def _run_verification(
     source_results: dict[str, dict[str, Any]] = {}
     source_completed_commands: dict[str, int] = {}
     per_source_shadow_records: dict[str, list[dict[str, Any]]] = {}
+    authoritative_envelopes: dict[str, dict[str, Any]] = {}
     source_key = ""
     if not snapshot_failed:
         try:
@@ -3740,16 +4035,66 @@ def _run_verification(
                     and not isinstance(shadow_revision, bool)
                     and shadow_revision >= 0
                 )
+                authoritative_context = (
+                    authoritative_contexts.get(source_key)
+                    if isinstance(authoritative_contexts, dict)
+                    else None
+                )
+                can_record_authoritative = bool(
+                    authoritative_enabled
+                    and isinstance(authoritative_runtime, dict)
+                    and isinstance(authoritative_context, dict)
+                    and len(grouped_checks.get(source_key, [])) == 1
+                    and isinstance(before, dict)
+                    and isinstance(before.get("digest"), str)
+                    and re.fullmatch(r"[0-9a-f]{64}", before["digest"])
+                )
                 command_started = time.perf_counter_ns()
                 def execute_current() -> int:
+                    execute_unobserved = lambda current=argv: execute_commands(
+                        [current], environment=verification_environment
+                    )
+                    observer_compatible = bool(
+                        click_inspection.execution_argv(argv) == argv
+                        and not click_inspection.is_git_remote_output_request(argv)
+                    )
+                    if can_record_authoritative and observer_compatible:
+                        assert isinstance(authoritative_context, dict)
+                        authoritative_result = active_authoritative_execute(
+                            argv,
+                            workspace=Path.cwd(),
+                            observation_root=shadow_workspace,
+                            environment=verification_environment,
+                            binding_context={
+                                **authoritative_context,
+                                "workspace_tree_digest": str(before["digest"]),
+                            },
+                            runtime=authoritative_runtime,
+                            runner_token=runner_token,
+                            execute_unobserved=execute_unobserved,
+                            resolve_backend=_resolve_read_only_executable,
+                            digest_file=file_content_digest,
+                        )
+                        authoritative_envelopes[source_key] = (
+                            authoritative_result.envelope
+                        )
+                        observation = authoritative_result.envelope.get(
+                            "observation", {}
+                        )
+                        reasons = observation.get("ineligibility_reasons", [])
+                        if observation.get("status") == "complete":
+                            print(
+                                "[Click authoritative observer] complete bound input snapshot",
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                "[Click authoritative observer] reuse unavailable: "
+                                + ", ".join(str(reason) for reason in reasons),
+                                flush=True,
+                            )
+                        return authoritative_result.exit_code
                     if can_record_shadow:
-                        execute_unobserved = lambda current=argv: execute_commands(
-                            [current], environment=verification_environment
-                        )
-                        observer_compatible = bool(
-                            click_inspection.execution_argv(argv) == argv
-                            and not click_inspection.is_git_remote_output_request(argv)
-                        )
                         if observer_compatible:
                             shadow_result = active_shadow_execute(
                                 argv,
@@ -3972,11 +4317,13 @@ def _run_verification(
             source_results=source_results,
             runner_started_ns=runner_started_ns,
             shadow_observer_records=combined_shadow_records,
+            authoritative_observations=authoritative_envelopes,
             shadow_intelligence_baselines=shadow_intelligence_baselines,
             shadow_source_exit_codes=shadow_source_exit_codes,
             shadow_execution_contexts=(
                 shadow_contexts if isinstance(shadow_contexts, dict) else {}
             ),
+            observer_mode=observer_mode,
             git_capture=git_capture,
         )
     if not recorded:

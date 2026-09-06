@@ -11,7 +11,7 @@
 
 Click은 코딩 에이전트를 위한 증분 검증(Incremental verification)을 제공합니다. Guarded 계약으로 승인 범위를 명확히 하고, **revision-aware evidence**로 새 작업에서도 유효한 검증을 이어갑니다. 변경 뒤 재사용하려면 실행 조건 일치와 완전한 의존성 관찰 또는 기준 실행 전에 커밋한 명시적 정책이 필요합니다. 근거가 없으면 실제로 다시 실행하며 의존성을 자동 발견했다고 주장하지 않습니다.
 
-릴리스 안내: v0.82.0에는 여기 설명한 Guarded 후속 계약 재검증·영수증 v5·결과 중심 대시보드가 포함됩니다.
+릴리스 안내: v0.90.0에는 지속적 비용 gate 기반 unittest/pytest 샤딩 설정, 제한된 조회 결과 캐시, fail-closed native observer profile이 포함됩니다.
 
 Click은 코드가 올바르거나 선택한 테스트가 충분하다고 증명하지 않습니다. 기존 검증 결과가 현재 코드에도 적용되는지만 추적합니다.
 
@@ -108,7 +108,7 @@ Guarded를 직접 선택할 수도 있습니다.
 
 ## 업데이트
 
-현재 릴리스: **v0.82.0**
+현재 릴리스: **v0.90.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -137,13 +137,14 @@ revision을 넘어 결과를 재사용하려면 선택적으로 다음 파일에
 .click/evidence-dependencies.json
 ~~~
 
-커밋된 의존 관계 파일이 검사별 재사용 권한을 정합니다. 구체적으로 적은 파일은
-항상 의존성으로 유지합니다. baseline 관찰이 완전하면 `*`, `**`, 디렉터리 같은
-확장 패턴은 실제로 검사가 사용한 입력까지 좁히고, 관찰된 입력을 영수증에 함께
-해시합니다. 작업 트리에서만 바꾼 의존 관계 파일은 커밋된 정책을 좁힐 수
-없습니다. 관찰 기능이 없거나 실패했거나, 외부 입력을 읽었거나, 자식 프로세스
-전체를 추적하지 못했다면 Click은 코드가 바뀐 뒤 검사를 다시 실행합니다.
-의존 관계 파일이 없어도 Click은 동작하지만 역시 재실행합니다.
+커밋된 의존 관계 파일은 검사별 후보 입력 경계를 선언하지만 그 자체로 재사용
+권한을 주지는 않습니다. 구체적으로 적은 파일은 항상 의존성으로 유지합니다.
+별도로 승인된 Guarded 계약에서 authoritative 관찰을 명시적으로 켜고 baseline이
+완전한 경우에만 `*`, `**`, 디렉터리 같은 확장 패턴을 실제로 검사가 사용한
+입력까지 좁히며, 모든 관찰 입력을 영수증에 함께 해시합니다. 작업 트리에서만
+바꾼 의존 관계 파일은 커밋된 정책을 좁힐 수 없습니다. 관찰이 없거나 불완전하면
+Click은 코드가 바뀐 뒤 검사를 다시 실행합니다. 의존 관계 파일이 없어도 Click은
+동작하지만 역시 재실행합니다.
 
 README나 문서처럼 특정 검사에 영향을 주지 않는다고 저장소가 확실히 아는
 변경에는 observer 없이 다음 안전 변경 정책을 커밋할 수 있습니다.
@@ -171,7 +172,11 @@ Git과 플러그인의 Python만 사용하므로 Linux, macOS, Windows에서 별
 모든 의존성을 자동 발견했다는 뜻은 아닙니다.
 커밋된 [Evidence Shards 맵](skills/click/references/evidence-shards-v1.md)은 정확한 broad suite 하나를 독립 자식으로 나눠, 뒤의 shard가 실패해도 앞의 통과 결과를 보존합니다. 이 맵만으로 mutation 뒤 재사용할 수는 없으며 위 규칙이 자식별로 다시 적용되고, 맵이 잘못되면 원래 suite를 실행합니다.
 
-Observer는 기본적으로 꺼져 있고 Dashboard와 별개입니다. `click-gate observer off`, `shadow`, `status`로 제어하며, 명시적으로 `shadow`를 켠 때만 호환되는 실제 검사에 네이티브 수집기를 붙입니다. Linux는 `strace`, 권한이 이미 있는 macOS는 `fs_usage`, Windows는 기본 ETW 도구인 `logman.exe`와 `tracerpt.exe`를 사용합니다. Click은 도구를 설치하거나 권한을 올리지 않으며 Shadow 예측만으로 검사를 생략하지 않습니다. Dashboard는 실제 실행, 권한 있는 exact/dependency/policy 재사용, 최근 실행 기준 추정 회피 시간, Shadow 잠재값을 분리하며 `click-gate dashboard start`, `status`, `stop`으로 제어합니다.
+지원 프로젝트에서는 `click-gate sharding init`, `sharding status`, `sharding refresh`만으로 JSON 없이 명령 선택, 검토용 proposal, Evidence 적용 또는 별도 승인된 Guarded 적용, 사용자가 직접 하는 커밋, parent/child bootstrap, baseline evidence까지 진행할 수 있습니다. 실측 비용 규칙은 짧은 suite를 원래 parent 명령으로 유지합니다. 이후 테스트 발견 대상이나 테스트 구조가 바뀌면 제한된 diff를 만들고, 이전에 Click이 생성해 커밋된 digest와 현재 bytes가 정확히 맞는 정책만 갱신합니다. 사용자 소유 또는 수정된 설정은 덮어쓰지 않으며 `git add`, `commit`, `push`도 실행하지 않습니다. 첫 bootstrap은 설정 비용이며 모든 자식의 authoritative 관찰이 완전하기 전에는 `sharding-ready / reuse-unavailable`로 표시합니다. 자세한 흐름은 [자동 샤딩 설정](skills/click/references/automatic-sharding-setup.md)을 확인하세요.
+
+[설정 없는 두 프로젝트 E2E 기록](docs/auto-sharding-e2e.md)은 실제 Guarded A→B 모듈 변경, 부분 자식 재사용, 같은 최종 코드의 전체 감사와 짧은 fixture에서 나온 음수 전체 요청 결과를 그대로 보여줍니다.
+
+Observer는 기본적으로 꺼져 있고 Dashboard와 별개입니다. `click-gate observer off`, `click-gate observer shadow`, `click-gate observer authoritative`, `click-gate observer status`로 제어합니다. `shadow`는 지원되는 Linux, macOS, Windows backend의 비권위 telemetry이며 검사 생략 권한이 아닙니다. `authoritative`는 별도로 승인된 Guarded 계약에서 CPython 3.12.3의 직접 `python -m unittest` 검사에만 쓸 수 있습니다. Linux의 정확한 strace 6.8 profile은 실제 host 검증을 마쳤습니다. macOS `fs_usage`와 Windows ETW native profile도 구현했지만 실기기 검증 대기 상태를 별도로 표시합니다. 각 profile은 이미 설치된 build 입력으로 identity가 결속된 native companion을 준비하고 원래 검사를 한 번만 실행하며, 완전하고 서명된 입력 snapshot만 재사용 권한으로 인정합니다. Click은 도구를 설치하거나 권한을 올리지 않습니다. 자세한 경계는 [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)를 확인하세요. Dashboard는 실제 실행, 권한 있는 exact/dependency/policy 재사용, 최근 실행 기준 추정 회피 시간, Shadow 잠재값을 분리하며 `click-gate dashboard start`, `status`, `stop`으로 제어합니다.
 
 검증 효율 화면은 **검증 묶음**별 계획과 실제 실행·재사용·미실행을 구분합니다. 부분 계측과 전체 대기시간, 과거 실행 기반 추정을 섞지 않으며 배치 타임라인과 JSON·독립형 HTML 공유본을 제공합니다. `python3 benchmarks/incremental_verification.py --iterations 3 --warmups 1 --output /tmp/click-comparison.json`으로 실제 Hook·runner 비교를 실행한 뒤 화면에서 JSON을 선택하세요. 짧은 검사는 관리 비용 때문에 느려질 수도 있습니다. [계측 범위·모드별 차이·내보내기](VERIFICATION_EFFICIENCY.md)를 확인하세요.
 
@@ -241,7 +246,7 @@ README는 일부러 쉽게 유지합니다. 세부 프로토콜은 아래 문서
 - [Guarded 계약 형식](skills/click/references/directive-format.md)
 - [검증 profile](skills/click/references/verification-profiles.md)
 - [Capability protocol](skills/click/references/capability-protocol.md)
-- [Shadow Observer v1](skills/click/references/observer-v1.md), [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md), [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
+- [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md), [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Anti-loop 정책](skills/click/references/anti-loop-policy.md)
 
 ## 라이선스

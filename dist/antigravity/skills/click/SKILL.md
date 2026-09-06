@@ -28,11 +28,22 @@ Do not treat a question about Click as a mutation. Bypass and cancel require the
 
 ## Evidence mode: work first, bind evidence honestly
 
-Use the current user prompt as the intent lineage. Do not invent a contract, contract approval, or approved dependency declaration. Choose concrete checks from repository evidence during execution and submit their stable evidence ids with `click-gate verify`; Evidence mode may register those argv sources dynamically. Same-revision reuse still requires exact receipt bindings. Cross-revision reuse requires both a committed `.click/evidence-dependencies.json` mapping and a complete baseline runtime dependency observation. Concrete paths remain hard dependencies, expanding manifest patterns may be refined to observed inputs, and every effective input must remain unchanged.
+Use the current user prompt as the intent lineage. Do not invent a contract, contract approval, or approved dependency declaration. Choose concrete checks from repository evidence during execution and submit their stable evidence ids with `click-gate verify`; Evidence mode may register those argv sources dynamically. Same-revision reuse still requires exact receipt bindings. A committed `.click/evidence-dependencies.json` mapping remains candidate policy only in Evidence mode because authoritative observation requires an approved Guarded contract. Caller-supplied observation JSON, profiling output, and Shadow data never grant reuse authority.
 
 An exact check may also use a committed `.click/evidence-reuse.json` safe-change entry without an observer. Treat that file only as repository-owner authority established before the baseline: never create, widen, or reinterpret it to skip checks for the current mutation. Click compares the baseline and current effective Git states, reports net changed paths, and reuses only when every path matches `reuse_if_only_changed`. Any unknown or unlisted path reruns automatically. A complete runtime observation is stronger and cannot be overridden by this declaration.
 
 A repository may decompose an exact broad source through committed [Evidence Shards v1](references/evidence-shards-v1.md). Continue submitting the declared parent id and argv; Click validates and runs the children. The shard map authorizes decomposition only. After mutation, each child still needs the ordinary dependency-observation or safe-change authority before its prior pass can be reused.
+
+For a supported repository that has no shard policy, use the JSON-free
+`click-gate sharding init|status|refresh` workflow in
+[automatic sharding setup](references/automatic-sharding-setup.md). Collection,
+proposal generation, and bootstrap require an active Evidence runtime or a
+separately approved Guarded contract. In Evidence, an explicit `refresh` may
+apply the reviewed proposal under host authority; Guarded requires a later
+digest-bound application approval. Keep proposal review, application, the
+user's exact policy commit, bootstrap validation, and baseline evidence as
+separate steps. Never stage, commit, push, overwrite user configuration, or
+describe the first baseline as savings.
 
 An in-scope or narrowing follow-up continues the same Evidence session and appends a prompt digest. Start a fresh session when the previous one is complete. The final receipt must distinguish host-authorized execution from Guarded approval.
 
@@ -78,8 +89,13 @@ When the user asks to view Shadow data, use the explicit `click-gate dashboard s
 
 Keep Observer collection separate from that viewer. New lifecycles default to
 `click-gate observer off`; use the explicit `shadow` control only when Shadow
-collection is intended, and never interpret either the control or dashboard as
-reuse authority.
+collection is intended. Use `click-gate observer authoritative` only after a
+Guarded contract that covers the work has been separately approved, and only
+for the exact supported profile in
+[Authoritative Observer v2](references/authoritative-observer-v2.md). Enabling
+the mode prepares a candidate runtime; only the one-use verification runner's
+complete, signed and current observation can authorize reuse. Never interpret
+the control, dashboard, caller JSON, or a Shadow record as authority.
 
 In Guarded mode, do not request reapproval for an in-scope detail, a narrowing instruction, or a technical choice. Record the follow-up turn digest and continue. Reapproval is required only when the approved outcome, visible behavior, boundary, invariant, authority, or verification commitment materially changes. The digest proves that the follow-up was recorded, not that the Hook semantically proved it was inside the prior boundary; interpret that distinction faithfully. In Evidence mode there is no Click approval to repeat; follow the host's authority prompts.
 

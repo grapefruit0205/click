@@ -1,5 +1,47 @@
 # Release notes
 
+## v0.90.0 — 2026-09-07
+
+- Click can now analyze supported CPython 3.10–3.14 `unittest` and `pytest`
+  commands in bounded shell-free collectors, build stable inventories, and
+  propose complete file-level Evidence Shards with matching dependency and
+  safe-change policy.
+- Automatic sharding is a continuous setup flow: it measures the parent suite,
+  keeps short or uneconomic suites intact, presents reviewable changes, applies
+  only generated policy lineage, waits for the user's commit, bootstraps a real
+  baseline, and refreshes after test, discovery, runner, environment, or policy
+  drift. Incomplete or stale policy always runs the original parent command.
+- Evidence mode can use the setup flow under the host's ordinary authority,
+  while Guarded mode retains separate proposal and application contracts.
+  Neither a proposal nor an estimate authorizes verification reuse.
+- A bounded owner-only inspection cache can reuse exact successful `cat`,
+  `sed -n`, and supported `rg` results when their file, directory, environment,
+  executable, request, and truncation bindings still match. Cache misses,
+  corruption, expiry, and ambiguous inputs perform the real inspection, and
+  inspection data never becomes verification evidence.
+- Collector process control, path handling, locking, capability reporting, and
+  runtime identity are shared across Linux, macOS, and Windows. Versioned
+  launchers such as `python3.13` and corresponding `.exe` names are admitted
+  only for the existing shell-free verification module boundary.
+- Native authoritative profiles now bind exact CPython 3.12.3 runtimes to
+  Linux `strace`, macOS strict-PID `fs_usage` plus a DYLD audit companion, or
+  Windows ETW plus an MSVC audit extension and inherited bootstrap handle.
+  Input snapshots, signed provenance, currentness checks, cancellation and
+  recovery, event loss, unsupported behavior, and incomplete process trees all
+  fail closed to a real verification run.
+- The status projection and dashboard distinguish execution, exact or
+  dependency-qualified reuse, skipped setup, requested-but-unfinished work,
+  observation telemetry, estimates, and measured Click processing time.
+- Public module boundaries now own collection, proposal, setup, dependency
+  identity, observation inputs, and dashboard projection. Distribution builds
+  reject unclassified hook sources and regenerate the Antigravity package from
+  the canonical implementation.
+- CI covers the deterministic suite on Linux, macOS, and Windows; native
+  authoritative contracts on macOS and Windows; the common runtime contract on
+  CPython 3.10, 3.11, 3.13, and 3.14; and real pytest integration with a pinned
+  package. The repository's committed policy expands to eight complete,
+  non-overlapping test groups.
+
 ## v0.82.0 — 2026-09-06
 
 - A completed Guarded contract can now provide successful verification results

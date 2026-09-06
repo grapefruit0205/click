@@ -140,6 +140,14 @@ class ClickObserverWindowsTests(unittest.TestCase):
         self.assertNotIn("C:\\Windows", rendered)
         self.assertNotIn(self.workspace_text, rendered)
         self.assertNotIn("unrelated", rendered)
+        self.assertEqual(
+            {item["path"] for item in parsed.absolute_inputs},
+            {
+                r"C:\Windows\System32\kernel32.dll",
+                r"C:\work\click\input.txt",
+                r"C:\work\click\pkg",
+            },
+        )
 
     def test_parser_uses_file_key_mapping_and_native_device_paths(self) -> None:
         raw = _document(
@@ -185,6 +193,16 @@ class ClickObserverWindowsTests(unittest.TestCase):
             ),
         )
         self.assertTrue(parsed.process_tree_complete)
+        self.assertEqual(
+            parsed.absolute_inputs,
+            (
+                {
+                    "path": r"C:\work\click\bound.txt",
+                    "kind": "file",
+                    "operations": ["metadata", "read"],
+                },
+            ),
+        )
 
     def test_parser_marks_loss_truncation_and_unknown_events_incomplete(self) -> None:
         raw = _document(
@@ -373,6 +391,58 @@ class ClickObserverWindowsTests(unittest.TestCase):
         self.assertTrue(result.failed)
         self.assertEqual(sum(call[1] == "start" for call in calls), 2)
         self.assertEqual(sum(call[1] == "stop" for call in calls), 2)
+
+        class InterruptingTarget(_FakeTarget):
+            def __init__(self) -> None:
+                super().__init__()
+                self.wait_timeouts: list[float | None] = []
+
+            def wait(self, timeout: float | None = None) -> int:
+                self.wait_calls += 1
+                self.wait_timeouts.append(timeout)
+                if self.wait_calls == 1:
+                    raise subprocess.TimeoutExpired("target", timeout)
+                raise KeyboardInterrupt
+
+        target = InterruptingTarget()
+        interrupted_calls: list[list[str]] = []
+        terminated: list[int] = []
+
+        def interrupt_control(argv: list[str], **_kwargs: object):
+            interrupted_calls.append(list(argv))
+            return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+        def terminate(child: _FakeTarget) -> int:
+            terminated.append(child.pid)
+            child.returncode = 130
+            return 130
+
+        interrupted = click_observer_windows.collect_command(
+            ["tool"],
+            workspace=Path.cwd(),
+            environment={},
+            logman_executable="logman.exe",
+            tracerpt_executable="tracerpt.exe",
+            run_control=interrupt_control,
+            spawn_argv=lambda *_args, **_kwargs: target,
+            terminate_group=terminate,
+            wait_for_sessions=lambda _seconds: None,
+        )
+
+        self.assertTrue(interrupted.target_started)
+        self.assertEqual(interrupted.exit_code, 130)
+        self.assertTrue(interrupted.failed)
+        self.assertEqual(terminated, [100])
+        self.assertEqual(
+            target.wait_timeouts,
+            [
+                click_observer_windows.TARGET_WAIT_POLL_SECONDS,
+                click_observer_windows.TARGET_WAIT_POLL_SECONDS,
+            ],
+        )
+        self.assertEqual(
+            sum(call[1] == "stop" for call in interrupted_calls), 2
+        )
 
     def test_unavailable_tools_use_fallback_exactly_once(self) -> None:
         fallback = mock.Mock(return_value=7)

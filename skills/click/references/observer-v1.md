@@ -206,15 +206,16 @@ scope and require a separate retention and consent design.
 
 ## Compatibility boundary
 
-The existing `runtime-dependency-observation-v1` receipt remains unchanged and
-continues to be the only runtime observation shape understood by the current
-cross-revision reuse logic. Shadow Observer v1 deliberately has no conversion
-or automatic bridge into that receipt. It never feeds Click's authority-bearing
-dependency observation. Linux, macOS, or Windows collection, failure, absence,
-and record storage therefore cannot change whether a check runs, passes,
-satisfies evidence, or is reused. macOS without existing privilege and Windows
-without usable inbox ETW tools retain the established verification behavior and
-may keep an `unavailable` record.
+The legacy `runtime-dependency-observation-v1` shape remains structurally
+readable for compatibility but cannot authorize production reuse. The separate
+[Authoritative Observer v2](authoritative-observer-v2.md) path accepts only its
+own runner-signed v2 observation. Shadow Observer v1 deliberately has no
+conversion or automatic bridge into either shape. It never feeds Click's
+authority-bearing dependency observation. Linux, macOS, or Windows Shadow
+collection, failure, absence, and record storage therefore cannot change
+whether a check runs, passes, satisfies evidence, or is reused. macOS without
+existing privilege and Windows without usable inbox ETW tools retain the
+established verification behavior and may keep an `unavailable` record.
 
 ## Phase 3B backend boundary
 

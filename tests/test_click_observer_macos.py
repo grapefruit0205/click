@@ -118,6 +118,16 @@ class ClickObserverMacOSTests(unittest.TestCase):
         rendered = json.dumps(parsed.inputs)
         self.assertNotIn("/usr/bin", rendered)
         self.assertNotIn(root, rendered)
+        self.assertEqual(
+            {item["path"] for item in parsed.absolute_inputs},
+            {
+                "/usr/bin/git",
+                "/usr/bin/python3",
+                click_observer_macos._canonical_macos_path(f"{root}/missing.cfg"),
+                click_observer_macos._canonical_macos_path(f"{root}/pkg"),
+                click_observer_macos._canonical_macos_path(f"{root}/src/input.py"),
+            },
+        )
 
     def test_parser_marks_truncation_and_missing_exec_incomplete(self) -> None:
         parsed = click_observer_macos.parse_fs_usage(
@@ -223,6 +233,10 @@ class ClickObserverMacOSTests(unittest.TestCase):
         )
         self.assertEqual(parsed.unresolved_event_count, 0)
         self.assertTrue(parsed.process_tree_complete)
+        self.assertIn(
+            click_observer_macos._canonical_macos_path(f"{root}/input.txt"),
+            {item["path"] for item in parsed.absolute_inputs},
+        )
         self.assertEqual(
             click_observer_macos._candidate_path(
                 "F=3 (R_____) [ -2]/D:/workspace/input.txt"
@@ -539,6 +553,35 @@ class ClickObserverMacOSTests(unittest.TestCase):
         self.assertNotIn("sudo", collector_launches[0])
         self.assertEqual(terminated, [4322])
         self.assertFalse(result.process_scope_complete)
+
+    def test_authoritative_collector_uses_only_the_suspended_target_pid(self) -> None:
+        launches: list[list[str]] = []
+        target = _FakeProcess(
+            pid=4421, returncode=0, running=True, command_name="Python"
+        )
+        collector = _FakeProcess(
+            pid=4422, returncode=0, running=True, stdout=b"trace-output"
+        )
+
+        result = click_observer_macos.collect_command(
+            ["tool"],
+            workspace=self.workspace,
+            environment={},
+            executable="/usr/bin/fs_usage",
+            spawn_argv=lambda argv, **_kwargs: (
+                launches.append(list(argv)) or collector
+            ),
+            spawn_suspended=lambda *_args, **_kwargs: target,
+            resume_target=lambda _target: True,
+            discard_suspended=lambda child: child.terminate_for_test(),
+            terminate_group=lambda child: child.terminate_for_test(),
+            strict_pid_scope=True,
+        )
+
+        self.assertTrue(result.target_started)
+        self.assertTrue(result.process_scope_complete)
+        self.assertEqual(launches[0][-1], "4421")
+        self.assertNotIn("Python", launches[0])
 
     def test_collector_interrupt_stops_both_retained_groups(self) -> None:
         target = _FakeProcess(pid=5321, returncode=0, running=True, interrupt=True)

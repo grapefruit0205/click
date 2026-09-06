@@ -59,9 +59,11 @@
               "tests.test_click_browser_advisory",
               "tests.test_click_capability",
               "tests.test_click_claims",
+              "tests.test_click_collector_runtime",
               "tests.test_click_inspection",
               "tests.test_click_inspection_policy",
               "tests.test_click_mutation",
+              "tests.test_click_observation_cache",
               "tests.test_click_process",
               "tests.test_click_service",
               "tests.test_click_verification_policy",
@@ -73,9 +75,11 @@
             "tests/test_click_browser_advisory.py",
             "tests/test_click_capability.py",
             "tests/test_click_claims.py",
+            "tests/test_click_collector_runtime.py",
             "tests/test_click_inspection.py",
             "tests/test_click_inspection_policy.py",
             "tests/test_click_mutation.py",
+            "tests/test_click_observation_cache.py",
             "tests/test_click_process.py",
             "tests/test_click_service.py",
             "tests/test_click_verification_policy.py"
@@ -149,6 +153,8 @@
               "-m",
               "unittest",
               "tests.test_antigravity_adapter",
+              "tests.test_click_authoritative_observer",
+              "tests.test_click_authoritative_reuse",
               "tests.test_click_dependency_trace",
               "tests.test_click_dashboard_projection",
               "tests.test_click_hook",
@@ -166,6 +172,8 @@
           ],
           "covers": [
             "tests/test_antigravity_adapter.py",
+            "tests/test_click_authoritative_observer.py",
+            "tests/test_click_authoritative_reuse.py",
             "tests/test_click_dependency_trace.py",
             "tests/test_click_dashboard_projection.py",
             "tests/test_click_hook.py",
@@ -181,6 +189,38 @@
           ]
         },
         {
+          "id": "automatic-analysis",
+          "checks": [
+            [
+              "python3",
+              "-m",
+              "unittest",
+              "tests.test_click_auto_sharding",
+              "tests.test_click_shard_proposal",
+              "-q"
+            ]
+          ],
+          "covers": [
+            "tests/test_click_auto_sharding.py",
+            "tests/test_click_shard_proposal.py"
+          ]
+        },
+        {
+          "id": "automatic-setup",
+          "checks": [
+            [
+              "python3",
+              "-m",
+              "unittest",
+              "tests.test_click_sharding_setup",
+              "-q"
+            ]
+          ],
+          "covers": [
+            "tests/test_click_sharding_setup.py"
+          ]
+        },
+        {
           "id": "repository-policy",
           "checks": [
             [
@@ -190,8 +230,10 @@
               "tests.test_click_compatibility_surface",
               "tests.test_click_import_bootstrap",
               "tests.test_click_runner_transport",
+              "tests.test_click_sharding_boundaries",
               "tests.test_distribution_validation",
               "tests.test_incremental_benchmark",
+              "tests.test_repository_shard_inventory",
               "tests.test_repository_policy",
               "tests.test_semantic_grader",
               "tests.test_windows_hook_commands",
@@ -202,8 +244,10 @@
             "tests/test_click_compatibility_surface.py",
             "tests/test_click_import_bootstrap.py",
             "tests/test_click_runner_transport.py",
+            "tests/test_click_sharding_boundaries.py",
             "tests/test_distribution_validation.py",
             "tests/test_incremental_benchmark.py",
+            "tests/test_repository_shard_inventory.py",
             "tests/test_repository_policy.py",
             "tests/test_semantic_grader.py",
             "tests/test_windows_hook_commands.py"

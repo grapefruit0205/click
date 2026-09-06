@@ -41,6 +41,35 @@ class ClickShadowDashboardTests(ClickGateTestCase):
         self.assertNotIn("snapshot.task.name", share)
         self.assertIn("projection_version", share)
         self.assertIn("reuse_origin", share)
+        self.assertIn("revalidation_savings", share)
+        self.assertIn("click_management_overhead_ms:null", share)
+        self.assertIn("live_net_time_saving_reason:'counterfactual-not-measured'", share)
+        self.assertNotIn("function summarize(batch)", CLICK_SHADOW_DASHBOARD.JS)
+        self.assertIn("data.batch_summaries", CLICK_SHADOW_DASHBOARD.JS)
+        self.assertIn("function outcomePresentation", CLICK_SHADOW_DASHBOARD.JS)
+        self.assertNotIn("Math.max(2,100*value/max)", CLICK_SHADOW_DASHBOARD.JS)
+        self.assertNotIn("innerHTML", CLICK_SHADOW_DASHBOARD.JS)
+
+        html = CLICK_SHADOW_DASHBOARD.HTML
+        ordered_ids = [
+            'id="estimatedAvoided"',
+            'id="executionComparison"',
+            'id="sources"',
+            'id="measurementDetails"',
+        ]
+        positions = [html.index(item) for item in ordered_ids]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("재사용으로 생략한 테스트 실행시간", html)
+        self.assertIn("과거 성공 실행 기록 기반 추정", html)
+        self.assertIn("동일 샤드 순차 기준", html)
+        self.assertIn("Click 관리비용 제외", html)
+        self.assertIn("총 검증 대기는 증가했습니다. 상세 보기", html)
+        self.assertIn('id="setupInitial"', html)
+        self.assertIn('id="setupObservation"', html)
+        self.assertIn('id="setupProcessing"', html)
+        self.assertIn('id="setupNet"', html)
+        self.assertIn("signedDuration(setup.comparison_net_ms)", CLICK_SHADOW_DASHBOARD.JS)
+        self.assertIn("Observer: authoritative", CLICK_SHADOW_DASHBOARD.JS)
 
     def test_guarded_contract_transition_keeps_viewer_history_without_authority(self) -> None:
         self.set_default("guarded", "turn-0")
@@ -273,8 +302,9 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             self.assertIn("약속한 범위 안에서", html)
             self.assertIn('id="approvalState"', html)
             self.assertIn('id="contractPromises"', html)
-            self.assertIn('<details class="panel telemetry">', html)
+            self.assertIn('<details class="telemetry">', html)
             self.assertIn("실제 재사용", html)
+            self.assertIn("재사용으로 생략한 테스트 실행시간", html)
             self.assertIn("독립형 HTML 내보내기", html)
             self.assertIn("default-src 'none'", response.headers["Content-Security-Policy"])
             self.assertEqual(response.headers["Cache-Control"], "no-store")

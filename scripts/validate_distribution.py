@@ -13,12 +13,14 @@ try:
     from build_antigravity_distribution import (
         CLICK_REFERENCE_FILES,
         HOOK_FILES,
+        hook_manifest_errors,
         rendered_skill,
     )
 except ModuleNotFoundError:
     from scripts.build_antigravity_distribution import (
         CLICK_REFERENCE_FILES,
         HOOK_FILES,
+        hook_manifest_errors,
         rendered_skill,
     )
 
@@ -146,6 +148,7 @@ def _same_file(
 
 
 def _validate_antigravity(root: Path, errors: list[str]) -> None:
+    errors.extend(hook_manifest_errors(root))
     platform = root / "platforms" / "antigravity"
     distribution = root / "dist" / "antigravity"
     manifest = _json(platform / "plugin.json", errors, root)

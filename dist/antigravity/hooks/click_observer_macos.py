@@ -37,6 +37,7 @@ else:  # Executed directly from the bundled hooks directory.
 
 
 MAX_RAW_TRACE_BYTES = 4 * 1024 * 1024
+MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
 # fs_usage publishes no readiness signal. Its startup performs disk-name cache
 # discovery and ktrace callback registration before ktrace_start(), so keep the
 # suspended target stopped long enough for that bounded initialization.
@@ -120,6 +121,9 @@ class ParsedTrace:
     child_process_count: int
     process_tree_complete: bool
     root_exec_observed: bool
+    # Kept only in memory for the authoritative adapter. Shadow records still
+    # persist repository-relative paths and an external count, never host paths.
+    absolute_inputs: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,11 +239,14 @@ def _file_digest(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _native_fs_usage(executable: str) -> bool:
+def native_fs_usage(executable: str) -> bool:
     try:
         return str(Path(executable).resolve(strict=True)) in NATIVE_FS_USAGE_PATHS
     except (OSError, RuntimeError, TypeError, ValueError):
         return False
+
+
+_native_fs_usage = native_fs_usage
 
 
 def _bounded_add(left: int, right: int) -> int:
@@ -500,7 +507,9 @@ def parse_fs_usage(
     root_text = _canonical_macos_path(root_text)
     root = PurePosixPath(root_text)
     inputs: dict[str, dict[str, Any]] = {}
+    absolute_inputs: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()
+    absolute_conflicts: set[str] = set()
     external_digests: set[str] = set()
     unresolved = 1 if truncated else 0
     child_processes = 0
@@ -518,6 +527,22 @@ def parse_fs_usage(
         except (OSError, TypeError, ValueError):
             unresolved = _bounded_add(unresolved, 1)
             return
+        absolute_key = candidate.as_posix()
+        absolute = absolute_inputs.get(absolute_key)
+        if absolute is not None and absolute["kind"] != kind:
+            absolute_conflicts.add(absolute_key)
+        elif absolute is None:
+            if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
+                unresolved = _bounded_add(unresolved, 1)
+            else:
+                absolute = {
+                    "path": absolute_key,
+                    "kind": kind,
+                    "operations": [],
+                }
+                absolute_inputs[absolute_key] = absolute
+        if absolute is not None and operation not in absolute["operations"]:
+            absolute["operations"].append(operation)
         try:
             relative = candidate.relative_to(root).as_posix()
         except ValueError:
@@ -649,6 +674,9 @@ def parse_fs_usage(
     for relative in conflicts:
         inputs.pop(relative, None)
         unresolved = _bounded_add(unresolved, 1)
+    for absolute in absolute_conflicts:
+        absolute_inputs.pop(absolute, None)
+        unresolved = _bounded_add(unresolved, 1)
     if not root_exec_observed:
         unresolved = _bounded_add(unresolved, 1)
     normalized_inputs = tuple(
@@ -673,6 +701,14 @@ def parse_fs_usage(
         child_process_count=child_processes,
         process_tree_complete=process_tree_complete,
         root_exec_observed=root_exec_observed,
+        absolute_inputs=tuple(
+            {
+                "path": item["path"],
+                "kind": item["kind"],
+                "operations": sorted(item["operations"]),
+            }
+            for _, item in sorted(absolute_inputs.items())
+        ),
     )
 
 
@@ -722,6 +758,7 @@ def collect_command(
     discard_suspended: DiscardTarget = _discard_suspended_target,
     terminate_group: TerminateGroup = click_process.terminate_process_group,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
+    strict_pid_scope: bool = False,
 ) -> CollectedExecution:
     """Collect one PID-scoped trace while executing the target at most once."""
 
@@ -750,6 +787,9 @@ def collect_command(
             env=dict(environment),
         )
         collector_started = time.monotonic()
+        filters = [str(target.pid)]
+        if not strict_pid_scope:
+            filters.append(str(target.command_name))
         collector = spawn_argv(
             [
                 executable,
@@ -758,8 +798,7 @@ def collect_command(
                 "pathname",
                 "-f",
                 "exec",
-                str(target.pid),
-                str(target.command_name),
+                *filters,
             ],
             cwd=workspace,
             env=dict(environment),
@@ -840,7 +879,9 @@ def collect_command(
             _bounded_add(collector_preparation_ms, collector_cleanup_ms),
             duration_ms,
         ),
-        process_scope_complete=False,
+        process_scope_complete=bool(
+            strict_pid_scope and target_started and not failed and not capture.truncated
+        ),
     )
 
 
@@ -856,7 +897,7 @@ def run_command(
     execute_unobserved: FallbackExecutor,
     resolve_backend: BackendResolver,
     digest_file: FileDigester = _file_digest,
-    native_backend_probe: NativeBackendProbe = _native_fs_usage,
+    native_backend_probe: NativeBackendProbe = native_fs_usage,
     system_version: Callable[[], str] = probe_macos_version,
     privilege_probe: Callable[[], bool] = has_privilege,
     collector: Collector = collect_command,

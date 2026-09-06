@@ -14,6 +14,7 @@ from scripts.validate_distribution import (
     _release_version,
     validate,
 )
+from scripts.build_antigravity_distribution import hook_manifest_errors
 
 
 ROOT = Path(__file__).parents[1]
@@ -22,6 +23,23 @@ ROOT = Path(__file__).parents[1]
 class DistributionValidationTests(unittest.TestCase):
     def test_public_distribution_is_self_consistent(self) -> None:
         self.assertEqual(validate(ROOT), [])
+
+    def test_new_unclassified_hook_source_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            copied = Path(temporary) / "source"
+            (copied / "hooks").mkdir(parents=True)
+            for source in (ROOT / "hooks").glob("*.py"):
+                shutil.copy2(source, copied / "hooks" / source.name)
+            shutil.copy2(
+                ROOT / "hooks" / "click_observer_native.c",
+                copied / "hooks" / "click_observer_native.c",
+            )
+            (copied / "hooks" / "click_new_runtime.py").write_text(
+                "VALUE = 1\n", encoding="utf-8"
+            )
+            errors = hook_manifest_errors(copied)
+            self.assertEqual(len(errors), 1)
+            self.assertIn("click_new_runtime.py", errors[0])
 
     def test_installed_codex_cache_version_keeps_release_metadata_valid(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

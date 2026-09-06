@@ -10,7 +10,7 @@ English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
 Click provides incremental verification for coding agents. It helps constrain unrequested scope expansion through a reviewed Guarded contract, while **revision-aware evidence** lets valid checks survive a new task. Reuse requires matching execution bindings and, after changes, a complete dependency observation or an explicit policy committed before the baseline. Missing authority means a real rerun, not automatic dependency inference.
 
-Release note: v0.82.0 adds Guarded successor requalification, receipt v5, and the result-first dashboard described here.
+Release note: v0.90.0 adds continuous, cost-gated unittest/pytest shard setup, bounded inspection-result caching, and fail-closed native observer profiles.
 
 Click does not prove that the code is correct or that the selected tests are sufficient. It tracks whether existing verification evidence still applies to the current code.
 
@@ -110,7 +110,7 @@ Or explicitly choose Guarded:
 
 ## Update
 
-Current release: **v0.82.0**
+Current release: **v0.90.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -133,19 +133,20 @@ A result is reused only when its important bindings still match, such as:
 
 If Click cannot establish that match, it runs the check again.
 
-Cross-revision reuse is intentionally conservative. Evidence mode uses a committed dependency map:
+Cross-revision reuse is intentionally conservative. A repository can commit a dependency map:
 
 ~~~text
 .click/evidence-dependencies.json
 ~~~
 
-The committed map authorizes reuse for a specific check, and concrete paths remain hard dependencies. When the baseline observation is complete, expanding map
-patterns such as `*`, `**`, and directory prefixes are refined to the inputs
-the check actually consumed; observed inputs are then hashed into the receipt.
+The map declares candidate inputs for a specific check, and concrete paths
+remain hard dependencies. It does not authorize reuse by itself. In an approved
+Guarded contract, an explicitly enabled authoritative run may refine expanding
+patterns such as `*`, `**`, and directory prefixes to the inputs that the check
+actually consumed. Click hashes every resulting input into the receipt.
 Working-tree edits cannot narrow the committed policy. If observation is
-unavailable, fails, sees an external input, or cannot cover the full child-
-process tree, Click runs the check again after a mutation. The map remains
-optional; leaving it out also means that the check reruns.
+unavailable or incomplete, Click runs the check again after a mutation. The map
+remains optional; leaving it out also means that the check reruns.
 
 For common changes that are known not to affect a check, such as documentation,
 the repository may instead commit an observer-free safe-change policy:
@@ -174,7 +175,59 @@ macOS, or Windows. The declaration is repository-owner policy, not an inferred
 claim that Click discovered every dependency.
 A committed [Evidence Shards map](skills/click/references/evidence-shards-v1.md) can split one exact broad suite into independent children, retaining a passed sibling after another fails. The map alone never permits reuse after a mutation; the rules above still decide each child, and an invalid map runs the original suite.
 
-Observer collection is off by default and independent from the dashboard. Use `click-gate observer off`, `shadow`, or `status`; only explicit `shadow` mode attaches a trusted native collector to compatible real checks. Linux uses `strace`, privileged macOS uses `fs_usage`, and Windows uses the inbox `logman.exe` and `tracerpt.exe` ETW tools. Click installs nothing or elevates no privilege. Shadow predictions never authorize a skipped check.
+For a supported project, `click-gate sharding init`, `sharding status`, and
+`sharding refresh` provide a JSON-free path from command selection to a reviewed
+proposal, Evidence application or separately approved Guarded application,
+user-owned commit, parent/child bootstrap, and baseline evidence. A measured
+cost rule keeps short suites on the parent command. Later test discovery or test
+structure changes produce a bounded diff and update only policy that still
+matches Click's prior committed digest lineage. User-owned or modified policy is
+never overwritten, and Click does not run `git add`, `commit`, or `push`. A
+successful bootstrap is setup cost; it reports `sharding-ready /
+reuse-unavailable` until every child has a complete authoritative observation. See
+[automatic sharding setup](skills/click/references/automatic-sharding-setup.md).
+The automatic collector supports bounded unittest discovery and a conservative
+pytest collect-only profile on CPython 3.10 through 3.14. Its common process and
+locking adapters are implemented for Linux, macOS, and Windows; platform-native
+validation status is tracked separately from implementation status.
+
+The [two-project setting-free E2E record](docs/auto-sharding-e2e.md) shows an
+actual Guarded A→B module change, partial child reuse, same-final-code audit,
+and the retained negative whole-request result for short fixtures.
+
+Observer collection is off by default and independent from the dashboard. Use
+`click-gate observer off`, `click-gate observer shadow`,
+`click-gate observer authoritative`, or `click-gate observer status`. Explicit
+`shadow` mode attaches non-authoritative telemetry on its supported Linux,
+macOS, and Windows backends; Shadow predictions never authorize a skipped
+check. Explicit `authoritative` mode is available only inside a separately
+approved Guarded contract for direct CPython 3.12.3 `python -m unittest`
+checks. The Linux strace 6.8 profile is validated on a real host. Native
+`fs_usage` and ETW profiles are implemented for macOS and Windows, but remain
+pending real-host validation and report that boundary separately. Each profile
+prepares an identity-bound native companion from already installed build
+inputs, runs the original check once, and authorizes reuse only for a complete
+signed input snapshot. Click installs nothing or elevates no privilege. See the
+[Authoritative Observer v2 contract](skills/click/references/authoritative-observer-v2.md).
+
+Use `click-gate status` for a compact read-only JSON view of verification
+progress. It distinguishes checks that ran in the current batch, checks reused
+after current-condition requalification, checks that did not run, and checks
+that have not been requested. It also reports which registered checks remain,
+which are valid for the current mutation revision, and which a mutation
+invalidated. This view cannot create reuse authority or complete a task.
+
+During Evidence, approved Guarded work, or read-only review, Click can reuse a
+complete result for one explicit local `cat`, bounded `sed -n`, or supported
+`rg` request. The cache binds the request, cwd, trusted executable, relevant
+environment, file contents, and a conservative directory inventory. Directory
+searches also bind applicable project ignore files, so additions, deletions,
+renames, and ignore changes miss the old entry and run normally. Cached output
+lives only in the owner-readable plugin data directory, expires after 24 hours,
+and never becomes verification evidence. Unsupported commands, ambiguous
+targets, failures, output over 48 KB, missing entries, and corrupt entries use
+the normal read-only runner. For an intentional same-request rerun, use
+`click-gate inspect` with `"fresh":true` in its version 1 request.
 
 Use `click-gate dashboard start`, `status`, or `stop` for actual **verification-group** outcomes, batch history and JSON/standalone HTML exports. Planned, started, reused and unstarted groups are distinct; partial processing measurements, full request wait (unknown when unmeasured), baseline-cost estimates and Shadow remain separate. Run `python3 benchmarks/incremental_verification.py --iterations 3 --warmups 1 --output /tmp/click-comparison.json`, then select that JSON in the viewer for a real hook/runner comparison. Short checks can be slower with runtime overhead. See [measurement scope, mode boundaries and exports](VERIFICATION_EFFICIENCY.md).
 
@@ -246,7 +299,7 @@ The README stays short on purpose. Protocol and architecture details live here:
 - [Guarded contract format](skills/click/references/directive-format.md)
 - [Verification profiles](skills/click/references/verification-profiles.md)
 - [Capability protocol](skills/click/references/capability-protocol.md)
-- [Shadow Observer v1](skills/click/references/observer-v1.md), [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md), and [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
+- [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md), and [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Anti-loop policy](skills/click/references/anti-loop-policy.md)
 
 ## License

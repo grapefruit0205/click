@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -102,6 +103,32 @@ class ClickDashboardProjectionTests(unittest.TestCase):
             environment_digest=ENVIRONMENT,
             executable_digest=EXECUTABLE,
             host_coverage_digest=HOST_COVERAGE,
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        return result
+
+    def timing_baseline(
+        self, *, key: str, check: str, duration_ms: int
+    ) -> dict[str, object]:
+        binding = click_incremental.timing_binding_digest(
+            source_key=key,
+            check_digest=check,
+            environment_digest=ENVIRONMENT,
+            executable_digest=EXECUTABLE,
+            host_coverage_digest=HOST_COVERAGE,
+            observer_mode="shadow",
+        )
+        result = click_incremental.build_duration_baseline(
+            duration_ms=duration_ms,
+            source_key=key,
+            revision=1,
+            check_digest=check,
+            observed_at=1,
+            batch_id="b" * 32,
+            origin_task={"mode": "guarded", "id": "ctr_" + "d" * 32},
+            observer_mode="shadow",
+            timing_binding_digest=binding,
         )
         self.assertIsNotNone(result)
         assert result is not None
@@ -231,7 +258,11 @@ class ClickDashboardProjectionTests(unittest.TestCase):
                 check_digest=CHECK_DEPENDENCY,
                 authority_source="runtime-dependency-observation",
                 estimated_avoided_ms=900,
-                duration_baseline={"duration_ms": 900, "revision": 1, "check_digest": CHECK_DEPENDENCY, "observed_at": 1, "batch_id": "b" * 32, "sample_count": 1},
+                duration_baseline=self.timing_baseline(
+                    key=KEY_DEPENDENCY,
+                    check=CHECK_DEPENDENCY,
+                    duration_ms=900,
+                ),
             ),
             click_incremental.decision(
                 source_key=KEY_POLICY,
@@ -242,7 +273,11 @@ class ClickDashboardProjectionTests(unittest.TestCase):
                 check_digest=CHECK_POLICY,
                 authority_source="repository-safe-change-policy",
                 estimated_avoided_ms=1800,
-                duration_baseline={"duration_ms": 1800, "revision": 1, "check_digest": CHECK_POLICY, "observed_at": 1, "batch_id": "b" * 32, "sample_count": 1},
+                duration_baseline=self.timing_baseline(
+                    key=KEY_POLICY,
+                    check=CHECK_POLICY,
+                    duration_ms=1800,
+                ),
             ),
         ]
         verification: dict[str, object] = {"mutation_revision": 2}
@@ -303,6 +338,8 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         )
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
+        self.assertEqual(projection["version"], 6)
+        self.assertEqual(projection["setup"]["status"], "unconfigured")
         incremental = projection["summary"]["incremental"]
         self.assertEqual(incremental["total_source_count"], 3)
         self.assertEqual(incremental["current_source_count"], 3)
@@ -312,6 +349,29 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         self.assertEqual(incremental["safe_change_reuse_count"], 1)
         self.assertEqual(incremental["executed_duration_ms"], 650)
         self.assertEqual(incremental["estimated_avoided_ms"], 2700)
+        savings = projection["summary"]["revalidation_savings"]
+        self.assertEqual(savings["omitted_test_execution_ms"], 2700)
+        self.assertEqual(savings["executed_test_execution_ms"], 650)
+        self.assertEqual(
+            savings["full_sequential_test_execution_estimate_ms"], 3350
+        )
+        self.assertEqual(
+            savings["test_execution_reduction_ratio"], 2700 / 3350
+        )
+        current_id = projection["history"]["current_batch_id"]
+        self.assertEqual(
+            projection["batch_summaries"][current_id][
+                "revalidation_savings"
+            ],
+            savings,
+        )
+        self.assertEqual(
+            projection["batch_summaries"][current_id]["incremental"],
+            {
+                key: incremental[key]
+                for key in click_incremental.SUMMARY_FIELDS
+            },
+        )
 
         shadow = projection["summary"]["shadow"]
         self.assertEqual(shadow["candidate_count"], 1)
@@ -397,6 +457,136 @@ class ClickDashboardProjectionTests(unittest.TestCase):
 
         self.assertEqual(projection["task"]["status"], "unknown")
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
+
+    def test_projection_keeps_requests_separate_and_deduplicates_redelivery(self) -> None:
+        state = self.state()
+        verification = state["verification"]
+        first = click_incremental.current_batch(verification)
+        assert first is not None
+        first.update(
+            version=4,
+            task={
+                "mode": "guarded",
+                "id": "ctr_" + "1" * 32,
+                "name": "첫 계약",
+            },
+        )
+        second = copy.deepcopy(first)
+        second.update(
+            batch_id="c" * 32,
+            timestamp=first["timestamp"] + 1,
+            finished_at=first["finished_at"] + 1,
+            task={
+                "mode": "guarded",
+                "id": "ctr_" + "2" * 32,
+                "name": "재시도 계약",
+            },
+        )
+        executed = next(item for item in second["sources"] if item["started"])
+        executed["duration_ms"] = 325
+        self.assertTrue(click_incremental.batch_is_valid(first))
+        self.assertTrue(click_incremental.batch_is_valid(second))
+
+        parent = click_incremental.build_plan(
+            [
+                click_incremental.decision(
+                    source_key="f" * 64,
+                    decision="run",
+                    reason_code="no-passing-evidence",
+                    current_revision=2,
+                    previous_revision=1,
+                    check_digest="e" * 64,
+                    authority_source="runner",
+                )
+            ],
+            current_revision=2,
+            planned_at=1,
+        )
+        parent_history: dict[str, object] = {}
+        click_incremental.append_plan_history(parent_history, parent)
+        verification[click_incremental.HISTORY_FIELD] = [
+            *parent_history[click_incremental.HISTORY_FIELD],
+            first,
+            copy.deepcopy(first),
+            second,
+        ]
+        verification[click_incremental.CURRENT_BATCH_FIELD] = second["batch_id"]
+
+        projection = click_dashboard_projection.dashboard_projection(
+            state, generated_at=second["finished_at"] + 1
+        )
+        self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
+        self.assertEqual(
+            set(projection["batch_summaries"]),
+            {first["batch_id"], second["batch_id"]},
+        )
+        self.assertEqual(len(projection["batches"]), 2)
+        self.assertEqual(
+            [batch["task"]["id"] for batch in projection["batches"]],
+            ["ctr_" + "1" * 32, "ctr_" + "2" * 32],
+        )
+        self.assertEqual(
+            projection["batch_summaries"][first["batch_id"]]["incremental"][
+                "total_source_count"
+            ],
+            3,
+        )
+        self.assertEqual(
+            projection["batch_summaries"][second["batch_id"]][
+                "revalidation_savings"
+            ]["executed_test_execution_ms"],
+            325,
+        )
+        self.assertEqual(
+            projection["summary"]["revalidation_savings"],
+            projection["batch_summaries"][second["batch_id"]][
+                "revalidation_savings"
+            ],
+        )
+
+    def test_projection_validator_keeps_v4_read_compatibility(self) -> None:
+        projection = click_dashboard_projection.dashboard_projection(
+            self.state(), generated_at=50
+        )
+        legacy = copy.deepcopy(projection)
+        legacy["version"] = 4
+        legacy.pop("batch_summaries")
+        legacy.pop("setup")
+        legacy["summary"].pop("revalidation_savings")
+
+        self.assertTrue(click_dashboard_projection.projection_is_valid(legacy))
+
+        v5 = copy.deepcopy(projection)
+        v5["version"] = 5
+        v5.pop("setup")
+        self.assertTrue(click_dashboard_projection.projection_is_valid(v5))
+
+    def test_setup_projection_preserves_measured_loss(self) -> None:
+        state = self.state()
+        state["auto_sharding_setup"] = {
+            "version": 1,
+            "status": "baseline-required",
+            "sharding_ready": False,
+            "reuse_ready": False,
+            "reuse_status": "unavailable",
+            "initial_setup_ms": 41.5,
+            "observation_ms": None,
+            "click_processing_ms": 3.5,
+            "bootstrap_parent_ms": 10.0,
+            "bootstrap_shards_ms": 17.0,
+            "comparison_net_ms": -7.0,
+            "comparison_scope": "first-bootstrap-parent-vs-sequential-children-not-savings",
+        }
+
+        projection = click_dashboard_projection.dashboard_projection(
+            state, generated_at=50
+        )
+
+        self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
+        self.assertEqual(projection["setup"]["comparison_net_ms"], -7.0)
+        tampered = copy.deepcopy(projection)
+        tampered["setup"]["comparison_net_ms"] = float("nan")
+        self.assertFalse(click_dashboard_projection.projection_is_valid(tampered))
 
 
 if __name__ == "__main__":

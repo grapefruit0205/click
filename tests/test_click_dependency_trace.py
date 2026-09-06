@@ -153,6 +153,9 @@ class ClickDependencyTraceTests(unittest.TestCase):
                 },
             ),
         )
+        absolute_paths = {row["path"] for row in parsed.absolute_inputs}
+        self.assertIn(f"{root}/private-link", absolute_paths)
+        self.assertIn("/outside/private-token", absolute_paths)
 
     def test_non_linux_executes_once_without_a_collector(self) -> None:
         calls: list[int] = []
@@ -445,6 +448,7 @@ class ClickDependencyTraceTests(unittest.TestCase):
         )
         capability = mock.Mock(returncode=0)
         click_dependency_trace.probe_strace_version.cache_clear()
+        self.addCleanup(click_dependency_trace.probe_strace_version.cache_clear)
         with mock.patch.object(
             click_dependency_trace.click_process,
             "run_argv",

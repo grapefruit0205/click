@@ -51,8 +51,10 @@ FILE_KEYWORDS = "0x1f0"
 TRACE_LEVEL = "0xff"
 MAX_ETL_MIB = 8
 MAX_RAW_TRACE_BYTES = 16 * 1024 * 1024
+MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
 MAX_XML_EVENTS = 200_000
 CONTROL_TIMEOUT_SECONDS = 30.0
+TARGET_WAIT_POLL_SECONDS = 0.1
 # ``logman start -ets`` returns after admitting the session, but the kernel
 # providers may still need a short interval before their first events are
 # observable.  Without this barrier, a fast target can start and read its
@@ -104,6 +106,9 @@ class ParsedTrace:
     child_process_count: int
     process_tree_complete: bool
     root_exec_observed: bool
+    # Kept only in memory for the authoritative adapter. Shadow records still
+    # persist repository-relative paths and an external count, never host paths.
+    absolute_inputs: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,7 +142,7 @@ def _file_digest(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _combined_digest(logman_digest: str, tracerpt_digest: str) -> str:
+def combined_backend_digest(logman_digest: str, tracerpt_digest: str) -> str:
     if _DIGEST.fullmatch(logman_digest) is None or _DIGEST.fullmatch(
         tracerpt_digest
     ) is None:
@@ -145,6 +150,9 @@ def _combined_digest(logman_digest: str, tracerpt_digest: str) -> str:
     return hashlib.sha256(
         f"logman:{logman_digest}\ntracerpt:{tracerpt_digest}\n".encode("ascii")
     ).hexdigest()
+
+
+_combined_digest = combined_backend_digest
 
 
 def probe_windows_version() -> str:
@@ -157,7 +165,7 @@ def probe_windows_version() -> str:
     return version if isinstance(version, str) and _VERSION.fullmatch(version) else ""
 
 
-def _native_windows_tool(executable: str, expected_name: str) -> bool:
+def native_windows_tool(executable: str, expected_name: str) -> bool:
     """Accept only the named inbox executable under the Windows directory."""
 
     if not isinstance(executable, str) or not isinstance(expected_name, str):
@@ -185,7 +193,10 @@ def _native_windows_tool(executable: str, expected_name: str) -> bool:
     return os.path.normcase(str(candidate)) in allowed
 
 
-def _windows_device_paths() -> Mapping[str, str]:
+_native_windows_tool = native_windows_tool
+
+
+def windows_device_paths() -> Mapping[str, str]:
     """Map native ``\\Device`` volume prefixes to DOS drives when available."""
 
     if os.name != "nt":
@@ -213,6 +224,9 @@ def _windows_device_paths() -> Mapping[str, str]:
         return mappings
     except (AttributeError, OSError, TypeError, ValueError):
         return {}
+
+
+_windows_device_paths = windows_device_paths
 
 
 def _canonical_windows_path(
@@ -398,7 +412,9 @@ def parse_windows_etw(
     root_exec_observed = bool(root_execution_bound or process_root_observed)
 
     inputs: dict[str, dict[str, Any]] = {}
+    absolute_inputs: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()
+    absolute_conflicts: set[str] = set()
     external_digests: set[str] = set()
 
     def add_path(path_text: str, *, kind: str, operation: str) -> None:
@@ -411,6 +427,21 @@ def parse_windows_etw(
             unresolved = _bounded_add(unresolved, 1)
             return
         normalized_case = ntpath.normcase(normalized)
+        absolute = absolute_inputs.get(normalized_case)
+        if absolute is not None and absolute["kind"] != kind:
+            absolute_conflicts.add(normalized_case)
+        elif absolute is None:
+            if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
+                unresolved = _bounded_add(unresolved, 1)
+            else:
+                absolute = {
+                    "path": normalized,
+                    "kind": kind,
+                    "operations": [],
+                }
+                absolute_inputs[normalized_case] = absolute
+        if absolute is not None and operation not in absolute["operations"]:
+            absolute["operations"].append(operation)
         prefix = root_case + "\\"
         if normalized_case == root_case:
             unresolved = _bounded_add(unresolved, 1)
@@ -497,6 +528,9 @@ def parse_windows_etw(
     for relative in conflicts:
         inputs.pop(relative, None)
         unresolved = _bounded_add(unresolved, 1)
+    for absolute in absolute_conflicts:
+        absolute_inputs.pop(absolute, None)
+        unresolved = _bounded_add(unresolved, 1)
     if not root_exec_observed:
         unresolved = _bounded_add(unresolved, 1)
     if root_execution_bound and not process_root_observed:
@@ -523,6 +557,14 @@ def parse_windows_etw(
         child_process_count=child_process_count,
         process_tree_complete=process_tree_complete,
         root_exec_observed=root_exec_observed,
+        absolute_inputs=tuple(
+            {
+                "path": item["path"],
+                "kind": item["kind"],
+                "operations": sorted(item["operations"]),
+            }
+            for _, item in sorted(absolute_inputs.items())
+        ),
     )
 
 
@@ -559,6 +601,15 @@ def _read_bounded(path: Path, limit: int) -> tuple[bytes, bool]:
     except OSError:
         return b"", True
     return raw[:limit], bool(size > limit or len(raw) > limit)
+
+
+def _wait_for_target(target: subprocess.Popen[Any]) -> int:
+    """Wait in bounded intervals so Windows can deliver KeyboardInterrupt."""
+    while True:
+        try:
+            return int(target.wait(timeout=TARGET_WAIT_POLL_SECONDS))
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def collect_command(
@@ -649,7 +700,7 @@ def collect_command(
                     root_pid = int(target.pid)
                     target_started = True
                     click_process.target_started()
-                    exit_code = int(target.wait())
+                    exit_code = _wait_for_target(target)
             except KeyboardInterrupt:
                 failed = True
                 exit_code = 130
@@ -779,9 +830,9 @@ def run_command(
     execute_unobserved: FallbackExecutor,
     resolve_backend: BackendResolver,
     digest_file: FileDigester = _file_digest,
-    native_backend_probe: NativeBackendProbe = _native_windows_tool,
+    native_backend_probe: NativeBackendProbe = native_windows_tool,
     system_version: Callable[[], str] = probe_windows_version,
-    device_map_provider: DeviceMapProvider = _windows_device_paths,
+    device_map_provider: DeviceMapProvider = windows_device_paths,
     collector: Callable[..., CollectedExecution] = collect_command,
     run_control: ControlRunner = click_process.run_argv,
     spawn_argv: SpawnArgv = click_process.spawn_argv,
@@ -831,7 +882,7 @@ def run_command(
     try:
         logman_digest = digest_file(Path(resolved["logman"]))
         tracerpt_digest = digest_file(Path(resolved["tracerpt"]))
-        digest = _combined_digest(logman_digest, tracerpt_digest)
+        digest = combined_backend_digest(logman_digest, tracerpt_digest)
         version = system_version()
     except Exception:
         logman_digest = tracerpt_digest = digest = version = ""
@@ -915,7 +966,7 @@ def run_command(
     )
     identity_started = time.monotonic()
     try:
-        final_digest = _combined_digest(
+        final_digest = combined_backend_digest(
             digest_file(Path(resolved["logman"])),
             digest_file(Path(resolved["tracerpt"])),
         )
@@ -976,8 +1027,11 @@ __all__ = [
     "BACKEND_NAME",
     "CollectedExecution",
     "ParsedTrace",
+    "combined_backend_digest",
     "collect_command",
+    "native_windows_tool",
     "parse_windows_etw",
     "probe_windows_version",
     "run_command",
+    "windows_device_paths",
 ]

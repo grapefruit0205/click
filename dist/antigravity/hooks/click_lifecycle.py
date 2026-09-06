@@ -410,6 +410,34 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
         return None, "", f"Malformed {CONTROL_COMMAND} command: {exc}."
     if not tokens or tokens[0] != CONTROL_COMMAND:
         return None, "", ""
+    if len(tokens) == 2 and tokens[1] == "status":
+        return "status", "", ""
+    if len(tokens) >= 3 and tokens[1] == "sharding":
+        operation = tokens[2]
+        if operation in {"status", "refresh"} and len(tokens) == 3:
+            return "sharding", json.dumps(
+                {"operation": operation, "command": []},
+                sort_keys=True,
+            ), ""
+        if operation == "init":
+            if len(tokens) == 3:
+                command: list[str] = []
+            elif len(tokens) >= 5 and tokens[3] == "--":
+                command = tokens[4:]
+            else:
+                return "", "", (
+                    f"Use `{CONTROL_COMMAND} sharding init -- <unittest argv>`; "
+                    "the `--` keeps the selected command explicit."
+                )
+            return "sharding", json.dumps(
+                {"operation": operation, "command": command},
+                sort_keys=True,
+            ), ""
+        return "", "", (
+            f"Use `{CONTROL_COMMAND} sharding init`, "
+            f"`{CONTROL_COMMAND} sharding status`, or "
+            f"`{CONTROL_COMMAND} sharding refresh`."
+        )
     if len(tokens) == 2 and tokens[1] in {"arm", "bypass", "cancel", "review"}:
         return tokens[1], "", ""
     if len(tokens) == 3 and tokens[1] == "default" and tokens[2] in {
@@ -431,6 +459,7 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
     if len(tokens) == 3 and tokens[1] == "observer" and tokens[2] in {
         "off",
         "shadow",
+        "authoritative",
         "status",
     }:
         return "observer", tokens[2], ""
@@ -460,8 +489,10 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
         f"`{CONTROL_COMMAND} inspect '<Inspection JSON>'`, "
         f"`{CONTROL_COMMAND} mutate '<Mutation JSON>'`, "
         f"`{CONTROL_COMMAND} service '<Managed Service JSON>'`, "
-        f"`{CONTROL_COMMAND} observer off|shadow|status`, "
+        f"`{CONTROL_COMMAND} observer off|shadow|authoritative|status`, "
         f"`{CONTROL_COMMAND} dashboard start|stop|status`, "
+        f"`{CONTROL_COMMAND} sharding init|status|refresh`, "
+        f"`{CONTROL_COMMAND} status`, "
         f"`{CONTROL_COMMAND} evidence '<Evidence Completion JSON>'`, "
         f"`{CONTROL_COMMAND} verify '<Verification Batch JSON>'`, "
         f"`{CONTROL_COMMAND} receipt export`, "

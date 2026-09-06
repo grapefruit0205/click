@@ -79,6 +79,99 @@ class ClickIncrementalPlanTests(unittest.TestCase):
         click_incremental.complete_request_timing(verification, missing, ended_ns=6_000_000, clock_id="other-clock")
         self.assertIsNone(missing["request_wall_ms"])
 
+    def test_timing_baseline_v2_separates_compatibility_from_reuse_revision(self) -> None:
+        source_key = "a" * 64
+        check_digest = "f" * 64
+        binding = click_incremental.timing_binding_digest(
+            source_key=source_key,
+            check_digest=check_digest,
+            environment_digest="1" * 64,
+            executable_digest="2" * 64,
+            host_coverage_digest="3" * 64,
+            observer_mode="off",
+        )
+        baseline = click_incremental.build_duration_baseline(
+            duration_ms=125.5,
+            source_key=source_key,
+            revision=7,
+            check_digest=check_digest,
+            observed_at=10,
+            batch_id="b" * 32,
+            origin_task={"mode": "guarded", "id": "ctr_" + "c" * 32},
+            observer_mode="off",
+            timing_binding_digest=binding,
+        )
+
+        self.assertTrue(click_incremental.baseline_is_valid(baseline))
+        self.assertTrue(click_incremental.timing_baseline_is_valid(baseline))
+        self.assertTrue(
+            click_incremental.baseline_is_suitable(
+                baseline,
+                source_key=source_key,
+                check_digest=check_digest,
+                observer_mode="off",
+                timing_binding_digest=binding,
+            )
+        )
+        assert baseline is not None
+        baseline["revision"] = 99
+        self.assertTrue(
+            click_incremental.baseline_is_suitable(
+                baseline,
+                source_key=source_key,
+                check_digest=check_digest,
+                observer_mode="off",
+                timing_binding_digest=binding,
+            )
+        )
+        self.assertFalse(
+            click_incremental.baseline_is_suitable(
+                baseline,
+                source_key=source_key,
+                check_digest=check_digest,
+                observer_mode="shadow",
+                timing_binding_digest=binding,
+            )
+        )
+        self.assertFalse(
+            click_incremental.baseline_is_suitable(
+                baseline,
+                source_key="b" * 64,
+                check_digest=check_digest,
+                observer_mode="off",
+                timing_binding_digest=binding,
+            )
+        )
+
+        legacy = {
+            "duration_ms": 125.5,
+            "revision": 7,
+            "check_digest": check_digest,
+            "observed_at": 10,
+            "batch_id": "b" * 32,
+            "sample_count": 1,
+        }
+        self.assertTrue(click_incremental.baseline_is_valid(legacy))
+        self.assertFalse(click_incremental.timing_baseline_is_valid(legacy))
+        self.assertFalse(
+            click_incremental.baseline_is_suitable(
+                legacy,
+                source_key=source_key,
+                check_digest=check_digest,
+                observer_mode="off",
+                timing_binding_digest=binding,
+            )
+        )
+        self.assertFalse(
+            click_incremental.baseline_is_suitable(
+                None,
+                source_key=source_key,
+                check_digest=check_digest,
+                observer_mode="off",
+                timing_binding_digest=binding,
+            )
+        )
+
     def item(
         self,
         suffix: str,
@@ -88,20 +181,36 @@ class ClickIncrementalPlanTests(unittest.TestCase):
         *,
         avoided: int = 0,
     ) -> dict[str, object]:
+        source_key = suffix * 64
+        check_digest = ("f" if suffix != "f" else "e") * 64
+        timing_binding = click_incremental.timing_binding_digest(
+            source_key=source_key,
+            check_digest=check_digest,
+            environment_digest="1" * 64,
+            executable_digest="2" * 64,
+            host_coverage_digest="3" * 64,
+            observer_mode="off",
+        )
         return click_incremental.decision(
-            source_key=suffix * 64,
+            source_key=source_key,
             decision=selected,
             reason_code=reason,
             current_revision=12,
             previous_revision=11,
-            check_digest=("f" if suffix != "f" else "e") * 64,
+            check_digest=check_digest,
             authority_source=authority,
             estimated_avoided_ms=avoided,
-            duration_baseline={
-                "duration_ms": avoided, "revision": 11,
-                "check_digest": ("f" if suffix != "f" else "e") * 64,
-                "observed_at": 1, "batch_id": "b" * 32, "sample_count": 1,
-            } if selected in click_incremental.REUSE_DECISIONS else None,
+            duration_baseline=click_incremental.build_duration_baseline(
+                duration_ms=avoided,
+                source_key=source_key,
+                revision=11,
+                check_digest=check_digest,
+                observed_at=1,
+                batch_id="b" * 32,
+                origin_task={"mode": "guarded", "id": "ctr_" + "c" * 32},
+                observer_mode="off",
+                timing_binding_digest=timing_binding,
+            ) if selected in click_incremental.REUSE_DECISIONS else None,
         )
 
     def test_canonical_plan_drives_only_non_reused_sources_into_runner(self) -> None:

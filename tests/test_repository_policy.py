@@ -46,7 +46,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
             (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "click")
-        self.assertEqual(manifest["version"], "0.82.0")
+        self.assertEqual(manifest["version"], "0.90.0")
         self.assertEqual(manifest["license"], "MIT")
         combined_copy = " ".join(
             (
@@ -72,7 +72,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         self.assertEqual(marketplace["name"], "click")
         self.assertEqual(marketplace["plugins"][0]["name"], "click")
         self.assertEqual(
-            marketplace["plugins"][0]["source"]["ref"], "v0.82.0"
+            marketplace["plugins"][0]["source"]["ref"], "v0.90.0"
         )
 
     def test_readmes_preserve_modes_references_and_reproducible_evidence_boundaries(self) -> None:
@@ -270,6 +270,44 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
                 path.read_text(encoding="utf-8"),
             )
 
+    def test_authoritative_observer_v2_is_guarded_bound_and_separate(self) -> None:
+        reference = _reference("authoritative-observer-v2.md")
+        normalized = " ".join(reference.lower().split())
+        for marker in (
+            "linux-cpython3123-strace68-v1",
+            "separately approved, active guarded contract",
+            "executed exactly once",
+            "one-use token",
+            "caller-provided json",
+            "runtime-dependency-observation-v2",
+            "missing path appearing",
+            "new import candidate",
+            "child process",
+            "network or ipc",
+            '"authoritative": false',
+            '"reuse_authorized": false',
+        ):
+            self.assertIn(marker, normalized)
+
+        dependency_runtime = (
+            ROOT / "hooks" / "click_dependency_cache.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'AUTHORITATIVE_OBSERVATION_PROVIDER_NAME = "runtime-dependency-observation-v2"',
+            dependency_runtime,
+        )
+        self.assertTrue((ROOT / "hooks" / "click_authoritative_observer.py").is_file())
+        self.assertTrue((ROOT / "hooks" / "click_observation_inputs.py").is_file())
+        self.assertIn(
+            "authoritative-observer-v2.md",
+            (ROOT / "scripts" / "build_antigravity_distribution.py").read_text(
+                encoding="utf-8"
+            ),
+        )
+        for readme in _readmes().values():
+            self.assertIn("click-gate observer authoritative", readme)
+            self.assertIn("authoritative-observer-v2.md", readme)
+
     def test_shadow_intelligence_is_non_authoritative_local_telemetry(self) -> None:
         intelligence = _reference("shadow-intelligence-v1.md")
         normalized = " ".join(intelligence.lower().split())
@@ -349,13 +387,14 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
 
     def test_release_documents_identify_current_and_preserve_release_history(self) -> None:
         for readme in _readmes().values():
-            self.assertIn("v0.82.0", readme)
+            self.assertIn("v0.90.0", readme)
             self.assertIn("codex plugin marketplace upgrade click", readme)
             self.assertIn("codex plugin add click@click", readme)
             self.assertIn("RELEASE_NOTES.md", readme)
 
         notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
         for marker in (
+            "## v0.90.0",
             "## v0.82.0",
             "## v0.81.1",
             "## v0.81.0",

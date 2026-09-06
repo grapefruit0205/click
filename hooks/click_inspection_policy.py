@@ -22,7 +22,7 @@ else:  # Imported from a directly executed bundled hook.
     import click_capability
 
 
-REQUEST_FIELDS = {"version", "commands"}
+REQUEST_FIELDS = {"version", "commands", "fresh"}
 MAX_COMMANDS = 8
 READ_ONLY_COMMANDS = {
     "basename",
@@ -202,6 +202,9 @@ def validate_request(
     if unknown:
         rendered = ", ".join(f"`{field}`" for field in unknown)
         return None, False, f"Inspection request contains unsupported field(s): {rendered}."
+    fresh = value.get("fresh", False)
+    if not isinstance(fresh, bool):
+        return None, False, "Inspection `fresh` must be a boolean when provided."
     commands = value.get("commands")
     if not isinstance(commands, list) or not commands:
         return None, False, "Inspection `commands` must be a non-empty argv-list list."
@@ -224,7 +227,10 @@ def validate_request(
             )
         broad = broad or is_broad_exploration_tokens(argv)
         normalized.append(argv)
-    return {"version": protocol_version, "commands": normalized}, broad, ""
+    request = {"version": protocol_version, "commands": normalized}
+    if fresh:
+        request["fresh"] = True
+    return request, broad, ""
 
 
 def git_option_allowed(subcommand: str, token: str) -> bool:

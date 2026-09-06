@@ -10,7 +10,25 @@ Use for an ambiguous but read-only command, and during Evidence, approved Guarde
 click-gate inspect '{"version":1,"commands":[["git","status","--short"],["sed","-n","1,160p","src/app.py"]]}'
 ```
 
-Every command must match the Hook's read-only argv policy. One request may contain up to eight commands, which run serially and stop on the first failure. The executable must be a bare name: names containing `/` or `\\`, Windows drive-prefixed forms such as `C:cat.exe`, and UNC forms are rejected. Immediately before execution, Click removes empty, relative, and repository-resolving PATH entries, rejects a candidate whose lexical path or resolved target is inside the nearest containing Git repository (or the current working directory outside Git), resolves the accepted program to an absolute real path, and executes that path with the sanitized PATH. Read children drop inherited `LD_*`, `DYLD_*`, `GCONV_PATH`, and `LOCPATH`. Recognized direct Bash reads are rewritten through this same runner even when no active contract or review ledger exists; they remain lightweight and untracked in that state, but the original shell no longer resolves their executable. Git inspection uses subcommand-specific positive option policies rather than a generic subcommand allowlist plus dangerous-option blacklist; `git grep` and `git cat-file` are not currently accepted. Global pagination and caller-supplied config overrides such as `-p`, `--paginate`, `-c`, and `--config-env` are rejected. Arbitrary `--format` and `--pretty` output, signature-rendering options, and `git status -v/-vv` are also excluded. Accepted Git reads run through a dedicated executor that additionally strips inherited `GIT_*` variables, ignores system/global Git config, forces a safe default log format with signature display disabled, uses `--no-pager` and `--no-optional-locks`, disables fsmonitor and external diff, and adds `--no-ext-diff` plus `--no-textconv` to supported diff-rendering commands. Local Git and SSH programs use the same absolute executable resolution. The Hook rejects shell interpreters and write-capable options. In active review and implementation it stores only a request digest and result metadata, applies the existing output cap, and detects repository-wide inventory from the validated argv. Before any tracked read executes, the runner atomically claims the managed state path, active status, current revision, request digest, one-use token, replay state, and freshness. An unclaimed startup reservation expires after 30 seconds; a claimed synchronous read has no elapsed-time release and continues to block mutation and final verification until its result is recorded or the user explicitly cancels. Tampered, unmanaged, stale, expired, cancelled, or replayed runners execute no read. A safe synchronous startup failure records failure and clears its claim. Broad classification, completed identical requests, and fixed failure counts are retained for advisory context only. A fresh repeat receives a new one-use token; an active same-digest reservation remains blocked so its exact token and result record cannot be replaced. All preceding runner claims, state and authority checks, mutation and verification interlocks, and operational limits remain unchanged.
+Every command must match the Hook's read-only argv policy. One request may contain up to eight commands, which run serially and stop on the first failure. The executable must be a bare name: names containing `/` or `\\`, Windows drive-prefixed forms such as `C:cat.exe`, and UNC forms are rejected. Immediately before execution, Click removes empty, relative, and repository-resolving PATH entries, rejects a candidate whose lexical path or resolved target is inside the nearest containing Git repository (or the current working directory outside Git), resolves the accepted program to an absolute real path, and executes that path with the sanitized PATH. Read children drop inherited `LD_*`, `DYLD_*`, `GCONV_PATH`, and `LOCPATH`. Recognized direct Bash reads are rewritten through this same runner even when no active contract or review ledger exists; they remain lightweight and untracked in that state, but the original shell no longer resolves their executable. Git inspection uses subcommand-specific positive option policies rather than a generic subcommand allowlist plus dangerous-option blacklist; `git grep` and `git cat-file` are not currently accepted. Global pagination and caller-supplied config overrides such as `-p`, `--paginate`, `-c`, and `--config-env` are rejected. Arbitrary `--format` and `--pretty` output, signature-rendering options, and `git status -v/-vv` are also excluded. Accepted Git reads run through a dedicated executor that additionally strips inherited `GIT_*` variables, ignores system/global Git config, forces a safe default log format with signature display disabled, uses `--no-pager` and `--no-optional-locks`, disables fsmonitor and external diff, and adds `--no-ext-diff` plus `--no-textconv` to supported diff-rendering commands. Local Git and SSH programs use the same absolute executable resolution. The Hook rejects shell interpreters and write-capable options. In active review and implementation the runtime ledger stores a request digest and result metadata, applies the existing output cap, and detects repository-wide inventory from the validated argv. Before any tracked read executes or returns a cached result, the runner atomically claims the managed state path, active status, current revision, request digest, one-use token, replay state, and freshness. An unclaimed startup reservation expires after 30 seconds; a claimed synchronous read has no elapsed-time release and continues to block mutation and final verification until its result is recorded or the user explicitly cancels. Tampered, unmanaged, stale, expired, cancelled, or replayed runners execute no read and return no cached content. A safe synchronous startup failure records failure and clears its claim. Broad classification, completed identical requests, and fixed failure counts are retained for advisory context only. A fresh repeat receives a new one-use token; an active same-digest reservation remains blocked so its exact token and result record cannot be replaced. All preceding runner claims, state and authority checks, mutation and verification interlocks, and operational limits remain unchanged.
+
+A separate heuristic cache may retain the complete stdout and stderr of one
+successful local `cat`, supported `sed -n`, or supported `rg` command. It is
+available only when an Evidence, approved Guarded, or review state supplies the
+one-use observation runner. Cache identity binds the normalized request, cwd,
+trusted executable content, relevant environment, explicit file contents, and
+for directory searches a conservative recursive inventory plus project ignore
+files. The supported directory subset rejects follow/hidden/no-ignore modes;
+other options or inputs that cannot be bounded execute normally. Results over
+48 KB, failures, and incomplete output are never cached. Entries use an
+owner-only plugin-data directory, an integrity digest, bounded count and bytes,
+and a 24-hour TTL. Missing, expired, permission-invalid, corrupt, or changed
+entries fail open to the normal read. A hit records `actual_process_executed`
+as false and never enters the evidence registry, claims completion, or changes
+verification reuse authority. The first hit at a revision gives a compact
+source/bytes/lines notice; later identical hits do not repeat it. Add
+`"fresh":true` to the version 1 inspection request to force the original
+read/search process and refresh an eligible entry.
 
 Experimental SSH inspection accepts only the same bounded Git policy further narrowed to `status`, `rev-parse HEAD`, `merge-base`, and `remote get-url`. It accepts no caller-supplied SSH options, assumes the remote login shell implements POSIX quoting, requires an already-known host key, disables interactive password flows, host-key updates, forwarding, local commands, and TTY allocation, and uses a 10-second connection timeout plus bounded keepalives. Unknown hosts, non-POSIX remote shells, unreachable hosts, and unsupported SSH implementations fail closed. This convenience is not a general remote-command capability or a security sandbox.
 
@@ -28,6 +46,27 @@ The Hook requires Evidence or approved Guarded state, rejects shell interpreters
 
 Recognizable long-running development servers are rejected here because a foreground server can hold the entire one-shot mutation open. Use the managed service capability instead.
 
+## Automatic sharding setup
+
+The setup facade keeps users out of capability JSON while retaining the same
+one-use mutation and verification runners:
+
+```text
+click-gate sharding init
+click-gate sharding init -- python3 -m unittest discover -s tests -q
+click-gate sharding status
+click-gate sharding refresh
+```
+
+Status and command selection are read-only. Approved `init -- ...` creates an
+external review artifact. A fresh Guarded contract bound in plain language to
+that proposal digest may use `refresh` to create absent policy files. After the
+user commits those exact files, subsequent refreshes perform the candidate
+parent/child bootstrap and submit the fixed
+`E_AUTO_SHARDING_BASELINE` parent source through protocol-v2 verification. See
+[automatic sharding setup](automatic-sharding-setup.md) for its state machine,
+Git boundary, recovery, and dashboard measurement scope.
+
 ## Managed local service
 
 Start one recognizable local development server under Evidence or approved Guarded state, and stop it when Browser or integration work is finished:
@@ -39,7 +78,7 @@ click-gate service '{"version":1,"action":"stop"}'
 
 Only `start` and `stop` are accepted. `start` requires direct argv for a recognizable development server and counts as a mutation, so prior completion evidence becomes stale. `stop` omits `argv`. Before either the start runner or its detached supervisor may spawn a process, it atomically claims the approved service id, request-plus-working-directory digest, and one-use token; replay, tampering, stale state, or cancellation before the corresponding claim therefore launches no additional server. A cancellation racing after a successful claim may briefly launch the child, which is then terminated when its state can no longer be recorded. The supervisor retains the exact child handle, starts the child in its own process group, and terminates only that retained group. It responds to explicit stop and `SessionEnd`, applies bounded start/stop waits, and enforces a final two-hour lifetime ceiling. One managed service may be active per contract. This avoids exposing a general process-control capability to the agent.
 
-## Shadow dashboard
+## Observer controls and Shadow dashboard
 
 Observer collection is lifecycle-local, explicitly controlled, and off by
 default:
@@ -47,14 +86,24 @@ default:
 ```text
 click-gate observer off
 click-gate observer shadow
+click-gate observer authoritative
 click-gate observer status
 ```
 
-Only `shadow` attaches the selected native collector to compatible argv
-verification. The setting is non-authoritative, never grants reuse, and does
-not advance the mutation revision or change evidence. Dashboard activation is
-independent: opening the viewer does not enable collection, and stopping the
-viewer does not disable it.
+`shadow` attaches the selected non-authoritative collector to compatible argv
+verification and never grants reuse. `authoritative` is accepted only after a
+separately approved Guarded contract and prepares the exact CPython 3.12.3
+profile for the current platform: Linux with strace 6.8, privileged macOS with
+`fs_usage`, or Windows with inbox ETW tools. Linux is validated on a real host;
+the macOS and Windows profiles are implemented and await real-host validation.
+Preparation is candidate state, not an observation or reuse grant. Only a
+complete runner-signed v2 observation from the original one-time execution can
+support successor requalification. These controls do not advance the mutation
+revision or change evidence. Dashboard
+activation is independent: opening the viewer does not enable collection, and
+stopping the viewer does not disable it. See
+[Authoritative Observer v2](authoritative-observer-v2.md) and
+[Shadow Observer v1](observer-v1.md).
 
 Open the current lifecycle's non-authoritative Evidence Map and ROI view only
 when requested:
@@ -93,9 +142,9 @@ An exact broad group may be decomposed by committed [Evidence Shards v1](evidenc
 
 Python checks must use an explicit supported pytest, unittest, or coverage module runner; Windows `py -3 -m ...` and `uv run pytest` are recognized. Python `-c` and direct Python scripts are not verification capabilities. Exact-file `node --check` and `node --test` are targeted; project-wide `node --test` is broad, while Node eval/print forms are not verification. Verification environment binding canonicalizes Hook-owned `PLUGIN_ROOT` alongside existing shell bookkeeping but continues to fingerprint project, user, PATH, and toolchain values. The prepared key/value HMAC records are protected by an aggregate runner-token binding. If a prepared value changes or disappears before the runner claims the batch, the runner projects current values onto the prepared key set, ignores runner-only additions, re-fingerprints the canonical environment, and rebinds the reserved environment digest without another approval. The exact resolved executable fingerprint remains fixed, so an executable change or malformed or tampered binding still fails closed. A successful receipt records the actual rebound environment digest. If runner admission otherwise fails before any check executes, only the exact digest/token-matched unclaimed reservation returns to `ready`; it records no evidence and consumes no test-failure retry. Claimed, stale, unavailable, tampered, and replayed state remains fail-closed. A claimed batch remains running until it records a result, the runner receives an interrupt and records exit `130`, or the contract is explicitly cancelled; only an unclaimed reservation may expire into a retry. Click terminates the retained isolated child process group before recording an interrupted check as non-passing, so an ordinary Ctrl-C does not leave a permanent claimed-runner lock.
 
-The Hook skips a successful same-revision check only when the receipt still matches the active intent or contract, normalized group, protected tree, environment, executable, and host coverage. For dependency-aware cross-revision reuse, Guarded may use approval-bound `dependencies`, a committed manifest entry, or both. Evidence may use only the committed manifest. In both modes the baseline must also carry a complete runtime dependency observation. Approval-bound paths and concrete manifest paths remain hard dependencies. A complete observation may refine expanding manifest patterns (`*`, `**`, and directory prefixes) to repository inputs actually consumed, and the resulting effective inputs are hashed. An unavailable or failed observer, an observed external input, or incomplete child-process-tree coverage makes only cross-revision reuse unavailable; it does not change the check's PASS/FAIL result. The provider, relevant normalized entry, observation digest, resolved paths and contents, check, identity, Git root, environment, executable, coverage, and host-recorded mutation snapshot must match. Missing post state or later drift runs the check. Reuse never occurs outside Git.
+The Hook skips a successful same-revision check only when the receipt still matches the active intent or contract, normalized group, protected tree, environment, executable, and host coverage. For dependency-aware cross-revision reuse, an approved Guarded contract may use approval-bound `dependencies`, a committed manifest entry, or both, but the baseline must carry a complete `runtime-dependency-observation-v2` attestation produced by that invocation's one-use runner. Evidence mode and caller-provided JSON cannot mint this authority. Approval-bound paths and concrete manifest paths remain hard dependencies. A complete observation may refine expanding manifest patterns (`*`, `**`, and directory prefixes) to repository inputs actually consumed, and the resulting effective inputs are hashed. An unavailable or failed observer, an unsupported input, or incomplete process coverage makes only cross-revision reuse unavailable; it does not change the check's PASS/FAIL result and never causes a hidden second execution. The provider, profile, backend and companion identities, relevant normalized entry, observation digest, input snapshots, check, shard, original execution, identity, Git root and tree, contract, environment, executable, host coverage, and host-recorded mutation snapshot must match. Missing post state or later drift runs the check. Reuse never occurs outside Git.
 
-The separate [Shadow Observer v1 contract](observer-v1.md) emits non-authoritative telemetry beside compatible argv verification only after `click-gate observer shadow` explicitly enables it for the lifecycle. New lifecycles default to `off`. The selected backend may use trusted Linux `strace`, native macOS `fs_usage` when the current process already has permission, or the trusted Windows inbox `logman.exe` and `tracerpt.exe` ETW tools. Its bounded aggregate is retained only in the active lifecycle; raw events are discarded. Click never elevates privilege. [Shadow Intelligence v1](shadow-intelligence-v1.md) may fingerprint that aggregate after a successful run, freeze a prediction before the next real rerun, and evaluate it afterward. Neither layer has a conversion or bridge into `runtime-dependency-observation-v1`, evidence reuse, approval, completion, or receipt export, and neither can authorize a skipped check. Collector or analysis absence and failure leave the established verification path and result unchanged.
+The separate [Shadow Observer v1 contract](observer-v1.md) emits non-authoritative telemetry beside compatible argv verification only after `click-gate observer shadow` explicitly enables it for the lifecycle. New lifecycles default to `off`. The selected backend may use trusted Linux `strace`, native macOS `fs_usage` when the current process already has permission, or the trusted Windows inbox `logman.exe` and `tracerpt.exe` ETW tools. Its bounded aggregate is retained only in the active lifecycle; raw events are discarded. Click never elevates privilege. [Shadow Intelligence v1](shadow-intelligence-v1.md) may fingerprint that aggregate after a successful run, freeze a prediction before the next real rerun, and evaluate it afterward. Neither layer has a conversion or bridge into `runtime-dependency-observation-v2`, evidence reuse, approval, completion, or receipt export, and neither can authorize a skipped check. Collector or analysis absence and failure leave the established verification path and result unchanged.
 
 The observer-free alternative is a committed `.click/evidence-reuse.json` file with exact `checks` groups and `reuse_if_only_changed` patterns. A successful run stores its unchanged policy digest and an effective Git baseline consisting of the commit identity plus bounded fingerprints for dirty and untracked files. Preflight compares that baseline with the current commit and worktree, reports net changed paths, and reuses only if every path matches the same policy entry. The policy and dependency-map paths are protected from self-authorization. Missing or edited policy, duplicate groups, malformed patterns, unsupported file types, excessive or racing changes, unmerged state, unavailable Git data, and any unlisted path rerun without asking. Environment, executable, contract, host coverage, and the host-recorded mutation boundary remain mandatory. A complete runtime observation takes precedence, so a safe-change entry cannot override a changed observed input. This policy is explicit repository-owner authority rather than automatic dependency discovery and needs no platform observer or extra install.
 

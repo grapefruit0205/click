@@ -101,6 +101,9 @@ class ParsedTrace:
     child_process_count: int
     process_tree_complete: bool
     root_exec_observed: bool
+    # Absolute names exist only in the in-memory collector result.  Shadow
+    # records continue to persist repository-relative, content-free inputs.
+    absolute_inputs: tuple[dict[str, Any], ...] = ()
 
 
 ShadowExecution = click_observer_common.ShadowExecution
@@ -360,6 +363,8 @@ def parse_strace(
     workspace: Path,
     initial_cwd: Path | None = None,
     truncated: bool = False,
+    allow_runtime_getrandom: bool = False,
+    allow_workspace_root: bool = False,
 ) -> ParsedTrace:
     """Parse bounded strace text into repository-relative aggregate inputs."""
     try:
@@ -374,16 +379,42 @@ def parse_strace(
 
     cwd_by_pid: dict[str, Path] = {"root": initial}
     inputs: dict[str, dict[str, Any]] = {}
+    absolute_inputs: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()
+    absolute_conflicts: set[str] = set()
     external_paths: set[str] = set()
     unresolved = 1 if truncated else 0
     child_processes = 0
     root_exec_observed = False
 
-    def add_path(path: Path | None, *, kind: str, operation: str) -> None:
+    def add_path(
+        path: Path | None,
+        *,
+        kind: str,
+        operation: str,
+        shadow_projection: bool = True,
+    ) -> None:
         nonlocal unresolved
         if path is None:
             unresolved = _bounded_add(unresolved, 1)
+            return
+        absolute = os.path.normcase(str(path))
+        absolute_existing = absolute_inputs.get(absolute)
+        if absolute_existing is not None and absolute_existing["kind"] != kind:
+            absolute_inputs.pop(absolute, None)
+            absolute_conflicts.add(absolute)
+            unresolved = _bounded_add(unresolved, 1)
+        elif absolute not in absolute_conflicts:
+            if absolute_existing is None:
+                if len(absolute_inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
+                    unresolved = _bounded_add(unresolved, 1)
+                else:
+                    absolute_inputs[absolute] = {
+                        "path": str(path), "kind": kind, "operations": {operation}
+                    }
+            else:
+                absolute_existing["operations"].add(operation)
+        if not shadow_projection:
             return
         try:
             relative_path = path.relative_to(root)
@@ -400,7 +431,8 @@ def parse_strace(
             return
         relative = relative_path.as_posix()
         if relative in {"", "."}:
-            unresolved = _bounded_add(unresolved, 1)
+            if not allow_workspace_root:
+                unresolved = _bounded_add(unresolved, 1)
             return
         if kind == "directory":
             relative = f"{relative.rstrip('/')}/"
@@ -466,6 +498,20 @@ def parse_strace(
                     unresolved = _bounded_add(unresolved, 1)
             continue
         if call in _IGNORED_PROCESS_CALLS:
+            continue
+        if call == "getcwd" and returned is not None and returned >= 0:
+            # The runner separately binds the canonical cwd.
+            continue
+        if (
+            call == "getrandom"
+            and allow_runtime_getrandom
+            and returned == 8
+            and re.search(r",\s*8,\s*GRND_NONBLOCK\s*$", arguments)
+        ):
+            # glibc obtains an internal startup canary this way even when
+            # CPython hash randomization is explicitly disabled. Project-level
+            # random APIs remain covered by the native profile and every other
+            # getrandom shape remains unresolved.
             continue
         if call == "chdir":
             path_text, offset, shortened = _decoded_path(arguments)
@@ -536,9 +582,20 @@ def parse_strace(
             if "O_WRONLY" in arguments and "O_RDWR" not in arguments:
                 continue
             resolved_descriptor = _fd_path(result)
+            lexical_observed = observed
             if resolved_descriptor.startswith("/"):
                 observed = Path(os.path.normpath(resolved_descriptor))
             directory = "O_DIRECTORY" in arguments
+            # Preserve a lexical symlink or alias as well as the kernel's
+            # resolved descriptor annotation.  The authoritative snapshot
+            # binds both; Shadow still receives only its normal projection.
+            if lexical_observed is not None and lexical_observed != observed:
+                add_path(
+                    lexical_observed,
+                    kind="directory" if directory else "file",
+                    operation="metadata" if "O_PATH" in arguments or directory else "read",
+                    shadow_projection=False,
+                )
             add_path(
                 observed,
                 kind="directory" if directory else "file",
@@ -560,6 +617,14 @@ def parse_strace(
         }
         for relative in sorted(inputs)
     )
+    normalized_absolute_inputs = tuple(
+        {
+            "path": absolute_inputs[key]["path"],
+            "kind": absolute_inputs[key]["kind"],
+            "operations": sorted(absolute_inputs[key]["operations"]),
+        }
+        for key in sorted(absolute_inputs)
+    )
     process_tree_complete = not truncated and unresolved == 0
     return ParsedTrace(
         inputs=normalized_inputs,
@@ -570,6 +635,7 @@ def parse_strace(
         child_process_count=child_processes,
         process_tree_complete=process_tree_complete,
         root_exec_observed=root_exec_observed,
+        absolute_inputs=normalized_absolute_inputs,
     )
 
 

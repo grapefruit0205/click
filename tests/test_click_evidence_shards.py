@@ -194,6 +194,32 @@ class ClickEvidenceShardsTests(unittest.TestCase):
 
         self.assertEqual(plan["status"], "sharded")
 
+    def test_pytest_default_discovery_is_exact_and_new_file_falls_back(self) -> None:
+        self.parent_argv = ["python3", "-m", "pytest", "-q", "tests"]
+        value = self.manifest()
+        value["entries"][0]["shards"] = [
+            {
+                "id": "alpha",
+                "checks": [["python3", "-m", "pytest", "-q", "tests/test_alpha.py"]],
+                "covers": ["tests/test_alpha.py"],
+            },
+            {
+                "id": "beta",
+                "checks": [["python3", "-m", "pytest", "-q", "tests/test_beta.py"]],
+                "covers": ["tests/test_beta.py"],
+            },
+        ]
+        self.write_manifest(value)
+        self.commit()
+        self.assertEqual(self.resolve()["status"], "sharded")
+
+        (self.root / "tests" / "new_test.py").write_text(
+            "# discovered by pytest\n", encoding="utf-8"
+        )
+        changed = self.resolve()
+        self.assertEqual(changed["status"], "fallback")
+        self.assertEqual(changed["reason"], "inventory-narrower-than-parent-discovery")
+
     def test_ignored_parent_discovery_member_also_forces_fallback(self) -> None:
         (self.root / ".gitignore").write_text(
             "tests/testignored.py\n", encoding="utf-8"

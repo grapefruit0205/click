@@ -11,6 +11,7 @@ from collections.abc import Callable
 import hashlib
 import json
 from pathlib import Path
+import re
 import secrets
 import sys
 import tempfile
@@ -23,6 +24,7 @@ if __package__:
         click_claims,
         click_contract_state,
         click_inspection,
+        click_observation_cache,
         click_process,
         click_state,
     )
@@ -31,6 +33,7 @@ else:  # Executed directly from the bundled hooks directory.
     import click_claims
     import click_contract_state
     import click_inspection
+    import click_observation_cache
     import click_process
     import click_state
 
@@ -49,6 +52,14 @@ RunInspectionRequest = Callable[[dict[str, Any], tuple[Path, str, str] | None], 
 
 def fresh_state() -> dict[str, Any]:
     return {"entries": {}}
+
+
+def _nonnegative_count(value: Any) -> int:
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else 0
+    )
 
 
 def unclaimed_reservation_is_fresh(value: Any, ttl_seconds: int) -> bool:
@@ -188,7 +199,7 @@ def prepare(
             ):
                 continue
             existing_status = str(existing.get("status", ""))
-            if existing_status == "success":
+            if existing_status in {"success", "reused"}:
                 prior_broad_success = True
             elif existing_status == "running" and is_running(existing):
                 prior_broad_running = True
@@ -248,6 +259,21 @@ def prepare(
         "last_exit_code": None,
         "output_bytes": 0,
         "broad_inventory": broad_inventory,
+        "actual_process_executed": None,
+        "cache_key": "",
+        "cache_status": "pending",
+        "cache_reuse_count": (
+            _nonnegative_count(prior.get("cache_reuse_count", 0))
+            if isinstance(prior, dict)
+            and int(prior.get("revision", -1)) == revision
+            else 0
+        ),
+        "cache_notice_shown": bool(
+            prior.get("cache_notice_shown", False)
+            if isinstance(prior, dict)
+            and int(prior.get("revision", -1)) == revision
+            else False
+        ),
     }
     while len(entries) > MAX_ENTRIES:
         entries.pop(next(iter(entries)))
@@ -364,6 +390,11 @@ def record_result(
     exit_code: int,
     output_bytes: int,
     incomplete: bool,
+    *,
+    cache_reused: bool = False,
+    cache_key: str = "",
+    cache_notice_shown: bool = False,
+    cache_status: str = "",
 ) -> bool:
     if not managed_path(path):
         return False
@@ -414,14 +445,54 @@ def record_result(
         entry["status"] = "failed"
     elif incomplete:
         entry["status"] = "incomplete"
+    elif cache_reused:
+        entry["status"] = "reused"
     else:
         entry["status"] = "success"
+    previous_reuse_count = entry.get("cache_reuse_count", 0)
+    if not isinstance(previous_reuse_count, int) or isinstance(
+        previous_reuse_count, bool
+    ) or previous_reuse_count < 0:
+        previous_reuse_count = 0
+    entry["actual_process_executed"] = not cache_reused
+    entry["cache_key"] = (
+        cache_key
+        if isinstance(cache_key, str)
+        and re.fullmatch(r"[0-9a-f]{64}", cache_key)
+        else ""
+    )
+    entry["cache_reuse_count"] = previous_reuse_count + int(cache_reused)
+    entry["cache_notice_shown"] = bool(
+        entry.get("cache_notice_shown") or cache_notice_shown
+    )
+    entry["cache_status"] = (
+        cache_status
+        if isinstance(cache_status, str)
+        and re.fullmatch(r"[a-z-]{1,32}", cache_status)
+        else "unavailable"
+    )
     entries[command_digest] = entry
     observations["entries"] = entries
     state["observations"] = observations
     state["updated_at"] = int(time.time())
     click_state.write_json(path, state)
     return True
+
+
+def cache_notice_needed(path: Path, command_digest: str) -> bool:
+    """Return whether this revision has not yet shown its cache-hit notice."""
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return False
+    observations = state.get("observations")
+    entries = observations.get("entries") if isinstance(observations, dict) else None
+    entry = entries.get(command_digest) if isinstance(entries, dict) else None
+    return bool(
+        isinstance(entry, dict)
+        and entry.get("status") == "running"
+        and entry.get("cache_notice_shown") is not True
+    )
 
 
 def run_request(
@@ -433,13 +504,59 @@ def run_request(
     commands = request["commands"]
     recorded_result = False
     try:
+        descriptor: dict[str, Any] | None = None
+        cache_hit: dict[str, Any] | None = None
+        if state_result is not None:
+            try:
+                descriptor, cache_hit = click_observation_cache.load(
+                    request, Path.cwd()
+                )
+            except (OSError, RuntimeError, TypeError, ValueError):
+                descriptor, cache_hit = None, None
         with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
-            exit_code = execute_commands(commands, stdout_file, stderr_file)
+            cache_reused = cache_hit is not None
+            if cache_hit is not None:
+                stdout_file.write(cache_hit["stdout_data"])
+                stderr_file.write(cache_hit["stderr_data"])
+                exit_code = 0
+            else:
+                exit_code = execute_commands(commands, stdout_file, stderr_file)
             output_bytes = stdout_file.tell() + stderr_file.tell()
             incomplete = output_bytes > MAX_OUTPUT_BYTES
+            cache_key = ""
+            cache_status = "reused" if cache_reused else "ineligible"
+            if (
+                not cache_reused
+                and exit_code == 0
+                and not incomplete
+                and descriptor is not None
+            ):
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                stdout_data = stdout_file.read()
+                stderr_data = stderr_file.read()
+                try:
+                    cache_key, cache_status = click_observation_cache.store_with_status(
+                        request,
+                        Path.cwd(),
+                        descriptor,
+                        stdout_data,
+                        stderr_data,
+                    )
+                except (OSError, RuntimeError, TypeError, ValueError):
+                    cache_key = ""
+                    cache_status = "storage-error"
+            elif cache_hit is not None:
+                cache_key = str(cache_hit.get("key", ""))
+
+            show_cache_notice = False
             if state_result is not None:
                 state_path, request_digest, runner_token = state_result
                 with click_state.state_lock():
+                    show_cache_notice = bool(
+                        cache_reused
+                        and cache_notice_needed(state_path, request_digest)
+                    )
                     recorded = record_result(
                         state_path,
                         request_digest,
@@ -447,6 +564,10 @@ def run_request(
                         exit_code,
                         output_bytes,
                         incomplete,
+                        cache_reused=cache_reused,
+                        cache_key=cache_key,
+                        cache_notice_shown=show_cache_notice,
+                        cache_status=cache_status,
                     )
                 if not recorded:
                     sys.stderr.write("Click could not record the observation result safely.\n")
@@ -455,6 +576,8 @@ def run_request(
 
             stdout_file.seek(0)
             stderr_file.seek(0)
+            if cache_hit is not None and show_cache_notice:
+                sys.stderr.write(click_observation_cache.notice(cache_hit))
             remaining = MAX_OUTPUT_BYTES
             if exit_code == 0:
                 remaining -= click_process.copy_limited_output(
