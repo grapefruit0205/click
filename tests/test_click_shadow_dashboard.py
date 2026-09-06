@@ -238,9 +238,11 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             "PLUGIN_DATA": str(self.plugin_data),
             "CLICK_CONFIG_HOME": str(self.plugin_data),
         }
+        environment_ready = threading.Event()
 
         def serve() -> None:
             with mock.patch.dict(os.environ, environment):
+                environment_ready.set()
                 results.append(
                     CLICK_SHADOW_DASHBOARD.run_server(
                         [str(state_path), instance_id, access_token]
@@ -249,6 +251,7 @@ class ClickShadowDashboardTests(ClickGateTestCase):
 
         thread = threading.Thread(target=serve, daemon=True)
         thread.start()
+        self.assertTrue(environment_ready.wait(timeout=2))
         port = 0
         for _ in range(500):
             with CLICK_STATE.state_lock():
