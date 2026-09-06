@@ -243,6 +243,34 @@ class ClickReceiptTests(unittest.TestCase):
         self.assertIsNone(rejected)
         self.assertIn("Successor-reused", error)
 
+    def test_v5_requires_guarded_separate_contract_and_preserves_shard_integrity(self) -> None:
+        receipt = _valid_sharded_receipt()
+        receipt["version"] = 5
+        receipt["evidence"][0]["lineage"] = {
+            "mode": "successor-reused", "from_revision": 9,
+            "dependency_digest": _digest("e"), "origin_batch_id": "a" * 32,
+            "origin_contract_id": "ctr_" + "b" * 32,
+            "requalification_mode": "dependency",
+        }
+        normalized, error = click_receipt.validate_receipt(receipt)
+        self.assertEqual(error, "")
+        self.assertIsNotNone(normalized)
+        for case in ("downgrade", "self-origin", "evidence-authority", "missing-shard", "mixed-identity"):
+            with self.subTest(case=case):
+                bad = copy.deepcopy(receipt)
+                if case == "downgrade":
+                    bad["version"] = 4
+                elif case == "self-origin":
+                    bad["evidence"][0]["lineage"]["origin_contract_id"] = bad["contract"]["id"]
+                elif case == "evidence-authority":
+                    bad["contract"] = None
+                    bad["authority"].update(mode="evidence", approval_bound=False, execution_authority="host")
+                elif case == "missing-shard":
+                    bad["evidence"].pop()
+                else:
+                    bad["evidence"][0]["lineage"]["origin_evidence_session_id"] = "evs_" + "c" * 32
+                self.assertIsNone(click_receipt.validate_receipt(bad)[0])
+
     def test_unknown_sensitive_or_self_referential_fields_fail_closed(self) -> None:
         for path, field in (
             ((), "runner_token"),

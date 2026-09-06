@@ -29,6 +29,39 @@ BACKEND = "a" * 64
 
 
 class ClickDashboardProjectionTests(unittest.TestCase):
+    def test_display_copy_rejects_paths_secrets_and_html_without_authority(self) -> None:
+        state = {"status": "staged", "runtime_mode": "guarded", "presentation": {
+            "name": "password abc", "promises": ["/home/private/repo", "<script>alert(1)</script>"],
+            "evidence_labels": {KEY_RUN: "secret token"},
+        }}
+        projection = click_dashboard_projection.dashboard_projection(state)
+        rendered = json.dumps(projection)
+        for forbidden in ("password abc", "/home/private", "<script>", "secret token"):
+            self.assertNotIn(forbidden, rendered)
+        self.assertFalse(projection["task"]["approval_bound"])
+        self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
+
+    def test_first_guarded_contract_shows_promise_approval_and_unstarted_sources(self) -> None:
+        state = {
+            "runtime_mode": "guarded", "status": "staged", "contract_id": "ctr_" + "a" * 32,
+            "staged_turn_id": "one", "approved_turn_id": "",
+            "presentation": {"name": "새 계약 검증", "promises": ["관련 검증을 통과한다"],
+                             "in_scope": ["검증 경로"], "out_of_scope": ["배포"], "must_hold": ["별도 승인 유지"],
+                             "evidence_labels": {KEY_RUN: "핵심 동작"}},
+            "verification": {"mutation_revision": 0},
+            "evidence_state": {"sources": {KEY_RUN: {"kind": "argv", "status": "ready"}}},
+        }
+        projection = click_dashboard_projection.dashboard_projection(state)
+        self.assertEqual(projection["task"]["name"], "새 계약 검증")
+        self.assertEqual(projection["task"]["promises"], ["관련 검증을 통과한다"])
+        self.assertFalse(projection["task"]["approval_bound"])
+        self.assertEqual(projection["sources"][0]["execution_status"], "not-run")
+        self.assertIn("검증", projection["sources"][0]["next_action"])
+        self.assertIsNone(projection["accounting"]["reuse_rate"])
+        self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
+        state.update(status="approved", approved_turn_id="two")
+        self.assertTrue(click_dashboard_projection.dashboard_projection(state)["task"]["approval_bound"])
+
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

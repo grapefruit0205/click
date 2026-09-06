@@ -35,6 +35,7 @@ EVIDENCE_STATUSES = {"ready", "running", "observed", "passed", "failed", "stale"
 EVIDENCE_STATE_VERSION = 1
 SUCCESSOR_EVIDENCE_FIELD = "successor_evidence"
 SUCCESSOR_EVIDENCE_VERSION = 1
+GUARDED_SUCCESSOR_VERSION = 2
 MAX_SUCCESSOR_EVIDENCE_BYTES = 2 * 1024 * 1024
 MAX_SUCCESSOR_SOURCES = 256
 _SUCCESSOR_FIELDS = frozenset({
@@ -43,6 +44,9 @@ _SUCCESSOR_FIELDS = frozenset({
     "captured_at", "evidence_state", "origins", "digest",
 })
 _SUCCESSOR_ORIGIN_FIELDS = frozenset({"batch_id", "execution_status"})
+_GUARDED_SUCCESSOR_FIELDS = (
+    _SUCCESSOR_FIELDS - {"origin_evidence_session_id"}
+) | {"origin_contract_id"}
 
 
 def evidence_key(evidence_id: str) -> str:
@@ -110,6 +114,7 @@ def _fresh_source(kind: str, dependency_patterns: tuple[str, ...] = ()) -> dict[
         "last_successor_reused_at": 0,
         "last_successor_origin_batch_id": "",
         "last_successor_origin_evidence_session_id": "",
+        "last_successor_origin_contract_id": "",
         "last_successor_candidate_digest": "",
         "last_successor_origin_revision": -1,
         "last_successor_mode": "",
@@ -153,6 +158,14 @@ def fresh_successor_evidence() -> dict[str, Any]:
     return {}
 
 
+def clear_successor_receipt(source: dict[str, Any]) -> None:
+    """A real current-lifecycle execution replaces previously reused lineage."""
+    source.update({
+        key: value for key, value in _fresh_source("argv").items()
+        if key == "successor_reuse_count" or key.startswith("last_successor_")
+    })
+
+
 def successor_scope_digest(identity: str) -> str:
     return hashlib.sha256(identity.encode()).hexdigest()
 
@@ -171,15 +184,19 @@ def successor_evidence_is_valid(
     expected_contract_schema_version: int,
     scope_digest: str,
 ) -> bool:
+    guarded = isinstance(value, dict) and value.get("version") == GUARDED_SUCCESSOR_VERSION
+    identity_field = "origin_contract_id" if guarded else "origin_evidence_session_id"
+    identity_pattern = r"ctr_[0-9a-f]{32}" if guarded else r"evs_[0-9a-f]{32}"
     if (
         not isinstance(value, dict)
-        or set(value) != _SUCCESSOR_FIELDS
-        or value.get("version") != SUCCESSOR_EVIDENCE_VERSION
+        or set(value) != (_GUARDED_SUCCESSOR_FIELDS if guarded else _SUCCESSOR_FIELDS)
+        or value.get("version") not in {SUCCESSOR_EVIDENCE_VERSION, GUARDED_SUCCESSOR_VERSION}
+        or isinstance(value.get("version"), bool)
         or value.get("scope_digest") != scope_digest
         or not isinstance(scope_digest, str)
         or re.fullmatch(r"[0-9a-f]{64}", scope_digest) is None
-        or not isinstance(value.get("origin_evidence_session_id"), str)
-        or re.fullmatch(r"evs_[0-9a-f]{32}", value["origin_evidence_session_id"])
+        or not isinstance(value.get(identity_field), str)
+        or re.fullmatch(identity_pattern, value[identity_field])
         is None
         or not isinstance(value.get("origin_intent_digest"), str)
         or re.fullmatch(r"[0-9a-f]{64}", value["origin_intent_digest"]) is None
@@ -242,7 +259,11 @@ def carry_successor_evidence(
     expected_contract_schema_version: int,
     now: int | None = None,
 ) -> bool:
-    """Carry one completed Evidence ledger as re-evaluation candidates only."""
+    """Carry completed facts, never approval, claims, runner or completion state.
+
+    The lifecycle caller must establish completion before calling this helper.
+    Cross-mode carry is deliberately unsupported.
+    """
     sources = sources_from_state(
         previous,
         expected_contract_schema_version=expected_contract_schema_version,
@@ -254,17 +275,25 @@ def carry_successor_evidence(
         if isinstance(verification, dict)
         else None
     )
-    session_id = previous.get("evidence_session_id")
+    guarded = previous.get("runtime_mode") == "guarded"
+    identity_field = "origin_contract_id" if guarded else "origin_evidence_session_id"
+    session_id = previous.get("contract_id" if guarded else "evidence_session_id")
     intent_digest = previous.get("intent_digest")
     if (
-        not sources
+        current.get("runtime_mode") != previous.get("runtime_mode")
+        or guarded and (
+            previous.get("status") != "approved"
+            or not previous.get("approved_turn_id")
+            or previous.get("approved_turn_id") == previous.get("staged_turn_id")
+        )
+        or not sources
         or len(sources) > MAX_SUCCESSOR_SOURCES
         or not isinstance(evidence_state, dict)
         or not isinstance(revision, int)
         or isinstance(revision, bool)
         or revision < 0
         or not isinstance(session_id, str)
-        or re.fullmatch(r"evs_[0-9a-f]{32}", session_id) is None
+        or re.fullmatch(r"ctr_[0-9a-f]{32}" if guarded else r"evs_[0-9a-f]{32}", session_id) is None
         or not isinstance(intent_digest, str)
         or re.fullmatch(r"[0-9a-f]{64}", intent_digest) is None
     ):
@@ -280,9 +309,9 @@ def carry_successor_evidence(
     if not eligible:
         return False
     value = {
-        "version": SUCCESSOR_EVIDENCE_VERSION,
+        "version": GUARDED_SUCCESSOR_VERSION if guarded else SUCCESSOR_EVIDENCE_VERSION,
         "scope_digest": scope_digest,
-        "origin_evidence_session_id": session_id,
+        identity_field: session_id,
         "origin_intent_digest": intent_digest,
         "origin_revision": revision,
         "origin_registry_digest": registry_digest(sources),
@@ -317,14 +346,27 @@ def successor_candidate(
     ):
         return None
     assert isinstance(value, dict)
+    guarded = value["version"] == GUARDED_SUCCESSOR_VERSION
+    if guarded and not (
+        state.get("runtime_mode") == "guarded"
+        and state.get("status") == "approved"
+        and state.get("approved_turn_id")
+        and state.get("approved_turn_id") != state.get("staged_turn_id")
+        and state.get("contract_id") != value["origin_contract_id"]
+    ):
+        return None
+    if not guarded and state.get("runtime_mode") != "evidence":
+        return None
     origin = value["origins"].get(source_key)
     source = value["evidence_state"]["sources"].get(source_key)
     if not isinstance(origin, dict) or not isinstance(source, dict):
         return None
     metadata = {
-        "kind": "successor-evidence",
+        "kind": "successor-contract" if guarded else "successor-evidence",
         "batch_id": origin["batch_id"],
-        "evidence_session_id": value["origin_evidence_session_id"],
+        ("contract_id" if guarded else "evidence_session_id"): value[
+            "origin_contract_id" if guarded else "origin_evidence_session_id"
+        ],
         "candidate_digest": value["digest"],
         "origin_revision": value["origin_revision"],
     }
@@ -616,6 +658,7 @@ def _successor_fields_are_valid(source: dict[str, Any]) -> bool:
     origin_revision = source.get("last_successor_origin_revision", -1)
     batch_id = source.get("last_successor_origin_batch_id", "")
     session_id = source.get("last_successor_origin_evidence_session_id", "")
+    contract_id = source.get("last_successor_origin_contract_id", "")
     candidate_digest = source.get("last_successor_candidate_digest", "")
     mode = source.get("last_successor_mode", "")
     if any(
@@ -626,19 +669,22 @@ def _successor_fields_are_valid(source: dict[str, Any]) -> bool:
     if count < 0 or reused_at < 0 or origin_revision < -1:
         return False
     if not all(isinstance(value, str) for value in (
-        batch_id, session_id, candidate_digest, mode
+        batch_id, session_id, contract_id, candidate_digest, mode
     )):
         return False
     if count == 0:
         return bool(
             reused_at == 0 and origin_revision == -1 and not batch_id
-            and not session_id and not candidate_digest and not mode
+            and not session_id and not contract_id and not candidate_digest and not mode
         )
     return bool(
         reused_at > 0
         and origin_revision >= 0
         and re.fullmatch(r"[0-9a-f]{32}", batch_id)
-        and re.fullmatch(r"evs_[0-9a-f]{32}", session_id)
+        and (
+            not contract_id and re.fullmatch(r"evs_[0-9a-f]{32}", session_id)
+            or not session_id and re.fullmatch(r"ctr_[0-9a-f]{32}", contract_id)
+        )
         and re.fullmatch(r"[0-9a-f]{64}", candidate_digest)
         and mode in {"exact", "dependency", "safe-change"}
     )

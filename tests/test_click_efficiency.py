@@ -68,6 +68,7 @@ const batch=JSON.parse(JSON.stringify(input.batch));batch.sources[0].label='</td
 batch.sources[0].reuse_origin={kind:'successor-evidence',batch_id:'a'.repeat(32),evidence_session_id:'evs_'+'b'.repeat(32),candidate_digest:'c'.repeat(64),origin_revision:7};
 api.setState(snapshot,batch,input.summary,safe);
 const report=api.shareReport();assert(!JSON.stringify(report).includes('<example-private-value>'));
+assert.equal(report.task,null);assert.equal(report.engine,null);assert.equal(report.accounting,null);assert.equal(report.controls,null);
 assert.equal(report.summary.authoritative_reuse_count,input.summary.authoritative_reuse_count);
 assert.equal(report.batch.sources[0].reuse_origin.origin_revision,7);
 const html=api.standaloneReport(report);assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));

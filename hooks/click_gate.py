@@ -206,7 +206,9 @@ def _emit(payload: dict[str, Any]) -> None:
     _OUTPUT_SINK(payload)
 
 
-def _deny(reason: str) -> None:
+def _deny(reason: str, *, event: dict[str, Any] | None = None, code: str = "") -> None:
+    if event is not None:
+        click_lifecycle.record_control_event(event, code)
     _emit(_OUTPUT_ADAPTER.deny(reason))
 
 
@@ -691,7 +693,8 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 ):
                     _deny(
                         "Pass the approved Click execution contract in the current turn "
-                        "before starting a structured mutation."
+                        "before starting a structured mutation.",
+                        event=event, code="approval-required",
                     )
                     return
                 rewritten, mutation_error = _prepare_mutation(event, value)
@@ -710,7 +713,8 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 ):
                     _deny(
                         "Pass the approved Click execution contract in the current turn "
-                        "before managing its local development service."
+                        "before managing its local development service.",
+                        event=event, code="approval-required",
                     )
                     return
                 rewritten, service_error = _prepare_service(event, value)
@@ -760,7 +764,8 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 ):
                     _deny(
                         "Pass the approved Click execution contract in the current turn "
-                        "before starting its final verification batch."
+                        "before starting its final verification batch.",
+                        event=event, code="approval-required",
                     )
                     return
                 (
@@ -788,7 +793,7 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                         event, value
                     )
                 if lifecycle_error:
-                    _deny(lifecycle_error)
+                    _deny(lifecycle_error, event=event, code="contract-lifecycle-rejected")
                     return
                 if action == "stage":
                     contract, projection_error = click_contract.validate_contract(value)
@@ -990,7 +995,8 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
             "`click-gate bypass` only after the current user turn begins with a recognized "
             "first-line `@Click bypass` directive or trusted Click autocomplete mention. "
             "Use the corresponding `@Click cancel` form plus `click-gate cancel` to discard "
-            "an active contract instead of bypassing it."
+            "an active contract instead of bypassing it.",
+            event=event, code="approval-required",
         )
 
 

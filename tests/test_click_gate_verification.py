@@ -26,6 +26,132 @@ from click_gate_test_support import (
 
 
 class ClickGateVerificationTests(ClickGateTestCase):
+    def test_guarded_successor_requires_new_approval_and_exports_contract_origin(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.set_default("guarded", "turn-0")
+        self.approve_contract()
+        command = self.verification_argv()
+        first = self.verify_gate([command], "turn-2")
+        self.assertEqual(self.run_rewritten(first).returncode, 0)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        previous = json.loads(state_path.read_text(encoding="utf-8"))
+
+        replacement = self.contract()
+        replacement["outcome"] = "verify the separately approved follow-up"
+        self.arm_gate("turn-3")
+        staged = self.stage_gate(replacement, "turn-3")
+        self.assertEqual(staged["hookSpecificOutput"]["permissionDecision"], "allow")
+        current = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertNotEqual(current["contract_id"], previous["contract_id"])
+        self.assertEqual(current["approved_turn_id"], "")
+        self.assertEqual(current["verification"]["status"], "ready")
+        self.assertNotIn("runner_token", current["verification"])
+        self.assertEqual(next(iter(current["evidence_state"]["sources"].values()))["status"], "ready")
+        self.assertTrue(current.get("successor_evidence"))
+        denied = self.verify_gate([command], "turn-3")
+        self.assertEqual(denied["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.arm_gate("turn-4")
+        self.pass_gate(current["contract_id"], "turn-4")
+        reused = self.verify_gate([command], "turn-4")
+        self.assertNotIn("run-verification", split_runner_command(reused["hookSpecificOutput"]["updatedInput"]["command"]))
+        exported = self.run_rewritten(self.pre_tool("Bash", "click-gate receipt export", "turn-4", submit_prompt=False))
+        self.assertEqual(exported.returncode, 0, exported.stderr)
+        body = json.loads(exported.stdout)["receipt"]
+        self.assertEqual(body["version"], 5)
+        self.assertEqual(body["contract"]["id"], current["contract_id"])
+        self.assertEqual(body["contract"]["approved_turn_id"], "turn-4")
+        self.assertEqual(body["evidence"][0]["lineage"]["origin_contract_id"], previous["contract_id"])
+        self.assertEqual(body["evidence"][0]["lineage"]["requalification_mode"], "exact")
+
+    def test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        beta = self.workspace / "beta.py"
+        beta.write_text("import unittest\nVALUE = 1\nclass Beta(unittest.TestCase):\n    def test_value(self): self.assertGreater(VALUE, 0)\n", encoding="utf-8")
+        command = self.verification_argv()
+        beta_command = [sys.executable, "-m", "unittest", "beta"]
+        policy = self.workspace / ".click" / "evidence-reuse.json"
+        policy.parent.mkdir()
+        policy.write_text(json.dumps({"version": 1, "entries": [{"checks": [command], "reuse_if_only_changed": ["beta.py"]}]}), encoding="utf-8")
+        self.initialize_git(".gitignore", "verification_fixture.py", "beta.py", ".click/evidence-reuse.json")
+        self.set_default("guarded", "turn-0")
+        contract = self.contract()
+        contract["verification"]["evidence"].append({"id": "E2", "kind": "argv", "description": "beta code behavior"})
+        contract["verification"]["done_when"].append({"condition": "beta passes", "primary_evidence": "E2"})
+        self.arm_gate("turn-1")
+        self.stage_gate(contract, "turn-1")
+        self.arm_gate("turn-2")
+        self.pass_gate(turn_id="turn-2")
+        first = self.verify_gate([command, beta_command], "turn-2", evidence_ids=["E1", "E2"])
+        self.assertEqual(self.run_rewritten(first).returncode, 0)
+        origin_id = self.active_contract_id()
+        contract["outcome"] = "check the next beta code change and a new validation"
+        contract["verification"]["evidence"].extend([
+            {"id": "E3", "kind": "argv", "description": "new validation"},
+            {"id": "E-hold", "kind": "manual", "description": "finish after relevant-input scenario"},
+        ])
+        contract["verification"]["done_when"].extend([
+            {"condition": "new validation passes", "primary_evidence": "E3"},
+            {"condition": "relevant input scenario checked", "primary_evidence": "E-hold"},
+        ])
+        self.arm_gate("turn-3")
+        self.stage_gate(contract, "turn-3")
+        self.arm_gate("turn-4")
+        self.pass_gate(turn_id="turn-4")
+        self.assertIsNone(self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-4"))
+        beta.write_text(beta.read_text(encoding="utf-8").replace("VALUE = 1", "VALUE = 2"), encoding="utf-8")
+        self.tool_hook("post-tool", "apply_patch", {"patch": "beta code"}, turn_id="turn-4", tool_use_id="tool-1")
+        request = self.verify_gate([command, beta_command, [*command, "-v"]], "turn-4", evidence_ids=["E1", "E2", "E3"])
+        result = self.run_rewritten(request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        batch = CLICK_VERIFICATION.click_incremental.current_batch(state["verification"])
+        by_key = {source["source_key"]: source for source in batch["sources"]}
+        alpha = by_key[CLICK_EVIDENCE.evidence_key("E1")]
+        self.assertEqual(alpha["status"], "reused")
+        self.assertEqual(alpha["decision"], "reuse-safe-change")
+        self.assertEqual(alpha["reuse_origin"]["contract_id"], origin_id)
+        for source_id in ("E2", "E3"):
+            self.assertEqual(by_key[CLICK_EVIDENCE.evidence_key(source_id)]["status"], "passed")
+        unknown = self.verify_gate([command], "turn-4", evidence_ids=["E_UNAPPROVED"])
+        self.assertEqual(unknown["hookSpecificOutput"]["permissionDecision"], "deny")
+
+        self.assertIsNone(self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-4"))
+        fixture = self.workspace / "verification_fixture.py"
+        fixture.write_text(fixture.read_text(encoding="utf-8") + "\n# related code changed\n", encoding="utf-8")
+        self.tool_hook("post-tool", "apply_patch", {"patch": "related code"}, turn_id="turn-4", tool_use_id="tool-1")
+        rerun = self.verify_gate([command], "turn-4")
+        self.assertIn("run-verification", split_runner_command(rerun["hookSpecificOutput"]["updatedInput"]["command"]))
+        self.assertEqual(self.run_rewritten(rerun).returncode, 0)
+        source = json.loads(state_path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+        self.assertEqual(source["successor_reuse_count"], 0)
+        self.assertEqual(source["last_successor_origin_contract_id"], "")
+
+    def test_guarded_successor_does_not_inherit_a_dependency_declaration(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.set_default("guarded", "turn-0")
+        contract = self.contract()
+        contract["verification"]["evidence"][0]["dependencies"] = ["verification_fixture.py"]
+        self.arm_gate("turn-1")
+        self.stage_gate(contract, "turn-1")
+        self.arm_gate("turn-2")
+        self.pass_gate(turn_id="turn-2")
+        command = self.verification_argv()
+        self.assertEqual(self.run_rewritten(self.verify_gate([command], "turn-2")).returncode, 0)
+        self.arm_gate("turn-3")
+        self.stage_gate(self.contract(), "turn-3")
+        self.arm_gate("turn-4")
+        self.pass_gate(turn_id="turn-4")
+        rerun = self.verify_gate([command], "turn-4")
+        self.assertIn("run-verification", split_runner_command(rerun["hookSpecificOutput"]["updatedInput"]["command"]))
+        self.assertEqual(self.run_rewritten(rerun).returncode, 0)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        source = json.loads(state_path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+        self.assertEqual(source["dependency_patterns"], [])
+        self.assertEqual(source["successor_reuse_count"], 0)
+
     def install_complete_dependency_observation(
         self,
         command: list[str],

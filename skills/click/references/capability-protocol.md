@@ -152,6 +152,15 @@ complete shard provenance required by v3. Merely retaining a successor
 candidate never selects v4 and never creates reuse authority. Offline
 verification accepts and validates v4 while retaining legacy v1-v3 support.
 
+An actually applied successor from a completed Guarded contract selects v5
+and records `origin_contract_id` instead of the v4 Evidence session identity.
+The new contract's separate staging and approval remain current authority;
+earlier approval, claims, tokens and unfinished work never transfer. Candidates
+must requalify against current exact declared checks, dependency declaration,
+workspace, environment, executable, known Hook coverage and existing change
+rules. Incomplete or uncertain bindings run the check. v5 retains complete v3
+shard provenance where present; offline validation still accepts v1–v4.
+
 If a host omits the working directory selected by a nested execution tool,
 export may recover it only from the sole canonical Git root shared by every
 current argv evidence source. A stale, missing, non-canonical, or conflicting

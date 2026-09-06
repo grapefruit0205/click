@@ -40,6 +40,8 @@ Show the exact Hook-generated easy contract once as the default approval body, w
 
 After every declared evidence source is current for the final mutation revision and no managed service remains active, a later change may stage a fresh contract. A contract with no argv source needs no ceremonial local batch. Missing, running, failed, or stale evidence—and an active managed service—still block replacement.
 
+That completed contract may retain successful verification candidates for the next Guarded contract, never approval, execution claims, tokens or completion. The successor must be separately approved and request its own declared checks before current-binding requalification. Changing a dependency declaration does not inherit its predecessor's authority. See the capability protocol for v5 lineage and conservative rerun rules.
+
 ## Off
 
 Ordinary work is fail-open while no Guarded contract is active. Apply Guarded when the user selects `@Click` or invokes `$click`; run `click-gate arm` and use the compact-contract workflow. Once staged or approved but incomplete, that contract blocks ordinary mutations across later turns. On approval or resume, pass the same emitted `contract_id`; do not resend the JSON. Ephemeral state may age out, but staged and approved-incomplete contracts are never removed by cleanup.

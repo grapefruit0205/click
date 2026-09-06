@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 import time
 from typing import Any
@@ -32,7 +32,7 @@ else:  # Executed beside the bundled hook modules.
     import click_shadow_intelligence
 
 
-PROJECTION_VERSION = 3
+PROJECTION_VERSION = 4
 PROJECTION_MODE = "incremental-verification"
 MAX_SOURCES = click_shadow_intelligence.MAX_STATE_SOURCES
 MAX_INPUTS = click_shadow_intelligence.MAX_PROJECTION_INPUTS
@@ -52,7 +52,7 @@ _INPUT_STATUSES = frozenset(
 )
 
 _FIELDS = frozenset(
-    {"version", "mode", "generated_at", "task", "summary", "sources", "map", "batches", "history"}
+    {"version", "mode", "generated_at", "task", "summary", "sources", "map", "batches", "history", "accounting", "controls", "engine"}
 )
 _TASK_FIELDS = frozenset(
     {
@@ -61,6 +61,7 @@ _TASK_FIELDS = frozenset(
         "mutation_revision",
         "observer_mode",
         "observer_enabled",
+        "name", "promises", "in_scope", "out_of_scope", "must_hold", "contract_id", "approval_bound",
     }
 )
 _SUMMARY_FIELDS = frozenset({"incremental", "shadow"})
@@ -100,6 +101,7 @@ _SOURCE_FIELDS = frozenset(
         "shadow_outcome",
         "execution_status", "execution_reason_code", "duration_ms", "duration_baseline",
         "reuse_origin",
+        "check_digest", "origin_name", "origin_check_label", "next_action",
     }
 )
 _MAP_FIELDS = frozenset(
@@ -155,6 +157,45 @@ def _safe_relative_path(value: Any, *, directory: bool = False) -> bool:
 def _source_status(value: Any) -> str:
     status = value.get("status") if isinstance(value, dict) else "unknown"
     return status if status in _SOURCE_STATUSES else "unknown"
+
+
+def engine_identity() -> dict[str, Any]:
+    """File provenance only, never a signed or independently trusted identity."""
+    result = {"version": None, "hook_files_digest": None, "assurance": "unsigned-files-at-snapshot"}
+    root = Path(__file__).resolve().parents[1]
+    try:
+        version = json.loads((root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")).get("version")
+        if isinstance(version, str) and re.fullmatch(r"\d+\.\d+\.\d+(?:\+codex\.\d{14})?", version):
+            result["version"] = version
+    except (OSError, ValueError, TypeError):
+        pass
+    try:
+        digest = hashlib.sha256()
+        for path in sorted((root / "hooks").glob("*.py"))[:256]:
+            content = path.read_bytes()
+            if len(content) > 2 * 1024 * 1024:
+                return result
+            digest.update(path.name.encode() + b"\0" + hashlib.sha256(content).digest())
+        result["hook_files_digest"] = digest.hexdigest()
+    except OSError:
+        pass
+    return result
+
+
+def _next_action(reason: str, status: str) -> str:
+    if status == "passed":
+        return "현재 코드에서 직접 통과했습니다. 다음 관련 변경 전에는 재실행이 필요하지 않습니다."
+    if status == "reused":
+        return "현재 재판정을 통과한 결과입니다. 관련 입력이 바뀌면 다시 검증하세요."
+    if status in {"failed", "interrupted"}:
+        return "실패 또는 중단 원인을 확인한 뒤 승인 범위에서 같은 검증을 다시 실행하세요."
+    if reason == "environment-binding-changed":
+        return "현재 환경에서 실제 검증을 실행해 새 기준 결과를 만드세요."
+    if reason in {"observed-input-changed", "safe-change-policy-not-covered"}:
+        return "관련 입력이 변경됐습니다. 현재 코드로 실제 검증을 실행하세요."
+    if reason in {"observer-incomplete", "policy-unavailable", "mutation-boundary-ambiguous", "workspace-ambiguous"}:
+        return "재사용 근거가 부족합니다. 정책을 완화하지 말고 현재 상태를 실제 검증하세요."
+    return "승인된 검증을 먼저 실행해 현재 상태의 성공 기준을 만드세요."
 
 
 def _intelligence_state(verification: dict[str, Any]) -> dict[str, Any]:
@@ -216,6 +257,7 @@ def dashboard_projection(
     """Build the only state shape exposed to the local dashboard server."""
 
     raw_state = state if isinstance(state, dict) else {}
+    presentation = click_incremental.sanitize_presentation(raw_state.get("presentation"))
     verification = raw_state.get("verification")
     verification = verification if isinstance(verification, dict) else {}
     evidence_state = raw_state.get("evidence_state")
@@ -234,7 +276,8 @@ def dashboard_projection(
     history = click_incremental.batch_history(verification, now=generated_at)
 
     source_keys = sorted(
-        {key for key in evidence_sources if _is_digest(key)}
+        {key for key, source in evidence_sources.items() if _is_digest(key)
+         and isinstance(source, dict) and source.get("kind", "argv") == "argv"}
         | set(observer_records)
         | set(intelligence["sources"])
         | set(decisions)
@@ -248,7 +291,7 @@ def dashboard_projection(
 
     for index, key in enumerate(source_keys, start=1):
         source_id = f"source:{key[:16]}"
-        label = actual[key]["label"] if key in actual else f"검증 묶음 {index}"
+        label = actual[key]["label"] if key in actual else presentation["evidence_labels"].get(key, f"검증 묶음 {index}")
         status = _source_status(evidence_sources.get(key))
         nodes.append(
             {
@@ -277,6 +320,13 @@ def dashboard_projection(
             previous_revision = int(decision["previous_revision"])
             estimated_avoided_ms = None
         result = actual.get(key, {})
+        execution_status = result.get("status", "not-run" if status == "ready" else "unknown")
+        origin = result.get("reuse_origin")
+        origin_contract = origin.get("contract_id", "") if isinstance(origin, dict) else ""
+        presentation_history = raw_state.get("presentation_history", {})
+        origin_presentation = click_incremental.sanitize_presentation(
+            presentation_history.get(origin_contract) if isinstance(presentation_history, dict) else None
+        )
         duration_baseline = result.get("duration_baseline")
         if result.get("status") == "reused" and click_incremental.baseline_is_valid(duration_baseline):
             estimated_avoided_ms = duration_baseline["duration_ms"]
@@ -356,11 +406,15 @@ def dashboard_projection(
                 "current_revision": current_revision,
                 "previous_revision": previous_revision,
                 "estimated_avoided_ms": estimated_avoided_ms,
-                "execution_status": result.get("status", "unknown"),
-                "execution_reason_code": result.get("execution_reason_code", "outcome-unconfirmed"),
+                "execution_status": execution_status,
+                "execution_reason_code": result.get("execution_reason_code", "not-requested" if status == "ready" else "outcome-unconfirmed"),
                 "duration_ms": result.get("duration_ms"),
                 "duration_baseline": duration_baseline,
                 "reuse_origin": result.get("reuse_origin"),
+                "check_digest": decision["check_digest"] if decision else "",
+                "origin_name": origin_presentation["name"] if origin_contract else "이전 Evidence 작업" if origin else "현재 계약",
+                "origin_check_label": origin_presentation["evidence_labels"].get(key, label),
+                "next_action": _next_action(reason_code, execution_status),
                 "observer_status": observer_status,
                 "input_count": len(input_keys),
                 "visible_input_count": source_visible,
@@ -422,7 +476,15 @@ def dashboard_projection(
             "mutation_revision": revision,
             "observer_mode": observer_control["mode"],
             "observer_enabled": observer_control["enabled"],
+            **{key: presentation[key] for key in ("name", "promises", "in_scope", "out_of_scope", "must_hold")},
+            "contract_id": raw_state.get("contract_id") if re.fullmatch(r"ctr_[0-9a-f]{32}", str(raw_state.get("contract_id", ""))) else "",
+            "approval_bound": bool(runtime_mode == "guarded" and status == "approved"
+                                   and raw_state.get("approved_turn_id")
+                                   and raw_state.get("approved_turn_id") != raw_state.get("staged_turn_id")),
         },
+        "accounting": click_incremental.history_accounting(verification),
+        "controls": click_incremental.control_events(raw_state),
+        "engine": engine_identity(),
         "summary": {
             "incremental": incremental,
             "shadow": _shadow_metrics(intelligence),
@@ -472,6 +534,14 @@ def projection_is_valid(value: Any) -> bool:
     ):
         return False
     task = value.get("task")
+    engine = value.get("engine")
+    if (
+        not isinstance(engine, dict) or set(engine) != {"version", "hook_files_digest", "assurance"}
+        or engine["assurance"] != "unsigned-files-at-snapshot"
+        or engine["version"] is not None and (not isinstance(engine["version"], str) or re.fullmatch(r"\d+\.\d+\.\d+(?:\+codex\.\d{14})?", engine["version"]) is None)
+        or engine["hook_files_digest"] is not None and not _is_digest(engine["hook_files_digest"])
+    ):
+        return False
     summary = value.get("summary")
     sources = value.get("sources")
     map_value = value.get("map")
@@ -485,6 +555,16 @@ def projection_is_valid(value: Any) -> bool:
         or task.get("observer_mode") not in click_observer_control.MODES
         or task.get("observer_enabled")
         != (task.get("observer_mode") == "shadow")
+        or task.get("name") != click_incremental.safe_display_text(task.get("name"), "")
+        or not isinstance(task.get("approval_bound"), bool)
+        or not isinstance(task.get("contract_id"), str)
+        or task["contract_id"] and re.fullmatch(r"ctr_[0-9a-f]{32}", task["contract_id"]) is None
+        or any(not isinstance(task.get(key), list) or len(task[key]) > 8
+               or any(item != click_incremental.safe_display_text(item, "") for item in task[key])
+               for key in ("promises", "in_scope", "out_of_scope", "must_hold"))
+        or not click_incremental.accounting_is_valid(value.get("accounting"))
+        or not isinstance(value.get("controls"), list)
+        or value["controls"] != click_incremental.control_events({"control_events": value["controls"]})
         or not isinstance(summary, dict)
         or set(summary) != _SUMMARY_FIELDS
         or not isinstance(sources, list)
@@ -550,6 +630,9 @@ def projection_is_valid(value: Any) -> bool:
             or not isinstance(source.get("label"), str)
             or not source["label"]
             or source["label"] != click_incremental.safe_label(source["label"], "")
+            or source.get("check_digest") != "" and not _is_digest(source.get("check_digest"))
+            or any(source.get(key) != click_incremental.safe_display_text(source.get(key), "")
+                   for key in ("origin_name", "origin_check_label", "next_action"))
             or source.get("status") not in _SOURCE_STATUSES
             or source.get("execution_decision") not in _EXECUTION_DECISIONS
             or source.get("reason_code")
