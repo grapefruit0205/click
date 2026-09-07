@@ -121,19 +121,43 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 "",
             )
         )
-        result = authoritative.run_command(
-            argv,
-            workspace=project,
-            observation_root=project,
-            environment=environment,
-            binding_context=self.context(),
-            runtime=self.runtime,
-            runner_token=self.id(),
-            execute_unobserved=fallback,
-            resolve_backend=resolve_backend,
-            digest_file=file_digest,
-            capture_limit=capture_limit,
-        )
+        original_records = observation_inputs.InputSnapshot.records
+
+        def diagnosed_records(snapshot, inputs):
+            try:
+                return original_records(snapshot, inputs)
+            except observation_inputs.InputError as error:
+                failures = []
+                for path, operations in sorted(inputs.items()):
+                    try:
+                        original_records(snapshot, {path: operations})
+                    except Exception as item_error:  # pragma: no branch - failure aid
+                        failures.append(f"{path}: {item_error}")
+                        if len(failures) == 8:
+                            break
+                raise AssertionError(
+                    f"authoritative input snapshot failed ({error}); "
+                    f"individual failures: {failures}"
+                ) from error
+
+        with mock.patch.object(
+            observation_inputs.InputSnapshot,
+            "records",
+            diagnosed_records,
+        ):
+            result = authoritative.run_command(
+                argv,
+                workspace=project,
+                observation_root=project,
+                environment=environment,
+                binding_context=self.context(),
+                runtime=self.runtime,
+                runner_token=self.id(),
+                execute_unobserved=fallback,
+                resolve_backend=resolve_backend,
+                digest_file=file_digest,
+                capture_limit=capture_limit,
+            )
         return project, result, fallback
 
     def current_binding(self, observation: dict) -> dict:

@@ -557,7 +557,7 @@ class ClickGateTestCase(unittest.TestCase):
             # integration coverage. Keep semantic unit tests on the same
             # interpreter that prepared their environment fingerprints.
             invocation = split_runner_command(command)
-            invocation = [sys.executable, *invocation[2:]]
+            invocation = [sys.executable, *invocation[1:]]
             use_shell = False
         return invocation, use_shell
 
