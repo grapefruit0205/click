@@ -16,7 +16,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Scan plugin
-        uses: hashgraph-online/ai-plugin-scanner-action@6c4a64c217ac7884f2678b080b73eb80decf889e # v1
+        uses: hashgraph-online/ai-plugin-scanner-action@fc91f16ca4e6c0c919e807238f27b329dd828cbe # v1
         with:
           plugin_dir: "."
           mode: "scan"
