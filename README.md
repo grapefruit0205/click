@@ -121,6 +121,26 @@ Start a fresh task after updating.
 
 See [release notes](RELEASE_NOTES.md) for version history.
 
+## Verify Hooks on Windows
+
+After installing or updating, restart Codex and open a new task. In PowerShell,
+confirm that Click is enabled and that one of the launchers used by the bundled
+Windows Hook can start Python 3:
+
+~~~powershell
+codex --version
+codex plugin list --json
+py -3 --version
+python --version
+~~~
+
+Start `codex`, run `/hooks`, and review or trust the current Click Hook hash if
+it is pending. An update can require a new review. Also check
+`$env:USERPROFILE\.codex\config.toml`: `hooks = false` disables Hooks, and an
+administrator policy with `allow_managed_hooks_only = true` skips
+plugin-bundled Hooks. See the official [Codex Hooks
+guide](https://learn.chatgpt.com/docs/hooks) for trust and configuration details.
+
 ## What makes evidence reusable?
 
 A result is reused only when its important bindings still match, such as:

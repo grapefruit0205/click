@@ -1,6 +1,6 @@
 # Release notes
 
-## v0.91.0 — 2026-09-07
+## v0.91.0 — 2026-09-08
 
 - Verification receipts now preserve each command's actual lifecycle and
   outcome, including planned, started, passed, failed, interrupted, not-run,
@@ -11,6 +11,9 @@
   unittest and pytest failures. Raw output remains the default, diagnostic
   parsing is size-limited and redacted, and it never gains file-reading or
   verification authority.
+- Windows diagnostic parsing recognizes native `.exe` interpreters and the
+  `py -3` launcher, while dashboard and benchmark interchange stays UTF-8
+  regardless of the active Windows console code page.
 - Verification remains fail-fast by default. An opt-in independent-source
   collection mode can report up to three distinct failures while rechecking
   revision and execution bindings between commands; dependent or ambiguous

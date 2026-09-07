@@ -119,6 +119,26 @@ codex plugin add click@click
 
 변경 이력은 [릴리스 노트](RELEASE_NOTES.md)에 있습니다.
 
+## Windows에서 Hook 확인
+
+설치 또는 업데이트 뒤 Codex를 다시 시작하고 새 작업을 여세요. PowerShell에서
+Click 활성화 상태와 번들 Windows Hook이 사용하는 Python 3 실행기 중 하나가
+동작하는지 확인합니다.
+
+~~~powershell
+codex --version
+codex plugin list --json
+py -3 --version
+python --version
+~~~
+
+`codex`를 시작해 `/hooks`를 실행하고 Click의 현재 Hook 해시가 검토 대기라면
+내용을 확인한 뒤 신뢰 처리하세요. 업데이트하면 다시 검토해야 할 수 있습니다.
+`$env:USERPROFILE\.codex\config.toml`도 확인하세요. `hooks = false`이면 Hook이
+꺼지고, 관리자 정책의 `allow_managed_hooks_only = true`는 플러그인 번들 Hook을
+건너뜁니다. 신뢰와 설정 방법은 공식 [Codex Hooks
+안내](https://learn.chatgpt.com/docs/hooks)를 참고하세요.
+
 ## evidence를 언제 재사용하나요?
 
 다음과 같은 정보가 계속 일치해야 합니다.

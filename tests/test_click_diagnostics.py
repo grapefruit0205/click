@@ -152,6 +152,26 @@ class ClickDiagnosticsTests(unittest.TestCase):
             all(item["failure_kind"] == "test-failure" for item in record["failures"])
         )
 
+    def test_framework_recognizes_windows_python_and_launcher_commands(self) -> None:
+        self.assertEqual(
+            click_diagnostics._framework(
+                [r"C:\\Python313\\python.exe", "-m", "unittest", "tests"]
+            ),
+            "python-unittest",
+        )
+        self.assertEqual(
+            click_diagnostics._framework(
+                [r"C:\\Windows\\py.exe", "-3", "-m", "pytest", "tests"]
+            ),
+            "pytest",
+        )
+        self.assertEqual(
+            click_diagnostics._framework(
+                [r"C:\\Python313\\Scripts\\pytest.exe", "tests"]
+            ),
+            "pytest",
+        )
+
     def test_invalid_encoding_and_truncation_remain_explicit(self) -> None:
         output = b"FAIL: test_bad (pkg.Case.test_bad)\nAssertionError: bad\xffvalue\n"
         record = self.record(output, truncated=True)

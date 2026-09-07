@@ -1179,14 +1179,20 @@ console.log(JSON.stringify({report,html}));
             exported = subprocess.run(
                 [shutil.which("node"), "-e", script],
                 input=json.dumps({"script": click_shadow_dashboard.JS, "projection": data, "batch": batch, "summary": summary["incremental"], "savings": savings}),
-                text=True, capture_output=True, check=False,
+                text=True, encoding="utf-8", errors="replace",
+                capture_output=True, check=False,
             )
             self.assertEqual(exported.returncode, 0, exported.stderr)
             output = json.loads(exported.stdout)
             artifact = Path(tempfile.mkdtemp(prefix="click-impact-e2e-"))
-            (artifact / "projection.json").write_text(json.dumps(data, ensure_ascii=False, indent=2))
-            (artifact / "report.json").write_text(json.dumps(output["report"], ensure_ascii=False, indent=2))
-            (artifact / "report.html").write_text(output["html"])
+            (artifact / "projection.json").write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            (artifact / "report.json").write_text(
+                json.dumps(output["report"], ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            (artifact / "report.html").write_text(output["html"], encoding="utf-8")
             print(f"Real Hook/runner dashboard/export evidence: {artifact}")
 
 

@@ -153,16 +153,31 @@ def _clean(value: Any, limit: int = MAX_MESSAGE_CHARS) -> str:
 
 def _framework(argv: Sequence[str]) -> str:
     parts = [str(value) for value in argv]
-    lowered = [Path(value).name.lower() for value in parts]
-    for index, value in enumerate(lowered[:-1]):
+    # Path.name follows the current host's path syntax. Normalizing both
+    # separators keeps diagnostics deterministic when a Windows command is
+    # inspected by another host, and removing .exe covers native Windows argv.
+    lowered = [
+        value.replace("\\", "/").rsplit("/", 1)[-1].lower()
+        for value in parts
+    ]
+    executables = [
+        value[:-4] if value.endswith(".exe") else value for value in lowered
+    ]
+    for index, value in enumerate(executables[:-1]):
         if value in {"python", "python3", "py", "pypy", "pypy3"} or value.startswith(
             "python3."
         ):
-            if parts[index + 1 : index + 3] == ["-m", "unittest"]:
+            module_index = index + 1
+            if value == "py" and module_index < len(parts):
+                launcher_selector = parts[module_index].lower()
+                if re.fullmatch(r"-\d+(?:\.\d+)?(?:-\d+)?", launcher_selector):
+                    module_index += 1
+            module = [item.lower() for item in parts[module_index : module_index + 2]]
+            if module == ["-m", "unittest"]:
                 return "python-unittest"
-            if parts[index + 1 : index + 3] == ["-m", "pytest"]:
+            if module == ["-m", "pytest"]:
                 return "pytest"
-    if lowered and lowered[0] in {"pytest", "py.test"}:
+    if executables and executables[0] in {"pytest", "py.test"}:
         return "pytest"
     return "unsupported"
 

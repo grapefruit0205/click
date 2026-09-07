@@ -119,6 +119,24 @@ codex plugin add click@click
 
 版本历史见 [Release Notes](RELEASE_NOTES.md)。
 
+## 在 Windows 上验证 Hook
+
+安装或更新后，请重新启动 Codex 并打开一个新任务。在 PowerShell 中确认 Click
+已启用，并确认随附 Windows Hook 使用的 Python 3 启动器至少有一个可运行：
+
+~~~powershell
+codex --version
+codex plugin list --json
+py -3 --version
+python --version
+~~~
+
+启动 `codex`，运行 `/hooks`；如果当前 Click Hook 哈希等待审核，请检查并信任
+它。更新后可能需要重新审核。另请检查
+`$env:USERPROFILE\.codex\config.toml`：`hooks = false` 会禁用 Hook，管理员策略
+`allow_managed_hooks_only = true` 会跳过插件附带的 Hook。信任与配置详情请参阅
+官方 [Codex Hooks 文档](https://learn.chatgpt.com/docs/hooks)。
+
 ## evidence 何时可以复用？
 
 以下信息必须继续匹配：

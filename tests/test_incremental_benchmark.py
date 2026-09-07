@@ -46,7 +46,10 @@ console.log('Actual driver v4 imports without fixture authority or lost samples.
         )
         self.assertEqual(checked.returncode, 0, checked.stderr)
         artifact = Path(tempfile.mkdtemp(prefix="click-impact-benchmark-")) / "workflow.json"
-        artifact.write_text(json.dumps(self.workflow_result, ensure_ascii=False, indent=2))
+        artifact.write_text(
+            json.dumps(self.workflow_result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         print(f"Actual benchmark/importer evidence: {artifact}")
 
     def test_guarded_workflow_compares_three_configs_and_audits_real_successor_reuse(self):
