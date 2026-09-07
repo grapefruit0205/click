@@ -20,7 +20,7 @@ from typing import Any
 if __package__:
     from . import (
         click_dependency_cache,
-        click_dependency_trace,
+        click_observer_common,
         click_incremental,
         click_observer_control,
         click_sharding_setup,
@@ -28,7 +28,7 @@ if __package__:
     )
 else:  # Executed beside the bundled hook modules.
     import click_dependency_cache
-    import click_dependency_trace
+    import click_observer_common
     import click_incremental
     import click_observer_control
     import click_sharding_setup
@@ -201,11 +201,19 @@ def engine_identity() -> dict[str, Any]:
         pass
     try:
         digest = hashlib.sha256()
-        for path in sorted((root / "hooks").glob("*.py"))[:256]:
+        hook_root = root / "hooks"
+        paths = list(hook_root.glob("*.py"))
+        paths.extend(path for path in (hook_root / "dashboard").rglob("*") if path.is_file())
+        if len(paths) > 256:
+            return result
+        for path in sorted(paths, key=lambda item: item.relative_to(hook_root).as_posix()):
             content = path.read_bytes()
             if len(content) > 2 * 1024 * 1024:
                 return result
-            digest.update(path.name.encode() + b"\0" + hashlib.sha256(content).digest())
+            relative = path.relative_to(hook_root).as_posix()
+            # Top-level Python names retain their existing byte-hash binding;
+            # nested frontend names also bind the exact bundled asset path.
+            digest.update(relative.encode("utf-8") + b"\0" + hashlib.sha256(content).digest())
         result["hook_files_digest"] = digest.hexdigest()
     except OSError:
         pass
@@ -295,7 +303,7 @@ def dashboard_projection(
         evidence_state.get("sources", {}) if isinstance(evidence_state, dict) else {}
     )
     evidence_sources = evidence_sources if isinstance(evidence_sources, dict) else {}
-    observer_records = click_dependency_trace.records_from_verification(verification)
+    observer_records = click_observer_common.records_from_verification(verification)
     intelligence = _intelligence_state(verification)
     plan = click_incremental.current_plan(verification)
     decisions = {

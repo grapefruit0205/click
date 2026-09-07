@@ -10,9 +10,11 @@ sufficiency. Structured argv requests execute without a shell.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import stat
@@ -42,15 +44,11 @@ else:  # Executed directly from the bundled hooks directory.
     click_lifecycle,
     click_mutation,
     click_observation,
-    click_observer_backend,
     click_observer_control,
-    click_observer_runtime,
     click_process,
     click_prompt,
-    click_receipt_runtime,
     click_runner_transport,
     click_service,
-    click_sharding_setup,
     click_shadow_dashboard,
     click_shadow_intelligence,
     click_state,
@@ -73,15 +71,11 @@ else:  # Executed directly from the bundled hooks directory.
     "click_lifecycle",
     "click_mutation",
     "click_observation",
-    "click_observer_backend",
     "click_observer_control",
-    "click_observer_runtime",
     "click_process",
     "click_prompt",
-    "click_receipt_runtime",
     "click_runner_transport",
     "click_service",
-    "click_sharding_setup",
     "click_shadow_dashboard",
     "click_shadow_intelligence",
     "click_state",
@@ -248,6 +242,79 @@ def _read_event() -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("hook input must be a JSON object")
     return value
+
+
+def _unrecorded_evidence_read(event: dict[str, Any], error: OSError) -> bool:
+    """Keep an ordinary host read available when Evidence storage is unwritable.
+
+    A positive Evidence session is required. Explicit capabilities, Guarded,
+    review, unknown state and active runner conflicts never use this path.
+    The stateless runner retains trusted executable and read-only argv checks,
+    but creates no observation, cache hit or successful evidence receipt.
+    """
+    if error.errno not in {errno.EROFS, errno.EACCES, errno.EPERM, errno.ENOSPC, errno.EDQUOT}:
+        return False
+    if event.get("tool_name") != "Bash":
+        return False
+    tool_input = event.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return False
+    request, _, parse_error = click_inspection.request_from_bash(str(tool_input.get("command", "")))
+    if request is None or parse_error:
+        return False
+    try:
+        state = json.loads(click_state.contract_path(event).read_text(encoding="utf-8"))
+        if (
+            not isinstance(state, dict)
+            or state.get("status") != "evidence"
+            or state.get("runtime_mode") != "evidence"
+            or state.get("state_schema_version") != CONTRACT_STATE_SCHEMA_VERSION
+            or state.get("contract_id")
+            or state.get("approved_turn_id")
+            or not re.fullmatch(r"evs_[0-9a-f]{32}", str(state.get("evidence_session_id", "")))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(state.get("intent_digest", "")))
+            or state.get("intent_digest") != state.get("contract_digest")
+        ):
+            return False
+        ledger = state.get("evidence_state")
+        if (
+            not isinstance(ledger, dict)
+            or ledger.get("version") != click_evidence.EVIDENCE_STATE_VERSION
+            or not isinstance(ledger.get("sources"), dict)
+            or ledger.get("source_count") != len(ledger["sources"])
+            or ledger.get("registry_digest") != click_evidence.registry_digest(ledger["sources"])
+            or click_evidence.sources_from_state(state, expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION) != ledger["sources"]
+        ):
+            return False
+        for path, field, allowed in (
+            (click_state.state_path(event), "status", {"idle", "bypassed"}),
+            (click_state.mode_path(event), "mode", {"adaptive"}),
+            (click_state.preference_path(), "default_mode", {"evidence", "off", "manual"}),
+        ):
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                continue
+            if not isinstance(value, dict) or value.get(field) not in allowed:
+                return False
+        verification = state.get("verification")
+        if not isinstance(verification, dict) or verification.get("status") == "running":
+            return False
+        mutation = state.get("mutation")
+        if not isinstance(mutation, dict) or click_mutation.is_running(mutation):
+            return False
+        entries = state.get("observations", {}).get("entries", {})
+        if not isinstance(entries, dict) or any(click_observation.is_running(entry) for entry in entries.values()):
+            return False
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+    _allow_rewritten_with_advisory(
+        _inspection_once_runner_command(request),
+        "Click Evidence storage is unavailable. This host-authorized read uses "
+        "the validated read-only runner without recording or reusing a receipt; "
+        "verification evidence remains unavailable.",
+    )
+    return True
 
 
 def _mark_contract_mutated(
@@ -533,6 +600,9 @@ def _save_sharding_projection(
 ) -> None:
     if state.get("status") == "none":
         return
+    (click_sharding_setup,) = click_import_bootstrap.load_siblings(
+        __package__, "click_sharding_setup"
+    )
     state["auto_sharding_setup"] = click_sharding_setup.dashboard_setup_projection(
         report
     )
@@ -542,6 +612,9 @@ def _save_sharding_projection(
 def _prepare_sharding_control(
     event: dict[str, Any], raw: str
 ) -> tuple[str, str, str]:
+    (click_sharding_setup,) = click_import_bootstrap.load_siblings(
+        __package__, "click_sharding_setup"
+    )
     try:
         request = json.loads(raw)
         if (
@@ -786,6 +859,11 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                     _allow_rewritten(rewritten)
                 return
             if action == "observer":
+                (click_observer_backend, click_observer_runtime) = (
+                    click_import_bootstrap.load_siblings(
+                        __package__, "click_observer_backend", "click_observer_runtime"
+                    )
+                )
                 runtime_state = click_contract_state.read_contract_state(event)
                 verification = runtime_state.get("verification")
                 if value == "status":
@@ -992,6 +1070,9 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 _allow_rewritten(rewritten)
                 return
             if action == "dashboard":
+                (click_sharding_setup,) = click_import_bootstrap.load_siblings(
+                    __package__, "click_sharding_setup"
+                )
                 current_status = click_lifecycle.read_state(event).get("status")
                 runtime_state = click_contract_state.read_contract_state(event)
                 try:
@@ -1487,6 +1568,9 @@ def _run_verification(arguments: list[str]) -> int:
 
 
 def _run_receipt_export(arguments: list[str]) -> int:
+    (click_receipt_runtime,) = click_import_bootstrap.load_siblings(
+        __package__, "click_receipt_runtime"
+    )
     if len(arguments) not in {3, 4}:
         sys.stderr.write(
             "usage: click_gate.py run-receipt-export "
@@ -1539,6 +1623,9 @@ def _run_receipt_export(arguments: list[str]) -> int:
 
 
 def _run_receipt_verify(arguments: list[str]) -> int:
+    (click_receipt_runtime,) = click_import_bootstrap.load_siblings(
+        __package__, "click_receipt_runtime"
+    )
     if len(arguments) != 1:
         sys.stderr.write("usage: click_gate.py run-receipt-verify <path>\n")
         return 2
@@ -1706,11 +1793,17 @@ def main() -> int:
             "usage: click_gate.py pre-tool|post-tool|prompt-submit|session-end\n"
         )
         return 1
+    event: dict[str, Any] | None = None
     try:
         event = _read_event()
         with click_state.state_lock():
             _HOST_ROUTER.dispatch(arguments[0], event)
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
+        if arguments[0] == "pre-tool" and event is not None and _unrecorded_evidence_read(event, exc):
+            return 0
+        sys.stderr.write(f"click hook error: {exc}\n")
+        return 1
+    except ValueError as exc:
         sys.stderr.write(f"click hook error: {exc}\n")
         return 1
     return 0

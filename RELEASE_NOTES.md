@@ -1,5 +1,39 @@
 # Release notes
 
+## v0.92.0 — 2026-09-08
+
+- Verification planning, execution bindings, and reuse policy now have separate
+  modules behind the existing facade. Typed runner results avoid recursive
+  copies, Shadow root lookup avoids unnecessary Git snapshots, and executable
+  hashes are shared only within one POSIX collection stage. Windows continues
+  to hash each executable record to detect same-size edits with restored mtime.
+- Hook startup loads dashboard, sharding setup, receipt, and native collector
+  code only when needed. Matched local Linux measurements show warmed-bytecode
+  import median falling from 130.548ms to 95.448ms (26.9%); this component result
+  is not a claim about whole-task speed or token savings.
+- Dashboard lifecycle, HTTP serving, static assets, and Korean/English/Simplified
+  Chinese locales now have separate owners. Timestamp-only poll changes avoid
+  repeated rendering, while actual task/measurement changes still update.
+  Projection and response work runs outside the global state lock; authentication,
+  Host checks, CSP, report exports, and the visible language selector are retained.
+- Ordinary read preparation can recover from unavailable Evidence storage only
+  for a positively identified intact Evidence session, using the validated
+  stateless runner and reporting that no receipt was recorded. Guarded and
+  active-run interlocks stay intact. Result-storage failures preserve command
+  output without issuing a success receipt; orphaned reads remain interlocked.
+- CI partitions the complete discovered suite into four class-preserving groups
+  per OS, rejects missing/duplicate discovery, isolates temporary files, and
+  uploads measured durations. Linux, macOS, Windows, native-authoritative,
+  runtime-compatibility, pytest, and required-check coverage are retained.
+- Distribution builds write changed files, remove stale generated files, and
+  validate every runtime module and dashboard asset against explicit manifests.
+  A clean rebuild remains available for releases.
+- Automatic sharding `init/status/refresh`, conservative parent-suite fallback,
+  and authoritative shard reuse remain required regression criteria. Existing
+  reuse policy and receipt authority are unchanged.
+- See [runtime optimization details](docs/runtime-optimization.md) for the
+  architecture, local test results, raw measurements, and platform limitations.
+
 ## v0.91.0 — 2026-09-08
 
 - Verification receipts now preserve each command's actual lifecycle and

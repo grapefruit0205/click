@@ -10,7 +10,7 @@ English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
 Click provides incremental verification for coding agents. It helps constrain unrequested scope expansion through a reviewed Guarded contract, while **revision-aware evidence** lets valid checks survive a new task. Reuse requires matching execution bindings and, after changes, a complete dependency observation or an explicit policy committed before the baseline. Missing authority means a real rerun, not automatic dependency inference.
 
-Release note: v0.91.0 adds outcome-aware verification telemetry, bounded failure diagnostics, whole-task efficiency evaluation, and a responsive Korean, English, and Simplified Chinese dashboard.
+Release note: v0.92.0 reduces Hook startup and repeated binding work, separates verification and dashboard modules, and partitions complete CI suites across Linux, macOS, and Windows while preserving automatic sharding and authoritative reuse.
 
 Click does not prove that the code is correct or that the selected tests are sufficient. It tracks whether existing verification evidence still applies to the current code.
 
@@ -110,7 +110,7 @@ Or explicitly choose Guarded:
 
 ## Update
 
-Current release: **v0.91.0**
+Current release: **v0.92.0**
 
 ~~~bash
 codex plugin marketplace upgrade click

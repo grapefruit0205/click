@@ -23,13 +23,11 @@ if __package__:
 else:
     import click_import_bootstrap
 
-(inventory, observation_inputs, observer_macos, observer_windows) = (
+(inventory, observation_inputs) = (
     click_import_bootstrap.load_siblings(
         __package__,
         "click_test_inventory",
         "click_observation_inputs",
-        "click_observer_macos",
-        "click_observer_windows",
     )
 )
 
@@ -104,6 +102,9 @@ def _strace_identity(project: Path) -> tuple[Path, dict]:
 
 
 def _darwin_identity(project: Path) -> tuple[Path, dict]:
+    (observer_macos,) = click_import_bootstrap.load_siblings(
+        __package__, "click_observer_macos"
+    )
     if sys.platform != "darwin" or not observer_macos.has_privilege():
         raise inventory.AnalysisError("fs-usage-privilege-unavailable")
     executable = inventory.trusted_executable("fs_usage", project)
@@ -122,6 +123,9 @@ def _darwin_identity(project: Path) -> tuple[Path, dict]:
 def _windows_identity(project: Path) -> tuple[tuple[Path, Path], dict]:
     if sys.platform != "win32":
         raise inventory.AnalysisError("windows-etw-backend-unavailable")
+    (observer_windows,) = click_import_bootstrap.load_siblings(
+        __package__, "click_observer_windows"
+    )
     logman = inventory.trusted_executable("logman", project)
     tracerpt = inventory.trusted_executable("tracerpt", project)
     if (

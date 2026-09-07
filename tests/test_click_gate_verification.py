@@ -26,6 +26,29 @@ from click_gate_test_support import (
 
 
 class ClickGateVerificationTests(ClickGateTestCase):
+    def test_prediction_root_lookup_does_not_take_an_authority_snapshot(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.approve_contract()
+        self.hook_in_process = True
+        with (
+            mock.patch.object(
+                CLICK_VERIFICATION, "git_workspace_snapshot",
+                side_effect=AssertionError("a first plan needs no reuse snapshot"),
+            ) as snapshot,
+            mock.patch.object(
+                CLICK_VERIFICATION, "git_capture", wraps=CLICK_VERIFICATION.git_capture,
+            ) as capture,
+        ):
+            payload = self.verify_gate([self.verification_argv()])
+        snapshot.assert_not_called()
+        self.assertTrue(any(
+            call.args[1] == ["rev-parse", "--show-toplevel"]
+            for call in capture.call_args_list
+        ))
+        self.assertIn("updatedInput", payload["hookSpecificOutput"])
+        self.assertEqual(self.run_rewritten(payload).returncode, 0)
+
     def test_evidence_status_distinguishes_execution_reuse_and_invalidation(self) -> None:
         (self.workspace / ".gitignore").write_text(
             "__pycache__/\n", encoding="utf-8"
@@ -2692,7 +2715,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
                 command_duration_ms=3,
                 observer_overhead_ms=1,
             )
-            return CLICK_VERIFICATION.click_dependency_trace.ShadowExecution(
+            return CLICK_VERIFICATION.click_observer_common.ShadowExecution(
                 exit_code=exit_code,
                 record=record,
             )
@@ -2790,7 +2813,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
                     command_duration_ms=25,
                     observer_overhead_ms=2,
                 )
-                return CLICK_VERIFICATION.click_dependency_trace.ShadowExecution(
+                return CLICK_VERIFICATION.click_observer_common.ShadowExecution(
                     exit_code=exit_code,
                     record=record,
                 )

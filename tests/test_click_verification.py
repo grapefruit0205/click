@@ -92,6 +92,16 @@ class ClickVerificationTests(unittest.TestCase):
                 imported.update(
                     f"{module}.{alias.name}".strip(".") for alias in node.names
                 )
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "load_siblings"
+            ):
+                imported.update(
+                    argument.value for argument in node.args[1:]
+                    if isinstance(argument, ast.Constant)
+                    and isinstance(argument.value, str)
+                )
         for forbidden in (
             "click_browser",
             "click_contract",
@@ -121,8 +131,10 @@ class ClickVerificationTests(unittest.TestCase):
             "click_process",
             "click_runtime_state",
             "click_state",
-            "click_verification_meter",
             "click_verification_policy",
+            "click_verification_bindings",
+            "click_verification_plan",
+            "click_verification_reuse",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, imported)

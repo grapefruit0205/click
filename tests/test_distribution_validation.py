@@ -8,19 +8,42 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from scripts.validate_distribution import (
     _release_notes_error,
     _release_version,
     validate,
 )
-from scripts.build_antigravity_distribution import hook_manifest_errors
+from scripts import build_antigravity_distribution as distribution_builder
+from scripts.build_antigravity_distribution import hook_manifest_errors, dashboard_manifest_errors
 
 
 ROOT = Path(__file__).parents[1]
 
 
 class DistributionValidationTests(unittest.TestCase):
+    def test_incremental_build_preserves_unchanged_files_and_removes_stale_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            for name in ("hooks", "skills", "platforms"):
+                shutil.copytree(ROOT / name, source / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            destination = source / "dist" / "antigravity"
+            with mock.patch.object(distribution_builder, "ROOT", source), mock.patch.object(distribution_builder, "PLATFORM", source / "platforms/antigravity"):
+                distribution_builder.build(destination)
+                sample = destination / "hooks/dashboard/app.js"
+                old_time = sample.stat().st_mtime_ns
+                stale = destination / "hooks/stale.py"
+                stale.write_text("stale", encoding="utf-8")
+                sample_source = source / "hooks/dashboard/styles.css"
+                sample_source.write_text(sample_source.read_text(encoding="utf-8") + "\n/* changed */\n", encoding="utf-8")
+                distribution_builder.build(destination)
+                self.assertEqual(sample.stat().st_mtime_ns, old_time)
+                self.assertFalse(stale.exists())
+                self.assertEqual((destination / "hooks/dashboard/styles.css").read_bytes(), sample_source.read_bytes())
+                (source / "hooks/dashboard/unclassified.js").write_text("unknown", encoding="utf-8")
+                self.assertIn("unclassified.js", " ".join(dashboard_manifest_errors(source)))
+
     def test_public_distribution_is_self_consistent(self) -> None:
         self.assertEqual(validate(ROOT), [])
 

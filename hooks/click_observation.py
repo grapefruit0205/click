@@ -76,6 +76,8 @@ def is_running(entry: Any) -> bool:
     if not isinstance(claimed_at, int) or isinstance(claimed_at, bool):
         return True
     if claimed_at > 0:
+        # The wrapper can exit while its isolated read child remains alive.
+        # Neither its PID nor elapsed time proves that the command stopped.
         return True
     started_at = entry.get("started_at", 0)
     if not isinstance(started_at, int) or isinstance(started_at, bool):
@@ -503,6 +505,7 @@ def run_request(
 ) -> int:
     commands = request["commands"]
     recorded_result = False
+    receipt_unavailable = False
     try:
         descriptor: dict[str, Any] | None = None
         cache_hit: dict[str, Any] | None = None
@@ -552,27 +555,34 @@ def run_request(
             show_cache_notice = False
             if state_result is not None:
                 state_path, request_digest, runner_token = state_result
-                with click_state.state_lock():
-                    show_cache_notice = bool(
-                        cache_reused
-                        and cache_notice_needed(state_path, request_digest)
-                    )
-                    recorded = record_result(
-                        state_path,
-                        request_digest,
-                        runner_token,
-                        exit_code,
-                        output_bytes,
-                        incomplete,
-                        cache_reused=cache_reused,
-                        cache_key=cache_key,
-                        cache_notice_shown=show_cache_notice,
-                        cache_status=cache_status,
-                    )
+                try:
+                    with click_state.state_lock():
+                        show_cache_notice = bool(
+                            cache_reused
+                            and cache_notice_needed(state_path, request_digest)
+                        )
+                        recorded = record_result(
+                            state_path,
+                            request_digest,
+                            runner_token,
+                            exit_code,
+                            output_bytes,
+                            incomplete,
+                            cache_reused=cache_reused,
+                            cache_key=cache_key,
+                            cache_notice_shown=show_cache_notice,
+                            cache_status=cache_status,
+                        )
+                except OSError as exc:
+                    recorded = False
+                    sys.stderr.write(f"Click observation result storage is unavailable: {exc}\n")
                 if not recorded:
-                    sys.stderr.write("Click could not record the observation result safely.\n")
-                    return exit_code or 2
-                recorded_result = True
+                    receipt_unavailable = True
+                    sys.stderr.write(
+                        "Click could not record the observation result safely. Output "
+                        "is preserved, but no successful receipt is available.\n"
+                    )
+                recorded_result = recorded
 
             stdout_file.seek(0)
             stderr_file.seek(0)
@@ -597,15 +607,21 @@ def run_request(
     except OSError as exc:
         if state_result is not None and not recorded_result:
             state_path, request_digest, runner_token = state_result
-            with click_state.state_lock():
-                recorded = record_result(
-                    state_path, request_digest, runner_token, 127, 0, False
+            try:
+                with click_state.state_lock():
+                    recorded = record_result(
+                        state_path, request_digest, runner_token, 127, 0, False
+                    )
+            except OSError as storage_error:
+                recorded = False
+                sys.stderr.write(
+                    f"Click observation failure storage is unavailable: {storage_error}\n"
                 )
             if not recorded:
                 sys.stderr.write("Click could not record the observation failure safely.\n")
         sys.stderr.write(f"Click observation runner failed: {exc}\n")
         return 127
-    return exit_code
+    return (exit_code or 2) if receipt_unavailable else exit_code
 
 
 def run(
@@ -625,14 +641,23 @@ def run(
     if error:
         sys.stderr.write(f"{error}\n")
         return 2
-    with click_state.state_lock():
-        request, error = claim_run(
-            state_path,
-            raw,
-            request_digest,
-            runner_token,
-            protocol_version=protocol_version,
+    try:
+        with click_state.state_lock():
+            request, error = claim_run(
+                state_path,
+                raw,
+                request_digest,
+                runner_token,
+                protocol_version=protocol_version,
+            )
+    except OSError as exc:
+        # The host may place the runner in a stricter filesystem sandbox than
+        # the preparation hook. Never execute using an unpersisted claim.
+        sys.stderr.write(
+            f"Click observation claim storage is unavailable: {exc}. "
+            "No read was executed and no receipt was recorded.\n"
         )
+        return 2
     if error:
         sys.stderr.write(f"{error}\n")
         return 2

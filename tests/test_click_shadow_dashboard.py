@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 import threading
 import time
@@ -24,6 +26,102 @@ from click_gate_test_support import (
 
 
 class ClickShadowDashboardTests(ClickGateTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        # The helper imports the direct-script entry point temporarily. Its
+        # delayed imports need the same path a real Python script retains.
+        script_path = mock.patch.object(sys, "path", [str(Path(CLICK_GATE.__file__).parent), *sys.path])
+        script_path.start()
+        self.addCleanup(script_path.stop)
+
+    def test_dashboard_import_defers_http_server_and_assets(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", "\n".join([
+                "import sys",
+                "from hooks import click_shadow_dashboard as dashboard",
+                "assert 'http.server' not in sys.modules",
+                "assert 'hooks.click_dashboard_server' not in sys.modules",
+                "assert dashboard._asset_text.cache_info().currsize == 0",
+                "assert '<!doctype html>' in dashboard.HTML",
+                "assert dashboard._asset_text.cache_info().currsize == 1",
+            ])],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_snapshot_projection_and_socket_write_release_state_lock(self) -> None:
+        server_module = CLICK_SHADOW_DASHBOARD._server_module()
+        handler = object.__new__(server_module._DashboardHandler)
+        handler.server = mock.Mock(
+            state_path=Path("session-contract-test.json"),
+            instance_id="instance", server_port=54321, access_token="access",
+        )
+        handler.headers = {"Host": "127.0.0.1:54321", "Authorization": "Bearer access"}
+        handler.path = "/api/v1/snapshot"
+        held = False
+
+        @contextmanager
+        def state_lock():
+            nonlocal held
+            self.assertFalse(held)
+            held = True
+            try:
+                yield
+            finally:
+                held = False
+
+        def snapshot(*_):
+            self.assertTrue(held)
+            return {"status": "evidence"}, {"status": "running"}
+
+        def project(state):
+            self.assertFalse(held)
+            self.assertEqual(state, {"status": "evidence"})
+            return {"version": 1}
+
+        def validate(projection):
+            self.assertFalse(held)
+            return projection == {"version": 1}
+
+        def send(*_):
+            self.assertFalse(held)
+
+        with (
+            mock.patch.object(CLICK_STATE, "state_lock", state_lock),
+            mock.patch.object(CLICK_SHADOW_DASHBOARD, "_snapshot", side_effect=snapshot),
+            mock.patch.object(server_module.click_dashboard_projection, "dashboard_projection", side_effect=project),
+            mock.patch.object(server_module.click_dashboard_projection, "projection_is_valid", side_effect=validate),
+            mock.patch.object(handler, "_send", side_effect=send) as sent,
+        ):
+            handler.do_GET()
+        sent.assert_called_once_with(200, "application/json; charset=utf-8", b'{"version":1}\n')
+
+    def test_server_idle_poll_reads_only_dashboard_sidecar(self) -> None:
+        server_module = CLICK_SHADOW_DASHBOARD._server_module()
+        token = "local-access-token"
+        dashboard = {
+            "instance_id": "instance", "status": "starting", "stop_requested": False,
+            "access_token_digest": hashlib.sha256(token.encode()).hexdigest(),
+        }
+        running = {**dashboard, "status": "running"}
+        stopped = {**running, "stop_requested": True}
+        server = mock.Mock(server_port=54321)
+        with (
+            mock.patch.object(CLICK_SHADOW_DASHBOARD, "_managed_state_path", return_value=True),
+            mock.patch.object(CLICK_STATE, "state_lock"),
+            mock.patch.object(CLICK_SHADOW_DASHBOARD, "_snapshot", return_value=({"status": "evidence", "runtime_mode": "evidence"}, dashboard)) as snapshot,
+            mock.patch.object(server_module.click_runtime_state, "view", return_value=mock.Mock(execution_authorized=True)),
+            mock.patch.object(CLICK_SHADOW_DASHBOARD, "_dashboard_state_for_path", side_effect=[running, stopped]) as sidecar,
+            mock.patch.object(CLICK_SHADOW_DASHBOARD, "_write_dashboard_fields", return_value=True),
+            mock.patch.object(server_module, "_DashboardServer", return_value=server),
+        ):
+            self.assertEqual(server_module.run_server(["session-contract-test.json", "instance", token]), 0)
+        self.assertEqual(snapshot.call_count, 1)
+        self.assertEqual(sidecar.call_count, 2)
+        server.handle_request.assert_called_once_with()
+        server.server_close.assert_called_once_with()
+
     def test_dashboard_javascript_parses_and_keeps_contract_prose_out_of_share_report(self) -> None:
         node = shutil.which("node")
         if node is None:
@@ -319,6 +417,16 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             self.assertIn("default-src 'none'", response.headers["Content-Security-Policy"])
             self.assertEqual(response.headers["Cache-Control"], "no-store")
             self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
+
+        for path, marker in (
+            ("/styles.css", "@media(max-width:760px)"),
+            ("/locales.js", "ClickDashboardMessages"),
+            ("/app.js", "function acceptSnapshot(data)"),
+        ):
+            with urllib.request.urlopen(base + path, timeout=2) as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn(marker, response.read().decode("utf-8"))
+                self.assertEqual(response.headers["Cache-Control"], "no-store")
 
         with self.assertRaises(urllib.error.HTTPError) as unauthorized:
             urllib.request.urlopen(base + "/api/v1/snapshot", timeout=2)

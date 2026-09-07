@@ -144,6 +144,7 @@ class ClickGateTestCase(unittest.TestCase):
                 mock.patch.object(sys, "stdin", standard_input),
                 mock.patch.object(sys, "stdout", standard_output),
                 mock.patch.object(sys, "stderr", standard_error),
+                mock.patch.object(sys, "path", [str(SCRIPT.parent.resolve()), *sys.path]),
             ):
                 returncode = CLICK_GATE.main()
             stdout = standard_output.getvalue()

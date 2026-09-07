@@ -19,10 +19,10 @@ import time
 from typing import Any
 
 if __package__:
-    from . import click_dependency_cache, click_dependency_trace
+    from . import click_dependency_cache, click_observer_common
 else:  # Executed directly from the bundled hooks directory.
     import click_dependency_cache
-    import click_dependency_trace
+    import click_observer_common
 
 
 SHADOW_INTELLIGENCE_FIELD = "shadow_intelligence"
@@ -1056,7 +1056,7 @@ def dashboard_projection(state: Any, *, generated_at: int | None = None) -> dict
         evidence_state.get("sources", {}) if isinstance(evidence_state, dict) else {}
     )
     evidence_sources = evidence_sources if isinstance(evidence_sources, dict) else {}
-    observer_records = click_dependency_trace.records_from_verification(verification)
+    observer_records = click_observer_common.records_from_verification(verification)
     intelligence = _detached_state(verification)
 
     source_keys = sorted(
