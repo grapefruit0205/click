@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "workdir": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "checks": [
+    {
+      "evidence_id": "E_AGENT_SHARDING_BASELINE",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "tests.test_click_auto_sharding",
+        "tests.test_click_shard_proposal",
+        "tests.test_click_sharding_setup",
+        "tests.test_click_sharding_boundaries",
+        "tests.test_click_evidence_shards",
+        "tests.test_repository_shard_inventory",
+        "tests.test_click_change_policy",
+        "-q"
+      ],
+      "class": "targeted"
+    },
+    {
+      "evidence_id": "E_AGENT_SHARD_REUSE_BASELINE",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_status_distinguishes_execution_reuse_and_invalidation",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_explicit_batch_workdir_expands_shards_from_nested_repository",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_shards_retain_passed_sibling_and_retry_only_unresolved",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_shard_map_alone_never_authorizes_cross_revision_skip",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_caller_installed_v1_shard_observations_rerun_every_child",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_each_shard_can_use_existing_committed_safe_change_authority",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_edited_shard_map_runs_original_parent_suite",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_shards_keep_original_timing_sample_across_reuse",
+        "-q"
+      ],
+      "class": "targeted"
+    }
+  ]
+}

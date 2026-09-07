@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "kind": "phase-1-local-command-outcome-overhead",
+  "measured_at": "2026-09-07T09:34:41.043512+00:00",
+  "environment": {
+    "python": "3.12.3",
+    "implementation": "CPython",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39"
+  },
+  "method": {
+    "storage": "Canonical compact UTF-8 JSON bytes for one-source v4 and v5 batches/history.",
+    "processing": "Median local perf_counter duration per independent lifecycle, including construct, store, v5 command transitions, final fold, validation, and canonical serialization.",
+    "output": "Canonical compact UTF-8 JSON bytes of progress_projection at a fixed generated_at.",
+    "interpretation": "Synthetic local component cost only; not task elapsed, request latency, user time, or token usage."
+  },
+  "samples": [
+    {
+      "command_count": 1,
+      "iterations_per_variant": 400,
+      "storage": {
+        "legacy_planned_batch_bytes": 937,
+        "exact_planned_batch_bytes": 1272,
+        "planned_added_bytes": 335,
+        "planned_added_bytes_per_command": 335.0,
+        "legacy_completed_history_bytes": 1064,
+        "exact_completed_history_bytes": 1429,
+        "completed_added_bytes": 365,
+        "completed_added_bytes_per_command": 365.0
+      },
+      "processing": {
+        "scope": "construct-store-record-validate-canonical-json",
+        "legacy_median_us": 533.928,
+        "exact_median_us": 757.654,
+        "added_median_us": 223.726
+      },
+      "public_progress_output": {
+        "legacy_bytes": 1101,
+        "exact_bytes": 1101,
+        "added_bytes": 0,
+        "identical": true
+      }
+    },
+    {
+      "command_count": 8,
+      "iterations_per_variant": 200,
+      "storage": {
+        "legacy_planned_batch_bytes": 937,
+        "exact_planned_batch_bytes": 3526,
+        "planned_added_bytes": 2589,
+        "planned_added_bytes_per_command": 323.625,
+        "legacy_completed_history_bytes": 1064,
+        "exact_completed_history_bytes": 3901,
+        "completed_added_bytes": 2837,
+        "completed_added_bytes_per_command": 354.625
+      },
+      "processing": {
+        "scope": "construct-store-record-validate-canonical-json",
+        "legacy_median_us": 459.053,
+        "exact_median_us": 2295.352,
+        "added_median_us": 1836.3
+      },
+      "public_progress_output": {
+        "legacy_bytes": 1101,
+        "exact_bytes": 1101,
+        "added_bytes": 0,
+        "identical": true
+      }
+    },
+    {
+      "command_count": 64,
+      "iterations_per_variant": 50,
+      "storage": {
+        "legacy_planned_batch_bytes": 937,
+        "exact_planned_batch_bytes": 21668,
+        "planned_added_bytes": 20731,
+        "planned_added_bytes_per_command": 323.922,
+        "legacy_completed_history_bytes": 1066,
+        "exact_completed_history_bytes": 23867,
+        "completed_added_bytes": 22801,
+        "completed_added_bytes_per_command": 356.266
+      },
+      "processing": {
+        "scope": "construct-store-record-validate-canonical-json",
+        "legacy_median_us": 564.812,
+        "exact_median_us": 29486.11,
+        "added_median_us": 28921.299
+      },
+      "public_progress_output": {
+        "legacy_bytes": 1103,
+        "exact_bytes": 1103,
+        "added_bytes": 0,
+        "identical": true
+      }
+    }
+  ]
+}

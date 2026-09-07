@@ -39,6 +39,7 @@ HOOK_FILES = (
     "click_change_policy.py",
     "click_dependency_cache.py",
     "click_dependency_trace.py",
+    "click_diagnostics.py",
     "click_observer_backend.py",
     "click_observer_common.py",
     "click_observer_control.py",
@@ -86,6 +87,7 @@ CLICK_REFERENCE_FILES = (
     "observer-v1.md",
     "shadow-intelligence-v1.md",
     "evidence-shards-v1.md",
+    "verification-efficiency.md",
     "antigravity.md",
 )
 

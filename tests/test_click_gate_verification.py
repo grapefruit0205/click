@@ -2249,6 +2249,201 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(
             {item["status"] for item in batch["sources"]}, {"passed"}
         )
+        self.assertEqual(batch["version"], 5)
+        self.assertTrue(
+            all(
+                command["status"] == "passed"
+                for source in batch["sources"]
+                for command in source["commands"]
+            )
+        )
+
+    def test_runner_records_exact_commands_and_stops_after_the_first_failure(
+        self,
+    ) -> None:
+        (self.workspace / ".gitignore").write_text(
+            "__pycache__/\n", encoding="utf-8"
+        )
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.prompt_submit("한 묶음의 fail-fast 결과 기록", "turn-1")
+        payload = self.verify_gate(
+            [
+                self.verification_argv(),
+                self.verification_argv(1),
+                self.verification_argv(),
+            ],
+            "turn-1",
+            evidence_ids=["E_CHAIN", "E_CHAIN", "E_CHAIN"],
+        )
+        tokens = split_runner_command(
+            payload["hookSpecificOutput"]["updatedInput"]["command"]
+        )
+        execute = mock.Mock(side_effect=[0, 7, 0])
+        environment = {
+            "PLUGIN_DATA": str(self.plugin_data),
+            "CLICK_CONFIG_HOME": str(self.plugin_data),
+        }
+        with (
+            mock.patch.dict(os.environ, environment),
+            mock.patch.object(
+                CLICK_VERIFICATION.Path, "cwd", return_value=self.workspace
+            ),
+        ):
+            result = CLICK_VERIFICATION.run(
+                tokens[5:],
+                file_content_digest=CLICK_VERIFICATION.file_content_digest,
+                git_workspace_snapshot=CLICK_VERIFICATION.git_workspace_snapshot,
+                git_metadata_present=CLICK_INSPECTION.git_metadata_present,
+                execute_commands=execute,
+                git_capture=CLICK_VERIFICATION.git_capture,
+            )
+
+        self.assertEqual(result, 7)
+        self.assertEqual(execute.call_count, 2)
+        state_path = Path(tokens[5])
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        batch = CLICK_VERIFICATION.click_incremental.current_batch(
+            state["verification"]
+        )
+        assert batch is not None
+        self.assertEqual(batch["status"], "failed")
+        self.assertEqual(batch["version"], 5)
+        source = batch["sources"][0]
+        self.assertEqual(source["status"], "failed")
+        self.assertEqual(
+            [item["status"] for item in source["commands"]],
+            ["passed", "failed", "not-run"],
+        )
+        self.assertEqual(
+            [item["exit_code"] for item in source["commands"]],
+            [0, 7, None],
+        )
+        evidence = state["evidence_state"]["sources"][
+            CLICK_EVIDENCE.evidence_key("E_CHAIN")
+        ]
+        self.assertEqual(evidence["status"], "failed")
+        self.assertEqual(evidence["last_exit_code"], 7)
+
+    def test_synthetic_noncontiguous_results_cannot_create_false_receipts(
+        self,
+    ) -> None:
+        (self.workspace / ".gitignore").write_text(
+            "__pycache__/\n", encoding="utf-8"
+        )
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.prompt_submit("비연속 결과 기록 fixture", "turn-1")
+        payload = self.verify_gate(
+            [self.verification_argv()] * 3,
+            "turn-1",
+            evidence_ids=["E_ALPHA", "E_BETA", "E_MISSING"],
+        )
+        tokens = split_runner_command(
+            payload["hookSpecificOutput"]["updatedInput"]["command"]
+        )
+        state_path = Path(tokens[5])
+        raw, decode_error = CLICK_CAPABILITY.decode_encoded_request(
+            tokens[8], "verification"
+        )
+        self.assertEqual(decode_error, "")
+        alpha_key = CLICK_EVIDENCE.evidence_key("E_ALPHA")
+        beta_key = CLICK_EVIDENCE.evidence_key("E_BETA")
+        missing_key = CLICK_EVIDENCE.evidence_key("E_MISSING")
+        environment = {
+            "PLUGIN_DATA": str(self.plugin_data),
+            "CLICK_CONFIG_HOME": str(self.plugin_data),
+        }
+        with (
+            mock.patch.dict(os.environ, environment),
+            mock.patch.object(CLICK_GATE.Path, "cwd", return_value=self.workspace),
+        ):
+            with CLICK_STATE.state_lock():
+                batch, claim_error = CLICK_GATE._claim_verification_run(
+                    state_path, raw, tokens[6], tokens[7]
+                )
+            self.assertEqual(claim_error, "")
+            self.assertIsNotNone(batch)
+            assert batch is not None
+            command_plans = batch.pop("_click_command_plans")
+            source_results = CLICK_VERIFICATION.click_incremental.new_source_results(
+                command_plans
+            )
+            for source_key, status, exit_code, offset in (
+                (alpha_key, "failed", 7, 1),
+                (beta_key, "passed", 0, 3),
+            ):
+                command_plan = command_plans[source_key][0]
+                self.assertTrue(
+                    CLICK_VERIFICATION.click_incremental.start_source_command(
+                        source_results,
+                        source_key,
+                        position=command_plan["position"],
+                        check_digest=command_plan["check_digest"],
+                        started_offset_ms=offset,
+                    )
+                )
+                self.assertTrue(
+                    CLICK_VERIFICATION.click_incremental.complete_source_command(
+                        source_results,
+                        source_key,
+                        position=command_plan["position"],
+                        check_digest=command_plan["check_digest"],
+                        status=status,
+                        reason=(
+                            "command-passed" if status == "passed"
+                            else "command-failed"
+                        ),
+                        finished_offset_ms=offset + 1,
+                        duration_ms=1,
+                        exit_code=exit_code,
+                    )
+                )
+            # The third source deliberately has no result at all. This fixture
+            # models out-of-order/corrupt input; the real runner remains fail-fast.
+            source_results.pop(missing_key)
+            for key in list(batch):
+                if key.startswith("_click_"):
+                    batch.pop(key)
+            for check in batch["checks"]:
+                approved_argv = check.pop("_click_approved_argv", None)
+                if approved_argv:
+                    check["argv"] = approved_argv
+            snapshot = CLICK_VERIFICATION.git_workspace_snapshot(self.workspace)
+            assert snapshot is not None
+            with CLICK_STATE.state_lock():
+                recorded = CLICK_VERIFICATION.record_result(
+                    state_path,
+                    batch,
+                    tokens[6],
+                    tokens[7],
+                    # A legacy prefix count and last exit both claim success.
+                    # Exact v5 command facts must still win.
+                    0,
+                    3,
+                    workspace_changed=False,
+                    workspace_root=str(snapshot["root"]),
+                    workspace_digest=str(snapshot["digest"]),
+                    source_durations_ms={alpha_key: 1, beta_key: 1},
+                    source_results=source_results,
+                    runner_started_ns=time.perf_counter_ns(),
+                    observer_mode="off",
+                )
+
+        self.assertTrue(recorded)
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        sources = state["evidence_state"]["sources"]
+        self.assertEqual(sources[alpha_key]["status"], "failed")
+        self.assertEqual(sources[alpha_key]["last_exit_code"], 7)
+        self.assertEqual(sources[beta_key]["status"], "passed")
+        self.assertEqual(sources[missing_key]["status"], "ready")
+        self.assertEqual(state["verification"]["status"], "failed")
+        batch = CLICK_VERIFICATION.click_incremental.current_batch(
+            state["verification"]
+        )
+        assert batch is not None
+        by_key = {item["source_key"]: item for item in batch["sources"]}
+        self.assertEqual(by_key[alpha_key]["status"], "failed")
+        self.assertEqual(by_key[beta_key]["status"], "passed")
+        self.assertEqual(by_key[missing_key]["status"], "not-run")
 
     def test_late_completion_from_cancelled_batch_cannot_overwrite_successor_batch(self) -> None:
         (self.workspace / ".gitignore").write_text(
@@ -2281,8 +2476,16 @@ class ClickGateVerificationTests(ClickGateTestCase):
                 )
             self.assertEqual(claim_error, "")
             self.assertIsNotNone(batch)
+            assert batch is not None
+            command_plan = batch["_click_command_plans"][source_key][0]
             CLICK_VERIFICATION._record_incremental_start(
-                state_path, old_tokens[6], old_tokens[7], source_key
+                state_path,
+                old_tokens[6],
+                old_tokens[7],
+                source_key,
+                position=command_plan["position"],
+                check_digest=command_plan["check_digest"],
+                started_offset_ms=0,
             )
             CLICK_GATE.click_contract_state.clear_contract_state(
                 {**self.base_event, "turn_id": "turn-1"}
@@ -2302,9 +2505,14 @@ class ClickGateVerificationTests(ClickGateTestCase):
                 old_tokens[6],
                 old_tokens[7],
                 source_key,
+                position=command_plan["position"],
+                check_digest=command_plan["check_digest"],
                 status="passed",
                 reason="command-passed",
+                finished_offset_ms=9.5,
                 duration_ms=9.5,
+                source_duration_ms=9.5,
+                exit_code=0,
             )
 
         self.assertEqual(state_path.read_bytes(), before)
@@ -2387,6 +2595,18 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(verification["last_exit_code"], 130)
         self.assertEqual(verification["runner_claimed_at"], 0)
         self.assertEqual(verification["runner_token_digest"], "")
+        batch = CLICK_VERIFICATION.click_incremental.current_batch(verification)
+        assert batch is not None
+        self.assertEqual(batch["status"], "interrupted")
+        self.assertEqual(batch["sources"][0]["status"], "unknown")
+        self.assertIsNone(batch["sources"][0]["duration_ms"])
+        self.assertEqual(
+            [
+                command["status"]
+                for command in batch["sources"][0]["commands"]
+            ],
+            ["unknown"],
+        )
         interrupted_source = state["evidence_state"]["sources"][
             CLICK_EVIDENCE.evidence_key("E1")
         ]
@@ -2677,9 +2897,36 @@ class ClickGateVerificationTests(ClickGateTestCase):
             assert batch is not None
             batch.pop("_click_verification_environment")
             batch.pop("_click_verification_environment_rebound")
+            command_plans = batch.pop("_click_command_plans")
             snapshot = CLICK_VERIFICATION.git_workspace_snapshot(self.workspace)
             assert snapshot is not None
             source_key = CLICK_EVIDENCE.evidence_key("E1")
+            source_results = CLICK_VERIFICATION.click_incremental.new_source_results(
+                command_plans
+            )
+            command_plan = command_plans[source_key][0]
+            self.assertTrue(
+                CLICK_VERIFICATION.click_incremental.start_source_command(
+                    source_results,
+                    source_key,
+                    position=command_plan["position"],
+                    check_digest=command_plan["check_digest"],
+                    started_offset_ms=1,
+                )
+            )
+            self.assertTrue(
+                CLICK_VERIFICATION.click_incremental.complete_source_command(
+                    source_results,
+                    source_key,
+                    position=command_plan["position"],
+                    check_digest=command_plan["check_digest"],
+                    status="passed",
+                    reason="command-passed",
+                    finished_offset_ms=2,
+                    duration_ms=1,
+                    exit_code=0,
+                )
+            )
             observation = (
                 CLICK_VERIFICATION.click_dependency_cache.dependency_observation(
                     ["verification_fixture.py"]
@@ -2696,6 +2943,8 @@ class ClickGateVerificationTests(ClickGateTestCase):
                     workspace_root=str(snapshot["root"]),
                     workspace_digest=str(snapshot["digest"]),
                     dependency_observations={source_key: observation},
+                    source_durations_ms={source_key: 1},
+                    source_results=source_results,
                 )
 
         self.assertTrue(recorded)

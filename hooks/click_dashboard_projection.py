@@ -35,9 +35,9 @@ else:  # Executed beside the bundled hook modules.
     import click_shadow_intelligence
 
 
-PROJECTION_VERSION = 6
+PROJECTION_VERSION = 8
 LEGACY_PROJECTION_VERSION = 4
-LEGACY_PROJECTION_VERSIONS = frozenset({4, 5})
+LEGACY_PROJECTION_VERSIONS = frozenset({4, 5, 6, 7})
 PROJECTION_MODE = "incremental-verification"
 MAX_SOURCES = click_shadow_intelligence.MAX_STATE_SOURCES
 MAX_INPUTS = click_shadow_intelligence.MAX_PROJECTION_INPUTS
@@ -60,7 +60,12 @@ _V4_FIELDS = frozenset(
     {"version", "mode", "generated_at", "task", "summary", "sources", "map", "batches", "history", "accounting", "controls", "engine"}
 )
 _V5_FIELDS = _V4_FIELDS | {"batch_summaries"}
-_FIELDS = _V5_FIELDS | {"setup"}
+_V6_FIELDS = _V5_FIELDS | {"setup"}
+_V7_FIELDS = _V6_FIELDS | {"retained_impact"}
+_FIELDS = _V7_FIELDS | {"task_efficiency"}
+_TASK_EFFICIENCY_FIELDS = frozenset(
+    {"kind", "version", "generated_at", "measurement_status", "measurement_reason", "presentations"}
+)
 _TASK_FIELDS = frozenset(
     {
         "runtime_mode",
@@ -512,12 +517,13 @@ def dashboard_projection(
         if isinstance(raw_status, str) and _STATUS.fullmatch(raw_status)
         else "unknown"
     )
+    projection_generated_at = max(
+        1, int(time.time()) if generated_at is None else generated_at
+    )
     projection = {
         "version": PROJECTION_VERSION,
         "mode": PROJECTION_MODE,
-        "generated_at": max(
-            1, int(time.time()) if generated_at is None else generated_at
-        ),
+        "generated_at": projection_generated_at,
         "task": {
             "runtime_mode": runtime_mode,
             "status": status,
@@ -531,6 +537,7 @@ def dashboard_projection(
                                    and raw_state.get("approved_turn_id") != raw_state.get("staged_turn_id")),
         },
         "accounting": click_incremental.history_accounting(verification),
+        "retained_impact": click_incremental.retained_impact(history),
         "controls": click_incremental.control_events(raw_state),
         "engine": engine_identity(),
         "summary": {
@@ -544,6 +551,14 @@ def dashboard_projection(
         "setup": click_sharding_setup.dashboard_setup_projection(
             raw_state.get("auto_sharding_setup")
         ),
+        "task_efficiency": {
+            "kind": "click-task-efficiency-public",
+            "version": 1,
+            "generated_at": projection_generated_at,
+            "measurement_status": "unmeasured",
+            "measurement_reason": "host-task-and-usage-boundaries-unavailable",
+            "presentations": [],
+        },
         "history": {
             "totals": click_incremental.history_totals(verification),
             "retained_batch_count": len(history),
@@ -581,7 +596,8 @@ def projection_is_valid(value: Any) -> bool:
     version = value.get("version") if isinstance(value, dict) else None
     legacy = version == 4
     expected_fields = (
-        _V4_FIELDS if version == 4 else _V5_FIELDS if version == 5 else _FIELDS
+        _V4_FIELDS if version == 4 else _V5_FIELDS if version == 5
+        else _V6_FIELDS if version == 6 else _V7_FIELDS if version == 7 else _FIELDS
     )
     if (
         not isinstance(value, dict)
@@ -714,7 +730,14 @@ def projection_is_valid(value: Any) -> bool:
                 if incremental[field] != selected["incremental"][field]:
                     return False
 
-    if version == PROJECTION_VERSION:
+    if version in {7, PROJECTION_VERSION} and not click_incremental.retained_impact_is_valid(value.get("retained_impact")):
+        return False
+    if version in {7, PROJECTION_VERSION} and (
+        value["retained_impact"]["completed_request_count"] > history["retained_batch_count"]
+        or value["retained_impact"]["reused_group_request_count"] > value["accounting"]["reuse_numerator"]
+    ):
+        return False
+    if version in {6, 7, PROJECTION_VERSION}:
         setup = value.get("setup")
         if (
             not isinstance(setup, dict)
@@ -747,6 +770,21 @@ def projection_is_valid(value: Any) -> bool:
                     or not math.isfinite(setup["comparison_net_ms"])
                 )
             )
+        ):
+            return False
+
+    if version == PROJECTION_VERSION:
+        task_efficiency = value.get("task_efficiency")
+        if (
+            not isinstance(task_efficiency, dict)
+            or set(task_efficiency) != _TASK_EFFICIENCY_FIELDS
+            or task_efficiency.get("kind") != "click-task-efficiency-public"
+            or task_efficiency.get("version") != 1
+            or task_efficiency.get("generated_at") != value.get("generated_at")
+            or task_efficiency.get("measurement_status") != "unmeasured"
+            or task_efficiency.get("measurement_reason")
+            != "host-task-and-usage-boundaries-unavailable"
+            or task_efficiency.get("presentations") != []
         ):
             return False
 

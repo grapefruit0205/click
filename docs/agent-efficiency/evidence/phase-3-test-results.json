@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "phase": 3,
+  "generated_at": 1788784525,
+  "suite": "tests.test_click_failure_collection",
+  "tests_run": 9,
+  "passed": 9,
+  "skipped": 0,
+  "failed": 0,
+  "real_runner_fixture": {
+    "first_request": "two-explicit-independent-test-failures-recorded",
+    "repair": "authorized-fixture-content-mutation",
+    "requalification": "both-sources-passed",
+    "unchanged_resubmission": "both-sources-reused-without-run-verification"
+  },
+  "verified": [
+    "fail-fast-default",
+    "explicit-independent-source-admission",
+    "source-failure-and-start-window-budgets",
+    "cancel-drift-setup-error-and-unknown-parser-stop",
+    "first-nonzero-exit-and-noncontiguous-outcomes",
+    "automatic-shard-identity-safe-fallback"
+  ],
+  "whole_task_effect": null,
+  "whole_task_effect_reason": "automated-runner-fixture-is-not-a-paired-model-task"
+}

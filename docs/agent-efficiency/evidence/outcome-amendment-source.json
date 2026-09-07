@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "kind": "phase-0-prompt-amendment-source",
+  "applied_at": "2026-09-07",
+  "source_path": "/home/grapefruit/.codex/attachments/ba75ecba-3969-4bb3-9022-9b83c8b2a029/pasted-text.txt",
+  "source_sha256": "5e0f6bfe36a58a71a86d0dbca33ec121ef20b1014ef60daa9d1945c4da99bf40",
+  "baseline_reset": false,
+  "product_code_changed": false,
+  "accepted_scope": [
+    "same-quality whole-task completion time",
+    "user intervention count and observed active time",
+    "completion quality, failures, incomplete and slower samples",
+    "first-use versus prepared repeat-use",
+    "Evidence versus Guarded",
+    "follow-up maintenance burden",
+    "first-screen whole-task improved/slower/unchanged/unmeasured status"
+  ],
+  "preserved_invariants": [
+    "automatic sharding init/status/refresh",
+    "shard reuse and existing authority boundaries",
+    "B0 snapshot and original prompt hashes",
+    "test-execution meaning of 절감 시간",
+    "ratio-only public token presentation"
+  ],
+  "current_prompt_hashes": {
+    "00-audit-and-baseline.md": "7e7b55e990f78d9e9e2ce65322d637ada52b912c072f2c7b83d3954b52a4675f",
+    "01-command-outcomes.md": "9a469e5b9b2d1cc19cdf91f310b2aa0ce5150750534a116d4b9f88f3d589c9e1",
+    "02-actionable-report.md": "af9738bd6e752409f07e57121318dce0a5134badf25e4ac498e0edd5ce67f32c",
+    "03-bounded-failure-collection.md": "4b32e8c8a31d4ea5c9a5eba2a1ae91602e23641f3252187ddf6f87b6a2edc8a7",
+    "04-paired-evaluation.md": "38411e64ef5cbb40b57c4ec92b2249907898269e0fa0ff13e9359125b1bbaa8b",
+    "05-dashboard-and-final.md": "5b189e9a10e4a102703140f40cb1ddf406dd8c5db26bd02069aee9865aac0129",
+    "APPLY-TO-EXISTING.md": "58d757216939e8bde21582515f9354b3b805470bb3259910d89ed5a4a3127987",
+    "CHANGELOG.md": "81e9a335b98544f44bddc7dd88d8f2bf487bf82fba7b79d0c25188f93379ffdf",
+    "COMMON.md": "ca66c1f569f7157ce4d32641976e07a837c331d43ea86b40216ed753439d25b2",
+    "DISPLAY-REQUIREMENTS.md": "368e840ea9a68957c02ea215d2a8f2502d674c2966e87cb781ade0812361bbc3",
+    "ESTIMATES.md": "3029943e19e784df1628df543742472499dd6c67cd3f93649fddf3e8d79bf317",
+    "README.md": "16f141a96c631bc36ed0c95724b95e133721129850862a1b05b6a4a01ebb35ad",
+    "SOURCE.md": "43abe836705c5756fcdf42f7706ddfa420b87f73302b9bc974c581841fc4645b",
+    "phase-manifest.json": "ac74703d600802e8622b90e38204addd8591acd5484e5c866ff8760c9dde67d8",
+    "prompt-changes.diff": "956ca39e22a9fccc434a470cae1734c0c5f092f7e6b4c3921137b85a78f2f6e8"
+  },
+  "verification": {
+    "result": "passed",
+    "click_evidence_id": "E-P0-amendment-v2",
+    "attachment_digest_verified": true,
+    "utf8_and_json_verified": true,
+    "phase_01_to_05_prompt_fences_verified": true,
+    "whole_task_contract_verified": true,
+    "automatic_sharding_and_reuse_acceptance_verified": true,
+    "verified_b0_paths": 300,
+    "b0_product_files_unchanged": true,
+    "executed_phase_0_prompt_unchanged": true,
+    "post_b0_additions_only_in": "docs/agent-efficiency/",
+    "completed_phases": [
+      0
+    ],
+    "next_phase": 1,
+    "preliminary_failed_runs": 7,
+    "prompt_defects_corrected_during_audit": [
+      "Phase 1 now names shard reuse explicitly",
+      "prompt-package and Phase 0 COMMON now include task_completion_time_delta_ms"
+    ],
+    "remaining_preliminary_failures_were_audit_harness_corrections": true
+  }
+}

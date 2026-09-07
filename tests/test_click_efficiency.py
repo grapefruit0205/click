@@ -25,6 +25,7 @@ class Node {
   prepend(...children){this.children.unshift(...children);}
   replaceChildren(...children){this.children=children;this.text='';}
   setAttribute(k,v){this.attributes[k]=String(v);}
+  getAttribute(k){return this.attributes[k] ?? null;}
   get outerHTML(){return '<'+this.tag+Object.entries(this.attributes).map(([k,v])=>' '+k+'="'+escape(v)+'"').join('')+'>'+escape(this.text)+this.children.map(n=>n.outerHTML).join('')+'</'+this.tag+'>';}
 }
 class Document {
@@ -40,7 +41,7 @@ const context={document:doc,location:{hash:'',pathname:'/'},history:{replaceStat
   setTimeout(){},setInterval(){},fetch(){throw Error('Unexpected network or verification');}};
 const marker='  refresh();\n  setInterval(refresh, 1500);';
 assert(input.script.includes(marker));
-const expose='  globalThis.api={readComparison,renderMap,renderComparison,outcomePresentation,renderOutcome,explain,standaloneReport,shareReport,setState(data,batch,summary,savings,measured){snapshot=data;activeBatch=batch;activeSummary=summary;activeSavings=savings;comparison=measured;}};';
+const expose='  globalThis.api={readComparison,readTaskEfficiency,comparisonRows,summaryCopy,render,renderBatch,renderSources,renderMap,renderComparison,renderTaskEfficiency,taskEfficiencyPresentation,publicTaskEfficiency,outcomePresentation,renderOutcome,explain,standaloneReport,shareReport,setState(data,batch,summary,savings,measured,taskMeasured){snapshot=data;activeBatch=batch;activeSummary=summary;activeSavings=savings;comparison=measured;if(taskMeasured!==undefined){taskEfficiency=taskMeasured;taskEfficiencyImported=Boolean(taskMeasured);selectedTaskComparison=taskMeasured?.presentations?.length===1?taskMeasured.presentations[0].comparison_ref:String();}}};';
 vm.runInNewContext(input.script.replace(marker,expose),context);
 const api=context.api;
 const b={wall_ms:10,status:'passed',executed_source_count:2,reused_source_count:0,not_run_source_count:0};
@@ -69,7 +70,7 @@ const workflow={version:4,kind:'click-guarded-workflow-benchmark',source:'isolat
     authority:'real-hooks-and-one-use-runner; distinct-scripted-fixture-approval-turns',observer:'off',cache:'fresh-initial-state-per-configuration-and-repetition; OS-cache-not-flushed; bytecode-disabled',
     default_configuration:'no-optional-shards-dependencies-or-safe-change-policy; product-default-mode-remains-Evidence',explicit_configuration:'fixed-committed-two-shard-map-and-sibling-code-safe-change-policy-before-A',
     test_interval:'source-command-dispatch-through-return; sequential-sum-for-executed-sources',click_request_interval:'driver-preflight-through-runner-return',additional_cost:'setup-transition-and-two-same-state-full-executions-reported-separately',failure:'expected-failure-kept-raw-and-in-workflow-cost; excluded-from-success-only-savings-statistics'},
-  samples:[{}],comparison_samples:workflowSamples,stage_summaries:Array(32).fill({}),cumulative_summaries:Array(4).fill({}),workflow_cost_summaries:Array(2).fill({}),summaries:Array(4).fill({}),
+  samples:[{iteration:0,warmup:false,arms:Object.fromEntries(['baseline','click-default','explicit-reuse'].map(key=>[key,{setup_ms:1,transition_ms:2,audit_wall_ms:3,validation_wall_ms:4}]))}],comparison_samples:workflowSamples,stage_summaries:Array(32).fill({}),cumulative_summaries:Array(4).fill({}),workflow_cost_summaries:Array(2).fill({}),summaries:Array(4).fill({}),
   repository_reference:{version:1,kind:'click-repository-bundle-reference',source:'current-repository-test-bundle',unit:'ms',scope_digest:'c'.repeat(64),
     conditions:{iterations:1,warmups:0,shard_count:6,scope_basis:'committed-evidence-shards-v1-inventory',measurement_order:'alternating-pair-order',cache:'same-working-tree-and-environment; OS-cache-not-flushed; bytecode-disabled',measurement_scope:'driver-command-dispatch-through-return'},
     samples:[{iteration:0,warmup:false,order:['same-shards','parent-suite'],eligible:true,excluded_reason:'',same_shards:{duration_ms:10,status:'passed',exit_code:0,executed_command_count:6,not_run_command_count:0},parent_suite:{duration_ms:11,status:'passed',exit_code:0,executed_command_count:1,not_run_command_count:0},delta_ms:1,delta_percent:100/11}],
@@ -77,6 +78,8 @@ const workflow={version:4,kind:'click-guarded-workflow-benchmark',source:'isolat
 const workflowSafe=api.readComparison(workflow);
 assert.equal(workflowSafe.version,2);assert.equal(workflowSafe.engine.version,'0.82.0+codex.20260906090212');assert.equal(workflowSafe.samples.length,32);
 assert.equal(workflowSafe.repository_reference.conditions.shard_count,6);
+assert.equal(workflowSafe.cost_samples.length,3);assert.equal(workflowSafe.cost_samples[0].additional_full_audit_ms,3);
+assert.equal(workflowSafe.samples[0].excluded_reason,'scope-not-equivalent');
 assert.equal(workflowSafe.samples.filter(item=>!item.eligible).length,11);assert(!JSON.stringify(workflowSafe).includes('dashboard_snapshot'));
 for (const mutate of [copy=>copy.unit='s',copy=>copy.source='claimed-production',copy=>copy.comparison_samples[0].unit='s',copy=>copy.comparison_samples[0].baseline.measurement_scope='unknown',copy=>copy.comparison_samples[0].delta_ms=999,copy=>copy.repository_reference.samples[0].delta_ms=999]) {
   const changed=JSON.parse(JSON.stringify(workflow));mutate(changed);assert.throws(()=>api.readComparison(changed));
@@ -98,14 +101,31 @@ api.renderOutcome(input.cases.allReuse.batch,input.cases.allReuse.summary,input.
 assert.equal(doc.getElementById('executionComparison').hidden,false);
 assert.equal(doc.getElementById('fullBar').style.width,'100%');
 assert.equal(doc.getElementById('executedBar').style.width,'0%');
-assert.equal(doc.getElementById('reductionRate').textContent,'약 100%');
+assert.equal(doc.getElementById('reductionRate').textContent,'약 100% [추정]');
 api.renderOutcome(input.cases.noReuse.batch,input.cases.noReuse.summary,input.cases.noReuse.savings);
 assert.equal(doc.getElementById('estimatedAvoided').textContent,'0 ms');
 assert.equal(doc.getElementById('executedBar').style.width,'100%');
-assert.equal(doc.getElementById('reductionRate').textContent,'약 0%');
+assert.equal(doc.getElementById('reductionRate').textContent,'약 0% [추정]');
 api.renderOutcome(input.cases.partial.batch,input.cases.partial.summary,input.cases.partial.savings);
-assert.match(doc.getElementById('estimatedAvoided').textContent,/^≥ /);
+assert.equal(doc.getElementById('estimatedAvoided').textContent,'2 / 2개');
+assert.match(doc.getElementById('estimateCoverage').textContent,/부분 추정.*\[추정\]/);
+assert(!doc.getElementById('estimateCoverage').textContent.includes('≥'));
 assert.equal(doc.getElementById('timingCoverage').textContent,'1/2');
+assert.equal(doc.getElementById('baselineBlocks').children.length,2);
+assert.equal(doc.getElementById('actualBlocks').children.length,2);
+assert(doc.getElementById('actualBlocks').children.every(item=>item.className.includes('reused')));
+assert.match(doc.getElementById('resultCoverage').textContent,/2\/2 결과 확보/);
+const untimed=JSON.parse(JSON.stringify(input.cases.partial));
+untimed.savings.omitted_test_execution_ms=null;untimed.savings.omitted_test_execution_status='unmeasured';
+untimed.savings.coverage.timed_reused_source_count=0;
+api.renderOutcome(untimed.batch,untimed.summary,untimed.savings);
+assert.equal(doc.getElementById('estimatedAvoided').textContent,'2 / 2개');
+assert.equal(doc.getElementById('executionComparison').hidden,true);
+assert(!api.summaryCopy(untimed.batch,untimed.summary,untimed.savings).includes('피한 테스트 재실행 비용'));
+assert(!api.summaryCopy(input.cases.failed.batch,input.cases.failed.summary,input.cases.failed.savings).includes('결과 확보'));
+assert(api.summaryCopy(input.cases.failed.batch,input.cases.failed.summary,input.cases.failed.savings).startsWith('검증 실패'));
+const differentMedians={samples:[{scenario:'unchanged',comparison:'parent-suite',eligible:true,baseline:{wall_ms:1},incremental:{wall_ms:0},delta_ms:1,delta_percent:100},{scenario:'unchanged',comparison:'parent-suite',eligible:true,baseline:{wall_ms:10},incremental:{wall_ms:9},delta_ms:1,delta_percent:10},{scenario:'unchanged',comparison:'parent-suite',eligible:true,baseline:{wall_ms:11},incremental:{wall_ms:1},delta_ms:10,delta_percent:1000/11}]};
+const row=api.comparisonRows(differentMedians)[0];assert.equal(row.delta,1);assert.equal(row.baseline-row.incremental,9);
 const source={id:'source:one',input_count:60,visible_input_count:60};
 const map={nodes:[{id:source.id,type:'source',label:'Check',kind:'argv',status:'passed'}],edges:[]};
 for(let n=0;n<60;n++){map.nodes.push({id:'input:'+n,type:'input',label:'test-'+n,kind:'file',status:'current-observed'});map.edges.push({source:source.id,target:'input:'+n,operations:['read']});}
@@ -132,16 +152,22 @@ assert.equal(doc.getElementById('waitIncreaseNotice').hidden,false);
 assert.match(doc.getElementById('pairedNet').textContent,/증가/);
 const report=api.shareReport();assert(!JSON.stringify(report).includes('<example-private-value>'));
 assert.equal(report.task,null);assert.equal(report.engine,null);assert.equal(report.accounting,null);assert.equal(report.controls,null);
-assert.equal(report.version,3);assert.deepEqual(report.revalidation_savings,input.savings);
-assert.equal(report.labels.omitted,'재사용으로 생략한 테스트 실행시간');
+assert.equal(report.version,5);assert.deepEqual(report.revalidation_savings,input.savings);
+assert.equal(report.labels.omitted,'절감 시간');
 assert.equal(report.measurement.click_management_overhead_ms,null);
 assert.equal(report.measurement.live_net_time_saving_reason,'counterfactual-not-measured');
 assert.equal(report.summary.authoritative_reuse_count,input.summary.authoritative_reuse_count);
-assert.equal(report.batch.sources[0].reuse_origin.origin_revision,7);
-const html=api.standaloneReport(report);assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));
-assert(html.includes('이전 계약에서 재판정'));
+assert.equal('reuse_origin' in report.batch.sources[0],false);
+assert.equal(report.batch.sources[0].label,'검증 묶음 1');
+assert.equal(report.summary_copy,api.summaryCopy(batch,input.summary,input.savings));
+const html=api.standaloneReport(report);assert(!html.includes('<script>'));assert(!html.includes('alert(1)'));
+assert(!html.includes('evs_'));assert(!html.includes('ctr_'));
 assert(html.includes('Click 전체 관리비용: 측정 정보 없음'));
 assert(!html.includes('src="http'));assert(!html.includes('href="http'));
+api.setState({...snapshot,task:{runtime_mode:'guarded',contract_id:'ctr_'+'f'.repeat(32),approval_bound:true},history:{current_batch_id:null},controls:[{code:'approval-required'}]},batch,input.summary,input.savings,safe);
+const historical=api.shareReport();assert.equal(historical.selection_scope,'historical-batch');assert.equal(historical.task,null);assert.equal(historical.controls,null);assert.equal(historical.shadow,null);
+api.render({generated_at:1000,task:{runtime_mode:'evidence',name:'새 작업',status:'evidence',mutation_revision:2},history:{current_batch_id:null,retained_batch_count:1},batches:[batch],summary:{incremental:input.cases.first.summary,revalidation_savings:input.cases.first.savings,shadow:{}},sources:[],map:{nodes:[],edges:[]}});
+assert.equal(doc.getElementById('estimatedAvoided').textContent,'기준 실행 대기');assert.equal(doc.getElementById('resultCoverage').textContent,'');assert.equal(doc.getElementById('actualBlocks').children.length,0);
 console.log('dashboard states, common metrics, map limit, paired comparison and safe exports passed');
 """
 
@@ -409,7 +435,7 @@ class VerificationEfficiencyTests(unittest.TestCase):
             "reused-duration-sample-missing", partial["reason_codes"]
         )
         partial_host = metrics.host_summary(missing)
-        self.assertIn("시간 표본 1/2개 · 확인된 표본 합계 ≥ 50 ms", partial_host)
+        self.assertIn("시간 표본 1/2개 · 부분 추정 합계 약 50 ms〔추정〕", partial_host)
         self.assertIn("테스트 실행시간 감소: 측정 정보 없음", partial_host)
 
         legacy_state = self.completed_canonical_batch(
@@ -753,6 +779,45 @@ class VerificationEfficiencyTests(unittest.TestCase):
             self.assertIsNone(metrics.summary(state)["request_wall_ms"])
             self.assertIsNone(metrics.summary(state)["executed_source_count"])
 
+    def test_completed_history_impact_deduplicates_and_excludes_unfinished_requests(self):
+        first = self.completed_canonical_batch(
+            [self.canonical_decision("1", "reuse-exact", 50), self.canonical_decision("2", "reuse-exact")], {},
+        )
+        batch = metrics.current_batch(first)
+        retry = copy.deepcopy(batch)
+        retry["batch_id"] = "f" * 32
+        failed = copy.deepcopy(batch)
+        failed.update(batch_id="c" * 32, status="failed")
+        unfinished = copy.deepcopy(batch)
+        unfinished.update(batch_id="d" * 32, finished_at=None)
+        self.assertFalse(metrics.revalidation_savings(unfinished)["scope_complete"])
+        total = metrics.retained_impact([batch, batch, retry, failed, unfinished])
+        self.assertTrue(metrics.retained_impact_is_valid(total))
+        self.assertEqual(total["completed_request_count"], 2)
+        self.assertEqual(total["reused_group_request_count"], 4)
+        self.assertEqual(total["timed_reused_group_count"], 2)
+        self.assertEqual(total["missing_timing_group_count"], 2)
+        self.assertEqual(total["avoided_execution_ms"], 100)
+        self.assertEqual(total["timing_status"], "partial")
+        corrupt = {**total, "avoided_execution_ms": None}
+        self.assertFalse(metrics.retained_impact_is_valid(corrupt))
+        empty = metrics.retained_impact([])
+        self.assertTrue(metrics.retained_impact_is_valid(empty))
+        self.assertIsNone(empty["avoided_execution_ms"])
+
+    def test_mixed_observer_samples_hide_time_ratio_without_changing_reuse(self):
+        state = self.completed_canonical_batch(
+            [self.canonical_decision("1", "reuse-exact", 40), self.canonical_decision("2", "reuse-exact", 60)], {},
+        )
+        batch = metrics.current_batch(state)
+        batch["sources"][1]["duration_baseline"]["observer_mode"] = "shadow"
+        before = copy.deepcopy(batch)
+        savings = metrics.revalidation_savings(batch)
+        self.assertEqual(savings["coverage"]["actual_reused_source_count"], 2)
+        self.assertIsNone(savings["full_sequential_test_execution_estimate_ms"])
+        self.assertIsNone(savings["test_execution_reduction_ratio"])
+        self.assertEqual(batch, before)
+
     @unittest.skipUnless(shutil.which("node"), "Node unavailable for JavaScript unit assertions")
     def test_dashboard_functions_match_actual_metrics_and_exports_are_content_safe(self):
         partial = self.verification(
@@ -849,6 +914,280 @@ class VerificationEfficiencyTests(unittest.TestCase):
             text=True, capture_output=True, check=False, cwd=Path(__file__).parents[1],
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+@unittest.skipUnless(shutil.which("node"), "Node unavailable for dashboard language assertions")
+class DashboardLanguageTests(unittest.TestCase):
+    def run_language_script(self, assertions):
+        from html.parser import HTMLParser
+        from hooks import click_dashboard_projection
+
+        class StaticLabels(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.labels = []
+
+            def handle_starttag(self, tag, attrs):
+                values = {key: value for key, value in attrs if key.startswith("data-i18n")}
+                if values:
+                    self.labels.append(values)
+
+        labels = StaticLabels()
+        labels.feed(click_shadow_dashboard.HTML)
+        fixture = VerificationEfficiencyTests()
+        state = fixture.completed_canonical_batch(
+            [fixture.canonical_decision("1"), fixture.canonical_decision("2", "reuse-exact", 90000)],
+            {"1" * 64: 30000},
+            batch_id="d" * 32,
+        )
+        current_batch = metrics.current_batch(state)
+        current_batch["version"] = 4
+        current_batch["task"] = {"mode": "evidence", "id": "evs_" + "a" * 32, "name": "사용자 작업명"}
+        state[metrics.HISTORY_FIELD] = [current_batch]
+        data = click_dashboard_projection.dashboard_projection({
+            "status": "evidence", "runtime_mode": "evidence", "evidence_session_id": "evs_" + "a" * 32,
+            "verification": state, "presentation": {"name": "사용자 작업명"},
+        })
+        batch = data["batches"][-1]
+        batch["sources"][0]["label"] = "사용자 검증명"
+        previous = copy.deepcopy(batch)
+        previous["batch_id"] = "e" * 32
+        previous["task"]["name"] = "이전 사용자 작업명"
+        data["batches"].insert(0, previous)
+        data["batch_summaries"][previous["batch_id"]] = copy.deepcopy(data["batch_summaries"][batch["batch_id"]])
+        data["history"]["retained_batch_count"] = 2
+
+        script = UI_ASSERTIONS.split("const b={wall_ms", 1)[0]
+        script = script.replace("readComparison,readTaskEfficiency,comparisonRows,", "readComparison,readTaskEfficiency,comparisonRows,setLanguage,applyStaticLanguage,msg,MESSAGES,getLocale:()=>locale,")
+        script = script.replace("vm.runInNewContext(input.script.replace(marker,expose),context);", r'''
+const saved={value:null};
+const storage={getItem:()=>saved.value,setItem:(key,value)=>{assert.equal(key,'click.dashboard.language');saved.value=value;}};
+context.localStorage=storage;
+const staticNodes=input.static_labels.map(attributes=>{const node=new Node('span');Object.entries(attributes).forEach(([key,value])=>node.setAttribute(key,value));return node;});
+doc.querySelectorAll=selector=>selector.startsWith('[data-i18n')?staticNodes.filter(node=>selector.slice(1,-1) in node.attributes):[];
+vm.runInNewContext(input.script.replace(marker,expose),context);
+''')
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script + assertions],
+            input=json.dumps({"script": click_shadow_dashboard.JS, "projection": data, "static_labels": labels.labels}),
+            text=True, capture_output=True, check=False, cwd=Path(__file__).parents[1],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_language_switch_preserves_selection_metrics_and_export_locale(self):
+        self.run_language_script(r'''
+const original=JSON.stringify(input.projection);
+api.render(input.projection);
+doc.getElementById('batchSelect').onchange({target:{value:'e'.repeat(32)}});
+doc.getElementById('filterReused').onclick();
+const korean=api.shareReport();
+assert.equal(api.setLanguage('en'),'en');
+assert.equal(doc.documentElement.attributes.lang,'en');
+assert.equal(doc.getElementById('estimatedAvoided').textContent,'About 1m 30s');
+assert.equal(doc.getElementById('batchHeadline').textContent,'Only 1 of 2 groups rerun · Reused: 1');
+assert.equal(doc.getElementById('sources').children.length,1);
+assert.equal(doc.getElementById('filterReused').attributes['aria-pressed'],'true');
+assert(doc.getElementById('selectionLabel').textContent.includes('Historical batch'));
+const english=api.shareReport();
+assert.equal(english.locale,'en');assert.equal(english.selection_scope,'historical-batch');
+assert.deepEqual(english.summary,korean.summary);assert.deepEqual(english.revalidation_savings,korean.revalidation_savings);
+assert.equal(english.batch.sources[0].label,'사용자 검증명');
+assert(english.summary_copy.includes('[Estimated]'));
+assert.equal(api.setLanguage('zh-CN'),'zh-CN');
+assert.equal(doc.getElementById('estimatedAvoided').textContent,'约1分30秒');
+assert.equal(doc.getElementById('batchHeadline').textContent,'全部 2 个中仅重跑 1 个 · 复用 1 个结果');
+assert.equal(doc.getElementById('filterReused').attributes['aria-pressed'],'true');
+const chinese=api.shareReport();assert.equal(chinese.locale,'zh-CN');assert(chinese.summary_copy.includes('[估算]'));
+assert.deepEqual(chinese.summary,english.summary);assert.deepEqual(chinese.revalidation_savings,english.revalidation_savings);
+assert(!/[가-힣]/u.test(chinese.summary_copy));assert(!/[가-힣]/u.test(english.summary_copy));
+const htmlEn=api.standaloneReport(english),htmlZh=api.standaloneReport(chinese);
+assert(htmlEn.includes('lang="en"'));assert(htmlEn.includes('Verification Efficiency Report'));
+assert(htmlEn.includes(english.display.omitted_text));assert(htmlZh.includes('lang="zh-CN"'));assert(htmlZh.includes('验证效率报告'));
+assert.equal(api.getLocale(),'zh-CN');
+assert.equal(english.labels.omitted,'Time saved');
+assert.equal(api.msg`이전 작업: ${'{0}<img onerror=alert(1)>'}`,'之前任务：{0}<img onerror=alert(1)>');
+assert.equal(JSON.stringify(input.projection),original);
+api.setLanguage('ko');assert.equal(api.shareReport().summary_copy,korean.summary_copy);
+''')
+
+    def test_reuse_table_opens_evidence_and_preserves_history_navigation(self):
+        self.run_language_script(r'''
+api.render(input.projection);api.setLanguage('en');
+doc.getElementById('filterReused').onclick();
+let rows=doc.getElementById('sources').children;
+assert.equal(rows.length,1);assert.equal(rows[0].tag,'tr');
+assert(rows[0].children[3].textContent.includes('Reuse applied'));
+const details=doc.getElementById('explanationSection');let scrolled=false;
+details.scrollIntoView=()=>{scrolled=true;};
+rows[0].children[0].children[0].onclick();
+assert.equal(details.open,true);assert.equal(scrolled,true);
+assert(doc.getElementById('whyBody').textContent.length>0);
+doc.getElementById('filterExecuted').onclick();
+rows=doc.getElementById('sources').children;
+assert.equal(rows.length,1);assert(rows[0].children[3].textContent.includes('Passed'));
+doc.getElementById('batchFlow').children[1].children[0].onclick();
+assert.equal(api.shareReport().selection_scope,'historical-batch');
+assert(doc.getElementById('selectionLabel').textContent.includes('Historical batch'));
+assert.equal(doc.getElementById('filterExecuted').attributes['aria-pressed'],'true');
+doc.getElementById('latestBatch').onclick();
+assert.equal(api.shareReport().selection_scope,'current-task');
+assert.equal(doc.getElementById('verifiedChecks').textContent,'2/2');
+''')
+
+    def test_language_preference_survives_reload_and_storage_failure(self):
+        self.run_language_script(r'''
+function reload(localStorage) {
+  const next={...context,document:new Document(),localStorage};
+  vm.runInNewContext(input.script.replace(marker,expose),next);return next;
+}
+api.setLanguage('en');assert.equal(saved.value,'en');
+let next=reload(storage);assert.equal(next.api.getLocale(),'en');assert.equal(next.document.documentElement.attributes.lang,'en');
+next.api.setLanguage('zh-CN');assert.equal(saved.value,'zh-CN');
+next=reload(storage);assert.equal(next.api.getLocale(),'zh-CN');
+saved.value='unsupported';next=reload(storage);assert.equal(next.api.getLocale(),'ko');
+const blocked={getItem(){throw Error('storage unavailable');},setItem(){throw Error('storage unavailable');}};
+next=reload(blocked);assert.equal(next.api.getLocale(),'ko');assert.equal(next.api.setLanguage('en'),'en');
+assert.equal(next.document.documentElement.attributes.lang,'en');
+assert.equal(next.api.setLanguage('<script>'),'ko');
+''')
+
+    def test_translation_coverage_and_status_distinctions(self):
+        self.run_language_script(r'''
+const slots=value=>[...value.matchAll(/\{\d+\}/g)].map(match=>match[0]).sort();
+for(const [key,pair] of Object.entries(api.MESSAGES)){
+  assert.equal(pair.length,2);
+  for(const value of pair){assert(value.length);assert(!/[가-힣]/u.test(value));assert.deepEqual([...new Set(slots(value))],[...new Set(slots(key))]);}
+}
+for(const attributes of input.static_labels)for(const key of Object.values(attributes))assert(key in api.MESSAGES,key);
+const batch=input.projection.batches.at(-1),totals=input.projection.batch_summaries[batch.batch_id];
+for(const language of ['en','zh-CN']){
+  api.setLanguage(language);api.applyStaticLanguage();
+  assert(staticNodes.every(node=>!/[가-힣]/u.test(node.textContent)));
+  for(const attributes of input.static_labels)for(const [name,key] of Object.entries(attributes)){
+    if(name!=='data-i18n')assert(!/[가-힣]/u.test(api.msg(key)));
+  }
+  for(const state of ['running','failed','interrupted','rejected','incomplete']){
+    const view=api.outcomePresentation({...batch,status:state},totals.incremental,totals.revalidation_savings);
+    assert.equal(view.complete,false);assert.equal(view.comparisonReady,false);assert.equal(view.resultText,'');
+    assert(!/[가-힣]/u.test(JSON.stringify(view)));
+  }
+  const partial={...totals.revalidation_savings,omitted_test_execution_status:'partial',full_sequential_test_execution_estimate_ms:null,full_sequential_test_execution_estimate_status:'unmeasured',test_execution_reduction_ratio:null};
+  const view=api.outcomePresentation(batch,totals.incremental,partial);
+  assert.equal(view.comparisonReady,false);assert(!/[가-힣]/u.test(JSON.stringify(view)));
+  assert(!api.summaryCopy({...batch,status:'failed'},totals.incremental,totals.revalidation_savings).includes(language==='en'?'Results available':'已取得'));
+}
+''')
+
+    def test_public_task_efficiency_cards_preserve_sign_scope_and_privacy(self):
+        self.run_language_script(r'''
+function taskPresentation(ref,timeRatio,tokenRatio,overrides={}) {
+  const taskMeasured=timeRatio!==null,tokenMeasured=tokenRatio!==null;
+  return {comparison_ref:ref.repeat(24),baseline_variant:'B0',improved_variant:'B2',comparison_label:'B0→B2',scenario:'failure-repair',run_kind:'prepared-repeat',runtime_mode:'evidence',measured_at:1788784525,
+    sample_count:1,comparable_sample_count:1,incomplete_sample_count:0,failed_sample_count:0,cancelled_sample_count:0,completion_condition:'same-version acceptance digest matched',
+    task_measurement_status:taskMeasured?'measured':'unmeasured',task_measurement_reason:taskMeasured?'':'task-boundary-missing',task_completion_time_delta_ms:taskMeasured?100:null,task_completion_time_savings_ratio:timeRatio,task_effect_status:!taskMeasured?'unmeasured':timeRatio>0?'faster':timeRatio<0?'slower':'unchanged',task_time_ratio_range:taskMeasured?{min:timeRatio,max:timeRatio}:null,
+    faster_sample_count:timeRatio>0?1:0,unchanged_sample_count:timeRatio===0?1:0,slower_sample_count:timeRatio<0?1:0,
+    token_measurement_status:tokenMeasured?'measured':'unmeasured',token_measurement_reason:tokenMeasured?'':'usage-scope-incomplete',token_savings_ratio:tokenRatio,token_pair_median_savings_ratio:tokenRatio,token_ratio_range:tokenMeasured?{min:tokenRatio,max:tokenRatio}:null,token_aggregation:tokenMeasured?'ratio-of-complete-pair-totals':'unavailable',
+    baseline_user_intervention_count:1,improved_user_intervention_count:2,user_intervention_pair_count:1,observability:{activity_intervals_are_non_additive:true,hidden_reasoning_status:'unknown'},...overrides};
+}
+const wrap=(...presentations)=>({kind:'click-task-efficiency-public',version:1,generated_at:1788784525,measurement_status:presentations.some(p=>p.task_measurement_status==='measured'||p.token_measurement_status==='measured')?'measured':'unmeasured',measurement_reason:presentations.length?'':'host-task-and-usage-boundaries-unavailable',presentations});
+const batch=input.projection.batches.at(-1),totals=input.projection.batch_summaries[batch.batch_id];
+for(const [ref,timeRatio,tokenRatio,taskText,tokenText] of [['a',.1,.125,'10% 빨라짐','12.5% 감소'],['b',0,0,'0% · 변화 없음','0% · 변화 없음'],['c',-.05,-.05,'5% 느려짐','5% 증가'],['d',.000001,.000001,'<0.01% 빨라짐','<0.01% 감소'],['e',-.000001,-.000001,'<0.01% 느려짐','<0.01% 증가']]){
+  const parsed=api.readTaskEfficiency(wrap(taskPresentation(ref,timeRatio,tokenRatio)));
+  api.setState(input.projection,batch,totals.incremental,totals.revalidation_savings,null,parsed);api.renderTaskEfficiency();
+  assert.equal(doc.getElementById('taskEffectValue').textContent,taskText);assert.equal(doc.getElementById('tokenSavings').textContent,tokenText);
+  assert.equal(doc.getElementById('tokenMeasuredBadge').hidden,false);assert(doc.getElementById('taskEffectScope').textContent.includes('B0→B2'));
+  assert.equal(doc.getElementById('tokenSavings').dataset.state,tokenRatio<0?'increased':'measured');
+}
+const unavailable=api.readTaskEfficiency(wrap(taskPresentation('f',null,null,{comparable_sample_count:0,incomplete_sample_count:1,failed_sample_count:1,task_effect_status:'unmeasured'})));
+api.setState(input.projection,batch,totals.incremental,totals.revalidation_savings,null,unavailable);api.renderTaskEfficiency();
+assert.equal(doc.getElementById('taskEffectValue').textContent,'미측정');assert.equal(doc.getElementById('tokenSavings').textContent,'미측정');assert(doc.getElementById('taskEffectAdverse').textContent.includes('실패 1개'));
+const realistic=wrap(taskPresentation('1',.1,.1));
+const parsedTime=api.readTaskEfficiency(realistic);assert.equal(parsedTime.generated_at,1788784525);assert.equal(parsedTime.presentations[0].measured_at,1788784525);
+for(const stamp of [-1,1.5,null,'1788784525',253402300800]){
+  const invalid=JSON.parse(JSON.stringify(realistic));invalid.generated_at=stamp;assert.throws(()=>api.readTaskEfficiency(invalid));
+  invalid.generated_at=realistic.generated_at;invalid.presentations[0].measured_at=stamp;assert.throws(()=>api.readTaskEfficiency(invalid));
+}
+const oversized=JSON.parse(JSON.stringify(realistic));oversized.presentations[0].sample_count=1788784525;assert.throws(()=>api.readTaskEfficiency(oversized));
+const raw=wrap(taskPresentation('1',.1,.1));raw.presentations[0].input_tokens=123;assert.throws(()=>api.readTaskEfficiency(raw));
+const two=api.readTaskEfficiency(wrap(taskPresentation('2',.1,.1),taskPresentation('3',-.1,-.1,{scenario:'code-change'})));
+api.setState(input.projection,batch,totals.incremental,totals.revalidation_savings,null,two);api.renderTaskEfficiency();
+assert.equal(doc.getElementById('taskEffectValue').textContent,'미측정');assert.equal(doc.getElementById('taskEvaluationLabel').hidden,false);
+doc.getElementById('taskEvaluationSelect').onchange({target:{value:'2'.repeat(24)}});assert.equal(doc.getElementById('taskEffectValue').textContent,'10% 빨라짐');
+const report=api.shareReport(),serialized=JSON.stringify(report);for(const key of ['input_tokens','output_tokens','cached_input_tokens','reasoning_output_tokens','baseline_total_tokens','improved_total_tokens'])assert(!serialized.includes(key));
+assert.equal(report.task_efficiency.presentation.comparison_ref,'2'.repeat(24));assert(!serialized.includes('task-evaluation-private.json'));
+const html=api.standaloneReport(report);assert(html.includes('토큰 절감률'));assert(html.includes('전체 작업 효과'));assert(!html.includes('input_tokens'));
+for(const language of ['en','zh-CN']){api.setLanguage(language);assert(!/[가-힣]/u.test(doc.getElementById('taskEffect').textContent));assert(!/[가-힣]/u.test(doc.getElementById('tokenStatus').textContent));}
+''')
+
+    def test_imported_comparison_switches_language_without_changing_samples(self):
+        self.run_language_script(r'''
+const measured={version:2,kind:'click-paired-verification-benchmark',conditions:{iterations:1,warmups:0,workload_rounds:20,runtime_mode:'guarded',scope_equivalence:'same-two-unittest-files',authority:'real-hooks-and-one-use-runner',observer:'off',order:'alternating-pair-order'},samples:[{scenario:'unchanged',comparison:'same-shards',iteration:0,warmup:false,order:['baseline','incremental'],baseline:{wall_ms:10,status:'passed',executed_source_count:2,reused_source_count:0,not_run_source_count:0},incremental:{wall_ms:15,status:'passed',executed_source_count:0,reused_source_count:2,not_run_source_count:0}}]};
+const parsed=api.readComparison(measured),original=JSON.stringify(parsed);
+const batch=input.projection.batches.at(-1),totals=input.projection.batch_summaries[batch.batch_id];
+api.setState(input.projection,batch,totals.incremental,totals.revalidation_savings,parsed);
+for(const language of ['en','zh-CN']){
+  api.setLanguage(language);
+  assert(!/[가-힣]/u.test(doc.getElementById('comparisonInfo').textContent));
+  assert(!/[가-힣]/u.test(doc.getElementById('comparisonChart').textContent));
+  assert.equal(doc.getElementById('waitIncreaseNotice').hidden,false);
+  const report=api.shareReport();assert(!/[가-힣]/u.test(report.comparison.conditions.cache));
+  assert.equal(JSON.stringify(report.comparison.samples),JSON.stringify(parsed.samples));
+  assert.equal(report.comparison.samples[0].delta_ms,-5);
+  assert.equal(JSON.stringify(parsed),original);
+  const html=api.standaloneReport(report);
+  assert(html.includes(language==='en'?'Separate repository':'独立仓库'));
+}
+''')
+
+
+class DashboardImpactRuntimeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable for export assertions")
+    def test_real_evidence_flow_projects_and_exports_actual_partial_reuse(self):
+        import tempfile
+        from benchmarks.incremental_verification import Fixture
+        from hooks import click_dashboard_projection
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), 20, mode="evidence", partial_policy=True)
+            baseline = fixture.verify()
+            self.assertEqual(baseline["status"], "passed")
+            fixture.change("partial-reuse")
+            result = fixture.verify()
+            self.assertEqual((result["executed_source_count"], result["reused_source_count"]), (1, 1))
+            state = fixture.state()
+            before = copy.deepcopy(state)
+            data = click_dashboard_projection.dashboard_projection(state)
+            self.assertTrue(click_dashboard_projection.projection_is_valid(data))
+            self.assertEqual(state, before)
+            batch = data["batches"][-1]
+            summary = data["batch_summaries"][batch["batch_id"]]
+            self.assertEqual(summary["incremental"]["total_source_count"], 2)
+            savings = summary["revalidation_savings"]
+            self.assertEqual(savings["coverage"]["actual_reused_source_count"], 1)
+            self.assertEqual(savings["full_sequential_test_execution_estimate_ms"], savings["executed_test_execution_ms"] + savings["omitted_test_execution_ms"])
+            script = UI_ASSERTIONS.split("const b={wall_ms", 1)[0] + r'''
+api.setState(input.projection,input.batch,input.summary,input.savings,null);
+const report=api.shareReport();
+assert.equal(report.summary.executed_source_count,1);assert.equal(report.summary.authoritative_reuse_count,1);
+assert.equal(report.display.comparison_ready,true);
+assert(report.batch.sources.some(item=>item.status==='reused'));assert(report.batch.sources.every(item=>!('reuse_origin' in item)));
+const html=api.standaloneReport(report);
+assert(html.includes(report.display.full_text));assert(html.includes(report.display.executed_text));
+assert(!html.includes('src="http'));assert(!html.includes('<script'));
+console.log(JSON.stringify({report,html}));
+'''
+            exported = subprocess.run(
+                [shutil.which("node"), "-e", script],
+                input=json.dumps({"script": click_shadow_dashboard.JS, "projection": data, "batch": batch, "summary": summary["incremental"], "savings": savings}),
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(exported.returncode, 0, exported.stderr)
+            output = json.loads(exported.stdout)
+            artifact = Path(tempfile.mkdtemp(prefix="click-impact-e2e-"))
+            (artifact / "projection.json").write_text(json.dumps(data, ensure_ascii=False, indent=2))
+            (artifact / "report.json").write_text(json.dumps(output["report"], ensure_ascii=False, indent=2))
+            (artifact / "report.html").write_text(output["html"])
+            print(f"Real Hook/runner dashboard/export evidence: {artifact}")
 
 
 if __name__ == "__main__":

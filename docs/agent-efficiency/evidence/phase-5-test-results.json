@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "phase": 5,
+  "generated_at": 1788784525,
+  "dashboard_focused_suite": {
+    "modules": [
+      "tests.test_click_efficiency",
+      "tests.test_click_dashboard_projection",
+      "tests.test_click_shadow_dashboard",
+      "tests.test_task_efficiency"
+    ],
+    "tests_run": 60,
+    "passed": 60,
+    "skipped": 0,
+    "failed": 0
+  },
+  "phase_2_through_5_focused_suite": {
+    "tests_run": 81,
+    "passed": 81,
+    "skipped": 0,
+    "failed": 0,
+    "duration_seconds": 32.762
+  },
+  "visual_qa": [
+    {
+      "viewport": "1440x900",
+      "path": "evidence/phase-5-dashboard-1440x900.png",
+      "sha256": "e4aa9206801ab62758ccf38acf6d4ebe77751c472c96c7c8e83465864e91be83",
+      "status": "passed"
+    },
+    {
+      "viewport": "390x844",
+      "path": "evidence/phase-5-dashboard-390x844.png",
+      "sha256": "b3062337ec20f3587a6d2d73b5fa428da4c899046058cbee3908a04db1e1c9b5",
+      "status": "passed"
+    }
+  ],
+  "keyboard_focus_rule": "verified",
+  "reduced_motion_rule": "verified",
+  "actual_task_presentation": "unmeasured"
+}

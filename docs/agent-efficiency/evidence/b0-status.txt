@@ -1,0 +1,39 @@
+M README.md
+ M VERIFICATION_EFFICIENCY.md
+ M dist/antigravity/hooks/click_dashboard_projection.py
+ M dist/antigravity/hooks/click_incremental.py
+ M dist/antigravity/hooks/click_shadow_dashboard.py
+ M hooks/click_dashboard_projection.py
+ M hooks/click_incremental.py
+ M hooks/click_shadow_dashboard.py
+ M tests/test_click_dashboard_projection.py
+ M tests/test_click_efficiency.py
+ M tests/test_click_shadow_dashboard.py
+ M tests/test_incremental_benchmark.py
+?? docs/dashboard-impact/COMMON.md
+?? docs/dashboard-impact/METRICS.md
+?? docs/dashboard-impact/PLAN.md
+?? docs/dashboard-impact/README.md
+?? docs/dashboard-impact/SOURCE-PROMPT.md
+?? docs/dashboard-impact/evidence/README.md
+?? docs/dashboard-impact/evidence/guarded-workflow.v4.json
+?? docs/dashboard-impact/evidence/real-hook-projection.v7.json
+?? docs/dashboard-impact/evidence/real-hook-report.v4.json
+?? docs/dashboard-impact/progress.json
+?? docs/dashboard-impact/reference-dashboard.png
+?? docs/dashboard-impact/reports/final.md
+?? docs/dashboard-impact/reports/languages.md
+?? docs/dashboard-impact/reports/phase-0.md
+?? docs/dashboard-impact/reports/phase-1.md
+?? docs/dashboard-impact/reports/phase-2.md
+?? docs/dashboard-impact/reports/phase-3.md
+?? docs/dashboard-impact/reports/phase-4.md
+?? docs/dashboard-impact/reports/phase-5.md
+?? docs/dashboard-impact/screenshots/desktop.jpg
+?? docs/dashboard-impact/screenshots/languages/desktop-en.jpg
+?? docs/dashboard-impact/screenshots/languages/desktop-zh.jpg
+?? docs/dashboard-impact/screenshots/languages/mobile-en.jpg
+?? docs/dashboard-impact/screenshots/languages/mobile-zh.jpg
+?? docs/dashboard-impact/screenshots/mobile-failed.jpg
+?? docs/dashboard-impact/screenshots/mobile-untimed.jpg
+?? docs/dashboard-impact/screenshots/mobile.jpg

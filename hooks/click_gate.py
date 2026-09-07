@@ -33,6 +33,7 @@ else:  # Executed directly from the bundled hooks directory.
     click_capability,
     click_contract,
     click_contract_state,
+    click_diagnostics,
     click_evidence,
     click_host_coverage,
     click_host_router,
@@ -63,6 +64,7 @@ else:  # Executed directly from the bundled hooks directory.
     "click_capability",
     "click_contract",
     "click_contract_state",
+    "click_diagnostics",
     "click_evidence",
     "click_host_coverage",
     "click_host_router",
@@ -518,8 +520,11 @@ def _verification_progress_report(event: dict[str, Any]) -> dict[str, Any]:
                 for key, source in candidate_registry.items()
                 if key in origins
             }
-    return click_incremental.progress_projection(
-        state, sources, successor_candidates=candidates
+    return click_diagnostics.enrich_progress(
+        click_incremental.progress_projection(
+            state, sources, successor_candidates=candidates
+        ),
+        state,
     )
 
 
@@ -1298,12 +1303,17 @@ def _record_verification_result(
     workspace_root: str = "",
     workspace_digest: str = "",
     environment_digests: dict[str, str] | None = None,
+    source_durations_ms: dict[str, int | float] | None = None,
     dependency_observations: dict[str, dict[str, Any]] | None = None,
     authoritative_observations: dict[str, dict[str, Any]] | None = None,
     shadow_observer_records: dict[str, dict[str, Any]] | None = None,
     shadow_intelligence_baselines: dict[str, dict[str, Any]] | None = None,
     shadow_source_exit_codes: dict[str, int] | None = None,
     shadow_execution_contexts: dict[str, dict[str, Any]] | None = None,
+    observer_mode: str | None = None,
+    *,
+    source_results: dict[str, dict[str, Any]] | None = None,
+    runner_started_ns: int | None = None,
 ) -> bool:
     return click_verification.record_result(
         path,
@@ -1316,12 +1326,16 @@ def _record_verification_result(
         workspace_root=workspace_root,
         workspace_digest=workspace_digest,
         environment_digests=environment_digests,
+        source_durations_ms=source_durations_ms,
         dependency_observations=dependency_observations,
         authoritative_observations=authoritative_observations,
         shadow_observer_records=shadow_observer_records,
         shadow_intelligence_baselines=shadow_intelligence_baselines,
         shadow_source_exit_codes=shadow_source_exit_codes,
         shadow_execution_contexts=shadow_execution_contexts,
+        observer_mode=observer_mode,
+        source_results=source_results,
+        runner_started_ns=runner_started_ns,
         git_capture=click_verification.git_capture,
     )
 

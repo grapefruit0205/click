@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "model_calls_started": 0,
+  "current_thread_id_available": true,
+  "rollout": {
+    "status": "schema-only-inspected-current-thread",
+    "metadata": {
+      "cli_version": "0.153.4",
+      "originator": "Codex Desktop",
+      "source": "vscode",
+      "model": "gpt-6-astra",
+      "effort": "xhigh"
+    },
+    "event_types": {
+      "session_meta/": 1,
+      "event_msg/task_started": 3,
+      "response_item/message": 51,
+      "world_state/": 3,
+      "turn_context/": 5,
+      "event_msg/item_completed": 478,
+      "response_item/custom_tool_call": 122,
+      "token_usage_record/": 180,
+      "response_item/custom_tool_call_output": 121,
+      "event_msg/token_count": 181,
+      "response_item/reasoning": 195,
+      "response_item/function_call": 54,
+      "response_item/function_call_output": 54,
+      "compacted/": 2,
+      "event_msg/thread_settings_applied": 5,
+      "event_msg/task_complete": 2
+    },
+    "event_field_names": {
+      "session_meta/": [
+        "base_instructions",
+        "cli_version",
+        "context_window",
+        "cwd",
+        "history_mode",
+        "id",
+        "model_provider",
+        "originator",
+        "session_id",
+        "source",
+        "thread_source",
+        "timestamp"
+      ],
+      "event_msg/task_started": [
+        "collaboration_mode_kind",
+        "model_context_window",
+        "started_at",
+        "turn_id",
+        "type"
+      ],
+      "response_item/message": [
+        "content",
+        "id",
+        "internal_chat_message_metadata_passthrough",
+        "phase",
+        "role",
+        "type"
+      ],
+      "world_state/": [
+        "full",
+        "state"
+      ],
+      "turn_context/": [
+        "active_permission_profile",
+        "approval_policy",
+        "approvals_reviewer",
+        "collaboration_mode",
+        "comp_hash",
+        "current_date",
+        "cwd",
+        "effort",
+        "model",
+        "multi_agent_version",
+        "permission_profile",
+        "personality",
+        "realtime_active",
+        "root_turn_id",
+        "sandbox_policy",
+        "summary",
+        "timezone",
+        "turn_id",
+        "workspace_roots"
+      ],
+      "event_msg/item_completed": [
+        "completed_at_ms",
+        "item",
+        "started_at_ms",
+        "thread_id",
+        "turn_id",
+        "type"
+      ],
+      "response_item/custom_tool_call": [
+        "call_id",
+        "id",
+        "input",
+        "internal_chat_message_metadata_passthrough",
+        "name",
+        "status",
+        "type"
+      ],
+      "token_usage_record/": [
+        "response_id",
+        "root_turn_id",
+        "session_id",
+        "thread_id",
+        "thread_token_usage",
+        "turn_id",
+        "turn_token_usage",
+        "usage"
+      ],
+      "response_item/custom_tool_call_output": [
+        "call_id",
+        "id",
+        "internal_chat_message_metadata_passthrough",
+        "output",
+        "type"
+      ],
+      "event_msg/token_count": [
+        "info",
+        "rate_limits",
+        "type"
+      ],
+      "response_item/reasoning": [
+        "encrypted_content",
+        "id",
+        "internal_chat_message_metadata_passthrough",
+        "summary",
+        "type"
+      ],
+      "response_item/function_call": [
+        "arguments",
+        "call_id",
+        "id",
+        "internal_chat_message_metadata_passthrough",
+        "name",
+        "namespace",
+        "type"
+      ],
+      "response_item/function_call_output": [
+        "call_id",
+        "id",
+        "internal_chat_message_metadata_passthrough",
+        "output",
+        "type"
+      ],
+      "compacted/": [
+        "compaction_response_id",
+        "first_window_id",
+        "guardian_history",
+        "latest_token_usage_record",
+        "message",
+        "previous_window_id",
+        "replacement_history",
+        "window_id",
+        "window_number"
+      ],
+      "event_msg/thread_settings_applied": [
+        "thread_id",
+        "thread_settings",
+        "type"
+      ],
+      "event_msg/task_complete": [
+        "completed_at",
+        "duration_ms",
+        "last_agent_message",
+        "started_at",
+        "time_to_first_token_ms",
+        "turn_id",
+        "type"
+      ]
+    },
+    "usage_observed": true,
+    "usage_field_shapes": [
+      "last_token_usage:cache_write_input_tokens,cached_input_tokens,input_tokens,output_tokens,reasoning_output_tokens,total_tokens",
+      "total_token_usage:cache_write_input_tokens,cached_input_tokens,input_tokens,output_tokens,reasoning_output_tokens,total_tokens"
+    ],
+    "response_id_observed": true,
+    "raw_usage_exported": false,
+    "contains_prior_tasks": true,
+    "complete_paired_comparison": false,
+    "token_savings_ratio": null,
+    "model_round_trips": null
+  },
+  "official_local_schema": {
+    "producer": "codex-cli 0.153.4 app-server generate-json-schema",
+    "path": "/tmp/click-agent-efficiency-host-schema-01534/v2/ThreadTokenUsageUpdatedNotification.json",
+    "sha256": "aba4f6c7e4a19b2b842c08ee793b57000c07dafd57b922ad0d8e7c76609108c2",
+    "top_level_fields": [
+      "threadId",
+      "tokenUsage",
+      "turnId"
+    ],
+    "definitions": {
+      "ThreadTokenUsage": [
+        "last",
+        "modelContextWindow",
+        "total"
+      ],
+      "TokenUsageBreakdown": [
+        "cacheWriteInputTokens",
+        "cachedInputTokens",
+        "inputTokens",
+        "outputTokens",
+        "reasoningOutputTokens",
+        "totalTokens"
+      ]
+    },
+    "live_stream_subscribed": false
+  },
+  "host_executable_ancestry": [
+    "/usr/bin/python3.12",
+    "/usr/bin/python3.12",
+    "/usr/lib/chatgpt/resources/codex",
+    "/usr/lib/chatgpt/ChatGPT",
+    "/usr/bin/gnome-shell"
+  ]
+}

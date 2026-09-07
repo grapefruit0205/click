@@ -11,13 +11,106 @@ from __future__ import annotations
 import os
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 import signal
 import subprocess
-from typing import Any, Mapping, Sequence
+import threading
+from typing import Any, BinaryIO, Mapping, Sequence
 
 
 _target_start = ContextVar("click_target_start", default=None)
+
+
+_TRUNCATION_MARKER = b"\n[Click retained output truncated]\n"
+
+
+@dataclass(frozen=True)
+class CapturedStream:
+    """One bounded retained stream plus its exact observed byte count."""
+
+    data: bytes
+    total_bytes: int
+    truncated: bool
+    reader_error: bool = False
+
+
+@dataclass(frozen=True)
+class CapturedProcess:
+    """Process result whose streams were drained once and retained by bounds."""
+
+    args: list[str]
+    returncode: int
+    stdout: CapturedStream
+    stderr: CapturedStream
+
+
+class _BoundedStream:
+    def __init__(self, limit: int) -> None:
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1024:
+            raise ValueError("capture limit must be an integer of at least 1024 bytes")
+        payload_limit = max(0, limit - len(_TRUNCATION_MARKER))
+        self._head_limit = payload_limit // 2
+        self._tail_limit = payload_limit - self._head_limit
+        self._head = bytearray()
+        self._tail = bytearray()
+        self.total_bytes = 0
+        self.reader_error = False
+
+    def feed(self, chunk: bytes) -> None:
+        if not chunk:
+            return
+        self.total_bytes += len(chunk)
+        remaining = chunk
+        if len(self._head) < self._head_limit:
+            take = min(self._head_limit - len(self._head), len(remaining))
+            self._head.extend(remaining[:take])
+            remaining = remaining[take:]
+        if remaining and self._tail_limit:
+            self._tail.extend(remaining)
+            if len(self._tail) > self._tail_limit:
+                del self._tail[: len(self._tail) - self._tail_limit]
+
+    def result(self) -> CapturedStream:
+        retained = bytes(self._head + self._tail)
+        truncated = self.total_bytes > len(retained)
+        data = (
+            bytes(self._head) + _TRUNCATION_MARKER + bytes(self._tail)
+            if truncated
+            else retained
+        )
+        return CapturedStream(
+            data=data,
+            total_bytes=self.total_bytes,
+            truncated=truncated,
+            reader_error=self.reader_error,
+        )
+
+
+def _drain_stream(
+    source: BinaryIO,
+    retained: _BoundedStream,
+    target: BinaryIO | None,
+) -> None:
+    try:
+        while True:
+            chunk = source.read(16_384)
+            if not chunk:
+                break
+            retained.feed(chunk)
+            if target is not None:
+                try:
+                    target.write(chunk)
+                    target.flush()
+                except (BrokenPipeError, OSError, ValueError):
+                    target = None
+    except (OSError, ValueError):
+        retained.reader_error = True
+    finally:
+        try:
+            source.close()
+        except (OSError, ValueError):
+            pass
 
 
 @contextmanager
@@ -78,6 +171,76 @@ def run_argv(
         int(child.returncode),
         captured_stdout,
         captured_stderr,
+    )
+
+
+def run_argv_captured(
+    argv: Sequence[str],
+    *,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    stdin: Any | None = None,
+    stdout_target: BinaryIO | None = None,
+    stderr_target: BinaryIO | None = None,
+    capture_limit_bytes: int = 64 * 1024,
+    timeout: float | None = None,
+    target: bool = False,
+) -> CapturedProcess:
+    """Run once, drain both pipes concurrently, and retain bounded output.
+
+    Full output is optionally forwarded while the child runs. Retention never
+    controls the child's pipe, so a long stream cannot deadlock or cause a
+    verification command to be repeated.
+    """
+
+    command = list(argv)
+    child = spawn_argv(
+        command,
+        cwd=cwd,
+        env=env,
+        stdin=stdin,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if target:
+        target_started()
+    if child.stdout is None or child.stderr is None:
+        terminate_process_group(child)
+        raise OSError("captured process pipes were unavailable")
+    captured_stdout = _BoundedStream(capture_limit_bytes)
+    captured_stderr = _BoundedStream(capture_limit_bytes)
+    threads = [
+        threading.Thread(
+            target=_drain_stream,
+            args=(child.stdout, captured_stdout, stdout_target),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=_drain_stream,
+            args=(child.stderr, captured_stderr, stderr_target),
+            daemon=True,
+        ),
+    ]
+    for reader in threads:
+        reader.start()
+    try:
+        child.wait(timeout=timeout)
+    except BaseException:
+        terminate_process_group(child)
+        for reader in threads:
+            reader.join(timeout=3)
+        raise
+    for reader in threads:
+        reader.join(timeout=3)
+    if threads[0].is_alive():
+        captured_stdout.reader_error = True
+    if threads[1].is_alive():
+        captured_stderr.reader_error = True
+    return CapturedProcess(
+        args=command,
+        returncode=int(child.returncode),
+        stdout=captured_stdout.result(),
+        stderr=captured_stderr.result(),
     )
 
 
