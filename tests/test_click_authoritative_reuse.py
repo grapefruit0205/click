@@ -122,6 +122,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
             )
         )
         original_records = observation_inputs.InputSnapshot.records
+        original_snapshot_records = authoritative._snapshot_records
 
         def diagnosed_records(snapshot, inputs):
             try:
@@ -140,10 +141,27 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                     f"individual failures: {failures}"
                 ) from error
 
-        with mock.patch.object(
-            observation_inputs.InputSnapshot,
-            "records",
-            diagnosed_records,
+        def diagnosed_snapshot_records(*args, **kwargs):
+            try:
+                return original_snapshot_records(*args, **kwargs)
+            except Exception as error:
+                absolute_inputs = args[1] if len(args) > 1 else ()
+                raise AssertionError(
+                    f"authoritative native input validation failed ({error}); "
+                    f"inputs: {list(absolute_inputs)[:24]}"
+                ) from error
+
+        with (
+            mock.patch.object(
+                observation_inputs.InputSnapshot,
+                "records",
+                diagnosed_records,
+            ),
+            mock.patch.object(
+                authoritative,
+                "_snapshot_records",
+                diagnosed_snapshot_records,
+            ),
         ):
             result = authoritative.run_command(
                 argv,
