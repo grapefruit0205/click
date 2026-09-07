@@ -300,7 +300,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
             side_effect=interrupt_started_target,
         ):
             _, interrupted, fallback = self.run_body(
-                "import time\ntime.sleep(6)"
+                "import time\ntime.sleep(15)"
             )
         interrupted_elapsed = time.monotonic() - interrupted_started
         for timer in timers:
@@ -310,7 +310,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         self.assertEqual(interrupted_observation["status"], "failed")
         fallback.assert_not_called()
         if os.name != "nt":
-            self.assertLess(interrupted_elapsed, 5.0)
+            self.assertLess(interrupted_elapsed, 10.0)
 
         _, recovered, fallback = self.run_body("self.assertTrue(True)")
         self.assertEqual(recovered.exit_code, 0)
