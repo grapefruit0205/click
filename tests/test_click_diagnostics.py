@@ -129,7 +129,8 @@ class ClickDiagnosticsTests(unittest.TestCase):
             / click_diagnostics.LOG_DIRECTORY
             / f"{record['log_ref']}.json"
         )
-        self.assertEqual(log_path.stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":
+            self.assertEqual(log_path.stat().st_mode & 0o777, 0o600)
         self.assertIsNotNone(
             click_diagnostics.read_local_log(self.plugin_data, record["log_ref"])
         )
