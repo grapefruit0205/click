@@ -2,7 +2,9 @@
  * This stream is necessary, never sufficient, for authoritative observation.
  * Native state is private; Python messages/Shadow JSON cannot issue evidence.
  */
-#ifndef _WIN32
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS
+#else
 #define _GNU_SOURCE
 #endif
 #include <Python.h>

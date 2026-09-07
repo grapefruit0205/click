@@ -61,8 +61,19 @@ def _read_flags() -> int:
     )
 
 
+def _lexical_canonical_path(path: Path) -> Path:
+    absolute = Path(os.path.normpath(os.path.abspath(path)))
+    try:
+        # Resolve filesystem aliases in parent components while retaining the
+        # final lexical component so symlink identity remains independently
+        # observable from the target it resolves to.
+        return absolute.parent.resolve(strict=False) / absolute.name
+    except (OSError, RuntimeError):
+        return absolute
+
+
 def _path_key(path: Path) -> str:
-    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+    return os.path.normcase(str(_lexical_canonical_path(path)))
 
 
 def relative_name(value) -> bool:
@@ -275,7 +286,7 @@ class InputSnapshot:
                     self.before[key] = metadata(path)
 
     def locator(self, path: Path) -> tuple[str, str]:
-        path = Path(os.path.normpath(os.path.abspath(path)))
+        path = _lexical_canonical_path(path)
         candidates = []
         for role, root in self.roots.items():
             try:
@@ -360,12 +371,18 @@ class InputSnapshot:
                 expanded.setdefault(str(resolved), set()).update(operations)
         if len(expanded) > MAX_INPUTS:
             raise InputError("observation-input-limit")
+        canonical: dict[str, tuple[Path, set[str]]] = {}
+        for raw, operations in sorted(expanded.items()):
+            path = _lexical_canonical_path(Path(raw))
+            key = _path_key(path)
+            if key not in canonical:
+                canonical[key] = (path, set())
+            canonical[key][1].update(operations)
         output = []
         self.total_bytes = 0
-        for raw, operations in sorted(expanded.items()):
-            path = Path(raw)
+        for key in sorted(canonical):
+            path, operations = canonical[key]
             role, relative = self.locator(path)
-            key = _path_key(path)
             old = self.before.get(key)
             current = metadata(path)
             # Missing paths are valid only under a fully indexed parent.

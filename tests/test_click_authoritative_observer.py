@@ -511,7 +511,8 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
     def test_input_snapshot_keys_use_platform_case_normalization(self) -> None:
         module = authoritative.click_observation_inputs
         value = Path("/TMP/Runtime.py")
-        expected = os.path.normpath(os.path.abspath(value)).lower()
+        absolute = Path(os.path.normpath(os.path.abspath(value)))
+        expected = str(absolute.parent.resolve(strict=False) / absolute.name).lower()
         with mock.patch.object(
             module.os.path,
             "normcase",

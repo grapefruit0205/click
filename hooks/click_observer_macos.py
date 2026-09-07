@@ -790,6 +790,14 @@ def collect_command(
         filters = [str(target.pid)]
         if not strict_pid_scope:
             filters.append(str(target.command_name))
+        collector_environment = dict(environment)
+        for key in (
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_FORCE_FLAT_NAMESPACE",
+            "CLICK_NATIVE_OBSERVER_CHANNEL",
+            "CLICK_NATIVE_OBSERVER_ROOT",
+        ):
+            collector_environment.pop(key, None)
         collector = spawn_argv(
             [
                 executable,
@@ -801,7 +809,7 @@ def collect_command(
                 *filters,
             ],
             cwd=workspace,
-            env=dict(environment),
+            env=collector_environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )

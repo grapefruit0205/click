@@ -333,6 +333,34 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 )
                 return snapshot.records({str(path): operations})
 
+            alias = Path(raw) / "project-alias"
+            try:
+                alias.symlink_to(project, target_is_directory=True)
+            except OSError:
+                alias = None
+            if alias is not None:
+                snapshot = observation_inputs.InputSnapshot(
+                    project,
+                    self.runtime["artifact_id"],
+                    profile=self.runtime["profile"],
+                )
+                aliased = snapshot.records(
+                    {
+                        str(target): {"metadata"},
+                        str(alias / target.name): {"execute"},
+                    }
+                )
+                target_rows = [
+                    row
+                    for row in aliased
+                    if row["root"] == "project" and row["path"] == target.name
+                ]
+                self.assertEqual(len(target_rows), 1)
+                self.assertEqual(
+                    target_rows[0]["operations"], ["execute", "metadata"]
+                )
+                self.assertTrue(observation_inputs.records_valid(aliased))
+
             content = receipt(target, {"read"})
             self.assertTrue(
                 observation_inputs.records_current(
@@ -669,7 +697,7 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
         self.assertIsNone(
             authoritative.verified_observation(
                 forged,
-                secret="runner-token",
+                secret=self.id(),
                 expected_binding={
                     field: (0 if field == "mutation_revision" else "0" * 64)
                     for field in authoritative.FULL_BINDING_FIELDS

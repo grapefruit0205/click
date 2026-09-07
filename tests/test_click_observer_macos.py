@@ -502,7 +502,9 @@ class ClickObserverMacOSTests(unittest.TestCase):
 
     def test_collector_suspends_actual_target_before_pid_filter(self) -> None:
         collector_launches: list[list[str]] = []
+        collector_environments: list[dict[str, str]] = []
         target_spawns: list[list[str]] = []
+        target_environments: list[dict[str, str]] = []
         target = _FakeProcess(
             pid=4321, returncode=4, running=True, command_name="Python"
         )
@@ -513,12 +515,14 @@ class ClickObserverMacOSTests(unittest.TestCase):
             stdout=b"trace-output",
         )
 
-        def spawn_suspended(argv: list[str], **_kwargs: object) -> _FakeProcess:
+        def spawn_suspended(argv: list[str], **kwargs: object) -> _FakeProcess:
             target_spawns.append(list(argv))
+            target_environments.append(dict(kwargs["env"]))  # type: ignore[arg-type]
             return target
 
-        def spawn_collector(argv: list[str], **_kwargs: object) -> _FakeProcess:
+        def spawn_collector(argv: list[str], **kwargs: object) -> _FakeProcess:
             collector_launches.append(list(argv))
+            collector_environments.append(dict(kwargs["env"]))  # type: ignore[arg-type]
             return collector
 
         terminated: list[int] = []
@@ -531,7 +535,13 @@ class ClickObserverMacOSTests(unittest.TestCase):
         result = click_observer_macos.collect_command(
             ["tool", "--flag"],
             workspace=self.workspace,
-            environment={"PATH": os.environ.get("PATH", os.defpath)},
+            environment={
+                "PATH": os.environ.get("PATH", os.defpath),
+                "DYLD_INSERT_LIBRARIES": "/tmp/monitor.dylib",
+                "DYLD_FORCE_FLAT_NAMESPACE": "1",
+                "CLICK_NATIVE_OBSERVER_CHANNEL": "/tmp/native.pipe",
+                "CLICK_NATIVE_OBSERVER_ROOT": "/tmp/project",
+            },
             executable="/usr/bin/fs_usage",
             spawn_argv=spawn_collector,
             spawn_suspended=spawn_suspended,
@@ -551,6 +561,11 @@ class ClickObserverMacOSTests(unittest.TestCase):
             ["-w", "-f", "pathname", "-f", "exec"],
         )
         self.assertNotIn("sudo", collector_launches[0])
+        self.assertIn("DYLD_INSERT_LIBRARIES", target_environments[0])
+        self.assertEqual(
+            collector_environments,
+            [{"PATH": os.environ.get("PATH", os.defpath)}],
+        )
         self.assertEqual(terminated, [4322])
         self.assertFalse(result.process_scope_complete)
 
