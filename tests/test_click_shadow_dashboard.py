@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from contextlib import contextmanager
 import json
+import secrets
 import shutil
 import subprocess
 import sys
@@ -99,7 +100,7 @@ class ClickShadowDashboardTests(ClickGateTestCase):
 
     def test_server_idle_poll_reads_only_dashboard_sidecar(self) -> None:
         server_module = CLICK_SHADOW_DASHBOARD._server_module()
-        token = "local-access-token"
+        token = secrets.token_urlsafe(24)
         dashboard = {
             "instance_id": "instance", "status": "starting", "stop_requested": False,
             "access_token_digest": hashlib.sha256(token.encode()).hexdigest(),

@@ -44,7 +44,10 @@ class ClickEvidenceStorageFailureTests(ClickGateTestCase):
             result, payload = self.run_hook("pre-tool", self.read_event())
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("without recording or reusing a receipt", json.dumps(payload))
-        self.assertIn("run-inspection-once", json.dumps(payload))
+        self.assertIn(
+            "run-inspection-once",
+            split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]),
+        )
         executed = self.run_rewritten(payload)
         self.assertEqual(executed.returncode, 0, executed.stderr)
         self.assertEqual(executed.stdout, "available\n")
@@ -54,7 +57,10 @@ class ClickEvidenceStorageFailureTests(ClickGateTestCase):
         with mock.patch.object(CLICK_GATE, "_prepare_observation", side_effect=OSError(errno.ENOSPC, "full")):
             result, payload = self.run_hook("pre-tool", self.read_event())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("run-inspection-once", json.dumps(payload))
+        self.assertIn(
+            "run-inspection-once",
+            split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]),
+        )
 
     def test_storage_failure_never_relaxes_unknown_guarded_explicit_or_active_claims(self):
         self.prompt_submit("inspect the project", "turn-1")
