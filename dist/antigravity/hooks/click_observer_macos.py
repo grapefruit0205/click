@@ -42,6 +42,10 @@ MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
 # discovery and ktrace callback registration before ktrace_start(), so keep the
 # suspended target stopped long enough for that bounded initialization.
 COLLECTOR_STARTUP_SECONDS = 1.0
+# fs_usage processes kernel events asynchronously.  A very short Python check
+# can exit before its final pathname events reach the output stream, so let the
+# already-running collector drain after the target has been reaped.
+COLLECTOR_DRAIN_SECONDS = 0.25
 NATIVE_FS_USAGE_PATHS = frozenset({"/usr/bin/fs_usage", "/usr/sbin/fs_usage"})
 MACOS_DATA_VOLUME_PREFIX = "/System/Volumes/Data"
 MACOS_PRIVATE_ALIASES = ("/etc", "/tmp", "/var")
@@ -534,6 +538,7 @@ def parse_fs_usage(
     truncated: bool = False,
     root_execution_bound: bool = False,
     process_scope_complete: bool = True,
+    allow_workspace_root: bool = False,
 ) -> ParsedTrace:
     """Parse bounded fs_usage text into content-free repository inputs."""
 
@@ -598,7 +603,8 @@ def parse_fs_usage(
                     external_digests.add(digest)
             return
         if not relative or relative == ".":
-            unresolved = _bounded_add(unresolved, 1)
+            if not allow_workspace_root:
+                unresolved = _bounded_add(unresolved, 1)
             return
         if kind == "directory" and not relative.endswith("/"):
             relative += "/"
@@ -801,6 +807,7 @@ def collect_command(
     resume_target: ResumeTarget = _resume_suspended_target,
     discard_suspended: DiscardTarget = _discard_suspended_target,
     terminate_group: TerminateGroup = click_process.terminate_process_group,
+    drain_wait: Callable[[float], None] = time.sleep,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
     strict_pid_scope: bool = False,
 ) -> CollectedExecution:
@@ -921,6 +928,8 @@ def collect_command(
                 failed = True
         if collector is not None and collector.poll() is None:
             try:
+                if target_started and not failed:
+                    drain_wait(COLLECTOR_DRAIN_SECONDS)
                 _stop_collector(collector, terminate_group=terminate_group)
             except Exception:
                 failed = True

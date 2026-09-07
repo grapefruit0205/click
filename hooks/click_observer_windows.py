@@ -362,6 +362,7 @@ def parse_windows_etw(
     process_scope_complete: bool = True,
     device_paths: Mapping[str, str] | None = None,
     transparent_child_images: Sequence[str] = (),
+    allow_workspace_root: bool = False,
 ) -> ParsedTrace:
     """Normalize bounded ETW XML into content-free repository inputs."""
 
@@ -419,11 +420,25 @@ def parse_windows_etw(
         elif provider in _FILE_NAMES:
             pid = _event_pid(fields)
             path = _first_text(fields, _PATH_FIELDS)
-            key = _first_text(fields, _FILE_KEY_FIELDS).lower()
-            if event_id == 10 and path and key:
-                file_keys[key] = path
-            if not path and key:
-                path = file_keys.get(key, "")
+            identifiers = tuple(
+                dict.fromkeys(
+                    value.lower()
+                    for field in _FILE_KEY_FIELDS
+                    if (value := fields.get(field, ""))
+                )
+            )
+            if path:
+                for identifier in identifiers:
+                    file_keys[identifier] = path
+            else:
+                path = next(
+                    (
+                        file_keys[identifier]
+                        for identifier in identifiers
+                        if identifier in file_keys
+                    ),
+                    "",
+                )
             file_events.append((pid, event_id, fields, path))
 
     descendants = {root_pid}
@@ -477,7 +492,8 @@ def parse_windows_etw(
             absolute["operations"].append(operation)
         prefix = root_case + "\\"
         if normalized_case == root_case:
-            unresolved = _bounded_add(unresolved, 1)
+            if not allow_workspace_root:
+                unresolved = _bounded_add(unresolved, 1)
             return
         if not normalized_case.startswith(prefix):
             try:

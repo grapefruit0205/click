@@ -204,6 +204,57 @@ class ClickObserverWindowsTests(unittest.TestCase):
             ),
         )
 
+    def test_authoritative_parser_maps_file_objects_and_binds_root(self) -> None:
+        raw = _document(
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={"ProcessID": 100, "ParentProcessID": 50},
+            ),
+            _event(
+                FILE_PROVIDER,
+                12,
+                execution_pid=100,
+                data={"FileObject": "0x456", "FileName": self.workspace_text},
+            ),
+            _event(
+                FILE_PROVIDER,
+                20,
+                execution_pid=100,
+                data={"FileObject": "0x456", "FileKey": "0x789"},
+            ),
+        )
+
+        shadow = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+        )
+        authoritative = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+            allow_workspace_root=True,
+        )
+
+        self.assertEqual(shadow.unresolved_event_count, 2)
+        self.assertFalse(shadow.process_tree_complete)
+        self.assertEqual(authoritative.unresolved_event_count, 0)
+        self.assertTrue(authoritative.process_tree_complete)
+        self.assertEqual(
+            authoritative.absolute_inputs,
+            (
+                {
+                    "path": self.workspace_text,
+                    "kind": "directory",
+                    "operations": ["enumerate", "read"],
+                },
+            ),
+        )
+
     def test_parser_merges_directory_metadata_and_current_query_events(self) -> None:
         raw = _document(
             _event(

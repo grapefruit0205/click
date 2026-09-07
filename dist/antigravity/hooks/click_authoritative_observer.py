@@ -417,6 +417,7 @@ def _darwin_command(
             truncated=collected.truncated or collected.failed,
             root_execution_bound=True,
             process_scope_complete=collected.process_scope_complete,
+            allow_workspace_root=True,
         )
         events, native_failed = _read_native_events(descriptor)
         reasons.update(_native_event_reasons(events, native_failed))
@@ -620,6 +621,7 @@ def _windows_command(
             if sys.prefix != sys.base_prefix
             and getattr(sys, "_base_executable", "")
             else (),
+            allow_workspace_root=True,
         )
         events, native_failed = _read_native_events(read_descriptor)
         reasons.update(_native_event_reasons(events, native_failed))

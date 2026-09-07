@@ -167,6 +167,35 @@ class ClickObserverMacOSTests(unittest.TestCase):
         )
         self.assertFalse(name_filtered.process_tree_complete)
 
+    def test_authoritative_parser_binds_the_workspace_root(self) -> None:
+        raw = self.trace_text(
+            "12:00:00.000001 execve /usr/bin/python3 0.000010 Python.20",
+            f"12:00:00.000002 getdirentries64 {self.workspace.as_posix()} "
+            "0.000011 Python.20",
+        )
+
+        shadow = click_observer_macos.parse_fs_usage(
+            raw, workspace=self.workspace
+        )
+        authoritative = click_observer_macos.parse_fs_usage(
+            raw, workspace=self.workspace, allow_workspace_root=True
+        )
+
+        self.assertEqual(shadow.unresolved_event_count, 1)
+        self.assertFalse(shadow.process_tree_complete)
+        self.assertEqual(authoritative.unresolved_event_count, 0)
+        self.assertTrue(authoritative.process_tree_complete)
+        self.assertIn(
+            {
+                "path": click_observer_macos._canonical_macos_path(
+                    self.workspace.as_posix()
+                ),
+                "kind": "directory",
+                "operations": ["enumerate"],
+            },
+            authoritative.absolute_inputs,
+        )
+
     def test_native_suspended_spawn_rejects_invalid_inputs_before_launch(self) -> None:
         with self.assertRaises(ValueError):
             click_observer_macos._spawn_suspended_macos(
@@ -551,6 +580,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
 
         terminated: list[int] = []
         resumed: list[int] = []
+        drained: list[float] = []
 
         def terminate(child: _FakeProcess) -> int:
             terminated.append(child.pid)
@@ -574,6 +604,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
             resume_target=lambda child: resumed.append(child.pid) or True,
             discard_suspended=terminate,
             terminate_group=terminate,
+            drain_wait=drained.append,
         )
 
         self.assertTrue(result.target_started)
@@ -598,6 +629,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
             ],
         )
         self.assertEqual(terminated, [4322])
+        self.assertEqual(drained, [click_observer_macos.COLLECTOR_DRAIN_SECONDS])
         self.assertFalse(result.process_scope_complete)
 
     def test_authoritative_collector_uses_only_the_suspended_target_pid(self) -> None:
@@ -608,6 +640,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
         collector = _FakeProcess(
             pid=4422, returncode=0, running=True, stdout=b"trace-output"
         )
+        drained: list[float] = []
 
         result = click_observer_macos.collect_command(
             ["tool"],
@@ -621,6 +654,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
             resume_target=lambda _target: True,
             discard_suspended=lambda child: child.terminate_for_test(),
             terminate_group=lambda child: child.terminate_for_test(),
+            drain_wait=drained.append,
             strict_pid_scope=True,
         )
 
@@ -628,6 +662,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
         self.assertTrue(result.process_scope_complete)
         self.assertEqual(launches[0][-1], "4421")
         self.assertNotIn("Python", launches[0])
+        self.assertEqual(drained, [click_observer_macos.COLLECTOR_DRAIN_SECONDS])
 
     def test_collector_interrupt_stops_both_retained_groups(self) -> None:
         target = _FakeProcess(pid=5321, returncode=0, running=True, interrupt=True)
