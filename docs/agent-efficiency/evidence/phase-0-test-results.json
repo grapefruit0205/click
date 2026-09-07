@@ -1,0 +1,33 @@
+{
+  "kind": "observed-local-test-results",
+  "baseline_snapshot": "/home/grapefruit/click-agent-efficiency-baselines/b0-20260907T070638Z",
+  "observed_at": "2026-09-07T07:17:19.476896+00:00",
+  "evidence_sources": [
+    {
+      "evidence_id": "E_AGENT_SHARDING_BASELINE",
+      "tests_run": 74,
+      "passed": 72,
+      "skipped": 2,
+      "failed": 0,
+      "elapsed_seconds": 82.927
+    },
+    {
+      "evidence_id": "E_AGENT_SHARD_REUSE_BASELINE",
+      "tests_run": 8,
+      "passed": 8,
+      "skipped": 0,
+      "failed": 0,
+      "elapsed_seconds": 29.358
+    }
+  ],
+  "total": {
+    "tests_run": 82,
+    "passed": 80,
+    "skipped": 2,
+    "failed": 0
+  },
+  "skip_reason": "prepared native authoritative profile required",
+  "runner_exit_code": 0,
+  "authority": "Observed test output recorded as an audit artifact; this JSON is not a Click receipt and does not grant reuse.",
+  "note": "Native setup E2E tests skip at Observer preparation. Fixture user approval/commits belong only to temporary test repositories."
+}

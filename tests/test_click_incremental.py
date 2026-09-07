@@ -213,6 +213,474 @@ class ClickIncrementalPlanTests(unittest.TestCase):
             ) if selected in click_incremental.REUSE_DECISIONS else None,
         )
 
+    @staticmethod
+    def command(
+        position: int, source_position: int, digest_marker: str
+    ) -> dict[str, object]:
+        return {
+            "position": position,
+            "source_position": source_position,
+            "check_digest": digest_marker * 64,
+        }
+
+    @staticmethod
+    def completed_command(
+        plan: dict[str, object],
+        *,
+        status: str,
+        exit_code: int,
+        started_offset_ms: float,
+        finished_offset_ms: float,
+    ) -> dict[str, object]:
+        outcome = click_incremental.planned_command_outcome(plan)
+        outcome.update(
+            status=status,
+            started=True,
+            completed=True,
+            started_offset_ms=started_offset_ms,
+            finished_offset_ms=finished_offset_ms,
+            duration_ms=finished_offset_ms - started_offset_ms,
+            exit_code=exit_code,
+            reason_code=(
+                "command-passed" if status == "passed"
+                else "command-interrupted" if status == "interrupted"
+                else "command-failed"
+            ),
+            measurement_scope=click_incremental.COMMAND_MEASUREMENT_SCOPE,
+        )
+        return outcome
+
+    def test_v5_command_outcomes_keep_an_earlier_failure_when_another_source_passes(
+        self,
+    ) -> None:
+        alpha_key = "a" * 64
+        beta_key = "b" * 64
+        command_plans = {
+            alpha_key: [self.command(1, 1, "1"), self.command(2, 2, "2")],
+            beta_key: [self.command(3, 1, "3")],
+        }
+        plan = click_incremental.build_plan(
+            [
+                self.item("a", "run", "observed-input-changed", "runner"),
+                self.item("b", "run", "no-passing-evidence", "runner"),
+            ],
+            current_revision=12,
+        )
+        task = {
+            "mode": "evidence",
+            "id": "evs_" + "c" * 32,
+            "name": "command outcome fixture",
+        }
+        verification: dict[str, object] = {}
+        batch = click_incremental.new_batch(
+            plan,
+            batch_id="d" * 32,
+            revision=12,
+            prepared_ms=1,
+            command_plans=command_plans,
+            task=task,
+        )
+        self.assertEqual(batch["version"], 5)
+        self.assertEqual(batch["task"], task)
+        self.assertTrue(click_incremental.store_batch(verification, batch))
+
+        results = click_incremental.new_source_results(command_plans)
+        self.assertTrue(
+            click_incremental.start_source_command(
+                results,
+                alpha_key,
+                position=1,
+                check_digest="1" * 64,
+                started_offset_ms=1,
+            )
+        )
+        self.assertTrue(
+            click_incremental.complete_source_command(
+                results,
+                alpha_key,
+                position=1,
+                check_digest="1" * 64,
+                status="passed",
+                reason="command-passed",
+                finished_offset_ms=3,
+                duration_ms=2,
+                exit_code=0,
+            )
+        )
+        self.assertTrue(
+            click_incremental.start_source_command(
+                results,
+                alpha_key,
+                position=2,
+                check_digest="2" * 64,
+                started_offset_ms=4,
+            )
+        )
+        self.assertTrue(
+            click_incremental.complete_source_command(
+                results,
+                alpha_key,
+                position=2,
+                check_digest="2" * 64,
+                status="failed",
+                reason="command-failed",
+                finished_offset_ms=8,
+                duration_ms=4,
+                exit_code=7,
+            )
+        )
+        self.assertFalse(
+            click_incremental.complete_source_command(
+                results,
+                alpha_key,
+                position=2,
+                check_digest="2" * 64,
+                status="passed",
+                reason="command-passed",
+                finished_offset_ms=9,
+                duration_ms=5,
+                exit_code=0,
+            )
+        )
+        self.assertTrue(
+            click_incremental.start_source_command(
+                results,
+                beta_key,
+                position=3,
+                check_digest="3" * 64,
+                started_offset_ms=9,
+            )
+        )
+        self.assertTrue(
+            click_incremental.complete_source_command(
+                results,
+                beta_key,
+                position=3,
+                check_digest="3" * 64,
+                status="passed",
+                reason="command-passed",
+                finished_offset_ms=12,
+                duration_ms=3,
+                exit_code=0,
+            )
+        )
+
+        alpha = click_incremental.source_command_outcome(
+            results[alpha_key], command_plans[alpha_key]
+        )
+        beta = click_incremental.source_command_outcome(
+            results[beta_key], command_plans[beta_key]
+        )
+        self.assertEqual(alpha, {
+            "valid": True,
+            "started": True,
+            "completed": True,
+            "status": "failed",
+            "exit_code": 7,
+        })
+        self.assertEqual(beta["status"], "passed")
+        self.assertTrue(
+            click_incremental.record_execution(
+                verification,
+                {alpha_key: 7, beta_key: 3},
+                source_results=results,
+                reused_keys=set(),
+                # This deliberately models a misleading aggregate last result.
+                exit_code=0,
+                runner_duration_ms=12,
+            )
+        )
+        recorded = click_incremental.current_batch(verification)
+        assert recorded is not None
+        by_key = {item["source_key"]: item for item in recorded["sources"]}
+        self.assertEqual(recorded["status"], "failed")
+        self.assertEqual(by_key[alpha_key]["status"], "failed")
+        self.assertEqual(by_key[alpha_key]["commands"][1]["exit_code"], 7)
+        self.assertEqual(by_key[beta_key]["status"], "passed")
+
+    def test_command_outcome_fold_never_reconstructs_a_success_prefix(self) -> None:
+        plans = [
+            self.command(1, 1, "1"),
+            self.command(2, 2, "2"),
+            self.command(3, 3, "3"),
+        ]
+        commands = [
+            self.completed_command(
+                plans[0], status="passed", exit_code=0,
+                started_offset_ms=1, finished_offset_ms=2,
+            ),
+            self.completed_command(
+                plans[1], status="failed", exit_code=9,
+                started_offset_ms=3, finished_offset_ms=4,
+            ),
+            self.completed_command(
+                plans[2], status="passed", exit_code=0,
+                started_offset_ms=5, finished_offset_ms=6,
+            ),
+        ]
+        outcome = click_incremental.source_command_outcome(
+            {
+                "started": True,
+                "completed": True,
+                "status": "failed",
+                "reason_code": "command-failed",
+                "commands": commands,
+            },
+            plans,
+        )
+        self.assertEqual(outcome["status"], "failed")
+        self.assertEqual(outcome["exit_code"], 9)
+        self.assertTrue(outcome["valid"])
+
+        partial = click_incremental.new_source_results({"a" * 64: plans[:2]})
+        self.assertTrue(
+            click_incremental.start_source_command(
+                partial, "a" * 64, position=1,
+                check_digest="1" * 64, started_offset_ms=1,
+            )
+        )
+        self.assertTrue(
+            click_incremental.complete_source_command(
+                partial, "a" * 64, position=1,
+                check_digest="1" * 64, status="passed",
+                reason="command-passed", finished_offset_ms=2,
+                duration_ms=1, exit_code=0,
+            )
+        )
+        incomplete = click_incremental.source_command_outcome(
+            partial["a" * 64], plans[:2]
+        )
+        self.assertTrue(incomplete["valid"])
+        self.assertEqual(incomplete["status"], "running")
+
+        missing = json.loads(json.dumps(partial["a" * 64]))
+        missing["commands"].pop()
+        self.assertFalse(
+            click_incremental.source_command_outcome(missing, plans[:2])["valid"]
+        )
+        duplicate = json.loads(json.dumps(partial["a" * 64]))
+        duplicate["commands"][1] = dict(duplicate["commands"][0])
+        self.assertFalse(
+            click_incremental.source_command_outcome(duplicate, plans[:2])["valid"]
+        )
+        rebound = json.loads(json.dumps(partial["a" * 64]))
+        rebound["commands"][0]["check_digest"] = "f" * 64
+        self.assertFalse(
+            click_incremental.source_command_outcome(rebound, plans[:2])["valid"]
+        )
+
+    def test_command_outcomes_record_interruption_and_unknown_fail_closed(self) -> None:
+        source_key = "a" * 64
+        plans = {source_key: [self.command(1, 1, "1"), self.command(2, 2, "2")]}
+        interrupted = click_incremental.new_source_results(plans)
+        self.assertTrue(
+            click_incremental.start_source_command(
+                interrupted, source_key, position=1,
+                check_digest="1" * 64, started_offset_ms=1,
+            )
+        )
+        self.assertTrue(
+            click_incremental.complete_source_command(
+                interrupted, source_key, position=1,
+                check_digest="1" * 64, status="interrupted",
+                reason="command-interrupted", finished_offset_ms=2,
+                duration_ms=1, exit_code=130,
+            )
+        )
+        result = click_incremental.source_command_outcome(
+            interrupted[source_key], plans[source_key]
+        )
+        self.assertEqual(result["status"], "interrupted")
+        self.assertEqual(result["exit_code"], 130)
+        self.assertEqual(
+            [item["status"] for item in interrupted[source_key]["commands"]],
+            ["interrupted", "not-run"],
+        )
+
+        unknown = click_incremental.new_source_results(plans)
+        self.assertTrue(
+            click_incremental.complete_source_command(
+                unknown, source_key, position=1,
+                check_digest="1" * 64, status="unknown",
+                reason="command-error", finished_offset_ms=None,
+                duration_ms=None, exit_code=None,
+            )
+        )
+        result = click_incremental.source_command_outcome(
+            unknown[source_key], plans[source_key]
+        )
+        self.assertEqual(result["status"], "unknown")
+        self.assertFalse(result["completed"])
+        self.assertFalse(result["started"])
+
+        malformed_planned = click_incremental.planned_command_outcome(
+            plans[source_key][0]
+        )
+        malformed_planned["started_offset_ms"] = 1
+        self.assertFalse(
+            click_incremental.command_outcome_is_valid(malformed_planned)
+        )
+
+    def test_v5_cancellation_between_commands_and_missing_completion_are_explicit(
+        self,
+    ) -> None:
+        source_key = "a" * 64
+        command_plans = {
+            source_key: [self.command(1, 1, "1"), self.command(2, 2, "2")]
+        }
+        plan = click_incremental.build_plan(
+            [self.item("a", "run", "observed-input-changed", "runner")],
+            current_revision=12,
+        )
+        task = {
+            "mode": "evidence",
+            "id": "evs_" + "c" * 32,
+            "name": "interruption fixture",
+        }
+
+        cancelled: dict[str, object] = {}
+        self.assertTrue(
+            click_incremental.store_batch(
+                cancelled,
+                click_incremental.new_batch(
+                    plan,
+                    batch_id="5" * 32,
+                    revision=12,
+                    prepared_ms=1,
+                    command_plans=command_plans,
+                    task=task,
+                ),
+            )
+        )
+        self.assertTrue(
+            click_incremental.mark_command_started(
+                cancelled,
+                source_key,
+                position=1,
+                check_digest="1" * 64,
+                started_offset_ms=1,
+            )
+        )
+        self.assertTrue(
+            click_incremental.mark_command_completed(
+                cancelled,
+                source_key,
+                position=1,
+                check_digest="1" * 64,
+                status="passed",
+                reason="command-passed",
+                finished_offset_ms=2,
+                duration_ms=1,
+                source_duration_ms=1,
+                exit_code=0,
+            )
+        )
+        self.assertTrue(click_incremental.interrupt_batch(cancelled))
+        batch = click_incremental.current_batch(cancelled)
+        assert batch is not None
+        self.assertTrue(click_incremental.batch_is_valid(batch))
+        self.assertEqual(batch["status"], "interrupted")
+        source = batch["sources"][0]
+        self.assertEqual(source["status"], "interrupted")
+        self.assertEqual(source["execution_reason_code"], "user-cancelled")
+        self.assertEqual(
+            [item["status"] for item in source["commands"]],
+            ["passed", "not-run"],
+        )
+
+        missing: dict[str, object] = {}
+        self.assertTrue(
+            click_incremental.store_batch(
+                missing,
+                click_incremental.new_batch(
+                    plan,
+                    batch_id="6" * 32,
+                    revision=12,
+                    prepared_ms=1,
+                    command_plans=command_plans,
+                    task=task,
+                ),
+            )
+        )
+        self.assertTrue(
+            click_incremental.mark_command_started(
+                missing,
+                source_key,
+                position=1,
+                check_digest="1" * 64,
+                started_offset_ms=1,
+            )
+        )
+        self.assertTrue(
+            click_incremental.record_execution(
+                missing,
+                {},
+                source_results={},
+                reused_keys=set(),
+                exit_code=0,
+                runner_duration_ms=2,
+            )
+        )
+        batch = click_incremental.current_batch(missing)
+        assert batch is not None
+        self.assertTrue(click_incremental.batch_is_valid(batch))
+        self.assertEqual(batch["status"], "failed")
+        source = batch["sources"][0]
+        self.assertEqual(source["status"], "unknown")
+        self.assertTrue(source["started"])
+        self.assertEqual(
+            [item["status"] for item in source["commands"]],
+            ["unknown", "not-run"],
+        )
+
+    def test_batch_versions_one_through_four_remain_readable_without_command_facts(
+        self,
+    ) -> None:
+        plan = click_incremental.build_plan(
+            [self.item("a", "run", "observed-input-changed", "runner")],
+            current_revision=12,
+        )
+        v2 = click_incremental.new_batch(
+            plan, batch_id="1" * 32, revision=12, prepared_ms=1
+        )
+        v3 = json.loads(json.dumps(v2))
+        v3["version"] = 3
+        v4 = click_incremental.new_batch(
+            plan,
+            batch_id="4" * 32,
+            revision=12,
+            prepared_ms=1,
+            task={
+                "mode": "evidence",
+                "id": "evs_" + "c" * 32,
+                "name": "legacy batch fixture",
+            },
+        )
+        v1 = json.loads(json.dumps(v2))
+        v1["version"] = 1
+        for source in v1["sources"]:
+            source.pop("reuse_origin")
+
+        for batch in (v1, v2, v3, v4):
+            self.assertTrue(click_incremental.batch_is_valid(batch))
+            self.assertNotIn("commands", batch["sources"][0])
+        verification = {
+            click_incremental.HISTORY_FIELD: [v4],
+            click_incremental.CURRENT_BATCH_FIELD: v4["batch_id"],
+        }
+        self.assertIsNone(click_incremental.current_command_plans(verification))
+        self.assertIsNone(
+            click_incremental.source_command_outcome(
+                {
+                    "started": True,
+                    "completed": False,
+                    "status": "running",
+                    "reason_code": "command-started",
+                },
+                [self.command(1, 1, "1")],
+            )
+        )
+
     def test_canonical_plan_drives_only_non_reused_sources_into_runner(self) -> None:
         plan = click_incremental.build_plan(
             [

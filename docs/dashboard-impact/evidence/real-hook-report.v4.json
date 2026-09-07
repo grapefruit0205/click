@@ -1,0 +1,239 @@
+{
+  "version": 4,
+  "selection_scope": "current-task",
+  "kind": "click-verification-efficiency-report",
+  "generated_at": 1788761047,
+  "projection_version": 7,
+  "retained_impact": {
+    "unit": "verification-group-request",
+    "window": "retained-completed-history",
+    "completed_request_count": 2,
+    "reused_group_request_count": 1,
+    "timed_reused_group_count": 1,
+    "missing_timing_group_count": 0,
+    "avoided_execution_ms": 57.129845,
+    "timing_status": "estimated",
+    "from_timestamp": 1788761043,
+    "through_timestamp": 1788761047,
+    "max_age_seconds": 604800,
+    "max_events": 1000
+  },
+  "engine": {
+    "version": "0.90.0",
+    "hook_files_digest": "ae84ed9c2cad045dcace8d9f6fbec46b7ee1495abacf90633517bd54567ef296",
+    "assurance": "unsigned-files-at-snapshot"
+  },
+  "accounting": {
+    "unit": "verification-group-request",
+    "window": "retained-history",
+    "from_timestamp": 1788761043,
+    "through_timestamp": 1788761047,
+    "max_age_seconds": 604800,
+    "max_events": 1000,
+    "batch_count": 2,
+    "unknown_request_batch_count": 0,
+    "request_denominator": 4,
+    "reuse_numerator": 1,
+    "reuse_rate": 0.25,
+    "missing_baseline_duration_count": 0,
+    "executed_source_count": 3,
+    "passed_source_count": 3,
+    "failed_source_count": 0,
+    "interrupted_source_count": 0,
+    "not_run_source_count": 0,
+    "pending_source_count": 0
+  },
+  "controls": [
+    {
+      "event_id": "548a3f85b475c55cc3c1fb820c6537114d2380fffabab593db09028ea016fa10",
+      "timestamp": 1788761046,
+      "code": "verification-guidance",
+      "effect": "advisory"
+    }
+  ],
+  "task": {
+    "runtime_mode": "evidence",
+    "contract_id": "",
+    "approval_bound": false
+  },
+  "unit": "verification-group",
+  "summary": {
+    "total_source_count": 2,
+    "planned_execution_source_count": 1,
+    "planned_reuse_source_count": 1,
+    "executed_source_count": 1,
+    "completed_source_count": 1,
+    "passed_source_count": 1,
+    "failed_source_count": 0,
+    "interrupted_source_count": 0,
+    "not_run_source_count": 0,
+    "pending_source_count": 0,
+    "authoritative_reuse_count": 1,
+    "exact_reuse_count": 0,
+    "dependency_reuse_count": 0,
+    "safe_change_reuse_count": 1,
+    "executed_duration_ms": 41.830133,
+    "request_wall_ms": 1719.68238,
+    "measured_processing_ms": 1584.072855,
+    "estimated_avoided_ms": 57.129845,
+    "estimated_source_count": 1,
+    "baseline_sample_count": 1
+  },
+  "revalidation_savings": {
+    "version": 1,
+    "unit": "ms",
+    "basis": "sequential-source-command-intervals",
+    "aggregation_scope": "actual-expanded-verification-batch",
+    "omitted_test_execution_ms": 57.129845,
+    "omitted_test_execution_status": "estimated",
+    "executed_test_execution_ms": 41.830133,
+    "executed_test_execution_status": "measured",
+    "full_sequential_test_execution_estimate_ms": 98.959978,
+    "full_sequential_test_execution_estimate_status": "estimated",
+    "test_execution_reduction_ratio": 0.5773025232483379,
+    "test_execution_reduction_status": "estimated",
+    "scope_complete": true,
+    "timing_complete": true,
+    "sequential_comparison_valid": true,
+    "coverage": {
+      "requested_source_count": 2,
+      "actual_executed_source_count": 1,
+      "timed_executed_source_count": 1,
+      "actual_reused_source_count": 1,
+      "timed_reused_source_count": 1
+    },
+    "reason_codes": []
+  },
+  "labels": {
+    "omitted": "재사용으로 피한 테스트 재실행 시간",
+    "full": "동일 묶음 전체 순차 실행 예상",
+    "executed": "이번 테스트 실행",
+    "reduction": "테스트 명령 실행 구간 감소",
+    "basis": [
+      "과거 실행 기록 기반 추정",
+      "동일 묶음·순차 실행 기준",
+      "관리비용 별도"
+    ]
+  },
+  "summary_copy": "전체 2개 중 1개만 다시 실행 · 1개 결과 재사용\n피한 테스트 재실행 비용 약 57.13 ms [추정].\n요청된 검증 묶음 2/2 결과 확보.\n과거 실행 기록 기반 추정 / 동일 묶음·순차 실행 기준 / 관리비용 별도.",
+  "display": {
+    "state": "partial-execution",
+    "hero_title": "재사용으로 피한 테스트 재실행 시간",
+    "result_text": "요청된 검증 묶음 2/2 결과 확보",
+    "comparison_ready": true,
+    "current_percent": 42.26974767516621,
+    "summary_text": "전체 2개 중 1개만 다시 실행 · 1개 결과 재사용",
+    "omitted_text": "약 57.13 ms [추정]",
+    "omitted_status_text": "1/1개 재사용 묶음의 적합한 과거 실행 기록 기반",
+    "full_text": "약 98.96 ms [추정]",
+    "executed_text": "41.83 ms [실측]",
+    "reduction_text": "약 57.73% [추정]",
+    "comparison_status": "동일 시간 축"
+  },
+  "measurement_scope": "hook-entry-to-result-recording",
+  "measurement": {
+    "request_wall_ms": 1719.68238,
+    "measured_processing_ms": 1584.072855,
+    "executed_test_execution_ms": 41.830133,
+    "full_sequential_test_execution_estimate_ms": 98.959978,
+    "click_management_overhead_ms": null,
+    "click_management_overhead_status": "unmeasured",
+    "live_net_time_saving_ms": null,
+    "live_net_time_saving_reason": "counterfactual-not-measured",
+    "observer_auxiliary_processing_ms": 0
+  },
+  "batch": {
+    "batch_id": "dff85b05190b353c1ad2e070ef4cb2e6",
+    "current_revision": 1,
+    "timestamp": 1788761046,
+    "finished_at": 1788761047,
+    "status": "passed",
+    "reason_code": "batch-finished",
+    "task": {
+      "mode": "evidence",
+      "id": "evs_da37fdddcd0293700363a3eb905ba933"
+    },
+    "sources": [
+      {
+        "label": "beta",
+        "source_key": "c19ce0e9e5ff00a655825b5d51370945a11c776147b351ec3f0945ebddcdd72f",
+        "check_digest": "134bc05b670ea13441c6bc952cd7fd395a6485dfef3bade71891381db2176431",
+        "decision": "run",
+        "status": "passed",
+        "started": true,
+        "completed": true,
+        "reason_code": "safe-change-policy-not-covered",
+        "execution_reason_code": "command-passed",
+        "authority_source": "runner",
+        "current_revision": 1,
+        "previous_revision": 0,
+        "duration_ms": 41.830133,
+        "duration_baseline": null,
+        "reuse_origin": null,
+        "estimated_avoided_ms": 0
+      },
+      {
+        "label": "alpha",
+        "source_key": "dc8bdb4d0fd16c0eb7ca8940166cfbdbc37a3485a5d59d72550696807b60d965",
+        "check_digest": "968da3ea0ca1cadd396e6cebc976940e88061a939f10e05cc6139e835ad20a99",
+        "decision": "reuse-safe-change",
+        "status": "reused",
+        "started": false,
+        "completed": false,
+        "reason_code": "successor-evidence-safe-change-covered",
+        "execution_reason_code": "reuse-applied",
+        "authority_source": "repository-safe-change-policy",
+        "current_revision": 1,
+        "previous_revision": 0,
+        "duration_ms": null,
+        "duration_baseline": {
+          "version": 2,
+          "duration_ms": 57.129845,
+          "unit": "ms",
+          "measurement_scope": "source-command-dispatch-through-return",
+          "execution_model": "sequential",
+          "observer_mode": "off",
+          "timing_binding_digest": "963033ee213fef9616434754c848ff67342e98b7cafcef021f7c53bb6b8c40a7",
+          "source_key": "dc8bdb4d0fd16c0eb7ca8940166cfbdbc37a3485a5d59d72550696807b60d965",
+          "revision": 0,
+          "check_digest": "968da3ea0ca1cadd396e6cebc976940e88061a939f10e05cc6139e835ad20a99",
+          "observed_at": 1788761044,
+          "batch_id": "8ab345c1d09faef4db1cf3f8efaa8dd3",
+          "sample_count": 1,
+          "origin_task": {
+            "mode": "evidence",
+            "id": "evs_b24e2282cf2c9b13edd00e449d549f61"
+          }
+        },
+        "reuse_origin": {
+          "kind": "successor-evidence",
+          "batch_id": "8ab345c1d09faef4db1cf3f8efaa8dd3",
+          "evidence_session_id": "evs_b24e2282cf2c9b13edd00e449d549f61",
+          "candidate_digest": "71f26705d82928bdf5665f19ab0eea990e4322251d4a4f838679f093c73a641a",
+          "origin_revision": 0
+        },
+        "estimated_avoided_ms": 57.129845
+      }
+    ]
+  },
+  "comparison": null,
+  "shadow": {
+    "candidate_count": 0,
+    "evaluated_source_count": 0,
+    "confirmed_candidate_count": 0,
+    "contradiction_count": 0,
+    "observer_overhead_ms": 0,
+    "potential_ms": 0,
+    "tracing_slowdown_measured": false
+  },
+  "notes": [
+    "전체 사용자 대기시간은 측정하지 않음",
+    "Hook 진입부터 결과 기록 또는 준비와 runner 개별 구간만 부분 계측 · 호스트 요청 전·최종 저장·반환 제외",
+    "생략한 테스트 실행시간은 실제 적용된 재사용의 적합한 이전 성공 실행 표본에 기반한 추정",
+    "전체 순차 실행 추정은 같은 묶음의 source command 구간 합이며 원래 parent 명령의 실측 wall time이 아님",
+    "생략한 테스트 실행시간은 관리비용을 뺀 순절감이나 사용자 대기시간 절감이 아님",
+    "Shadow는 실제 재사용·실측 절약 아님",
+    "입력 파일 경로와 원시 명령·환경·토큰은 공유본에 포함하지 않음",
+    "비교 fixture 결과를 일반 저장소 성능으로 일반화할 수 없음"
+  ]
+}

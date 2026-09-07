@@ -32,6 +32,7 @@ if __package__:
         click_contract_state,
         click_dependency_cache,
         click_dependency_trace,
+        click_diagnostics,
         click_evidence,
         click_evidence_shards,
         click_host_coverage,
@@ -56,6 +57,7 @@ else:  # Executed directly from the bundled hooks directory.
     import click_contract_state
     import click_dependency_cache
     import click_dependency_trace
+    import click_diagnostics
     import click_evidence
     import click_evidence_shards
     import click_host_coverage
@@ -76,7 +78,9 @@ else:  # Executed directly from the bundled hooks directory.
 
 PROTOCOL_VERSION = 2
 CONTRACT_STATE_SCHEMA_VERSION = 2
-BATCH_FIELDS = {"version", "checks", "workdir"}
+BATCH_FIELDS = {
+    "version", "checks", "workdir", "reporting", "failure_collection"
+}
 CHECK_FIELDS = {"evidence_id", "argv", "class"}
 VERIFICATION_CLASSES = click_verification_meter.VERIFICATION_CLASSES
 RUNNING_TTL_SECONDS = 60 * 60
@@ -136,6 +140,129 @@ VERIFICATION_BATCH_FIELDS = BATCH_FIELDS
 VERIFICATION_CHECK_FIELDS = CHECK_FIELDS
 VERIFICATION_PROTOCOL_VERSION = PROTOCOL_VERSION
 EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
+FAILURE_COLLECTION_VERSION = 1
+FAILURE_COLLECTION_MAX_EXTRA_SOURCES = 3
+FAILURE_COLLECTION_MAX_EXTRA_FAILURES = 3
+FAILURE_COLLECTION_MAX_START_WINDOW_MS = 30_000
+FAILURE_COLLECTION_STATE_FIELD = "bounded_failure_collection"
+FAILURE_COLLECTION_RESULT_STATUSES = frozenset(
+    {"not-triggered", "disabled", "collecting", "completed", "stopped"}
+)
+
+
+def _default_failure_collection() -> dict[str, Any]:
+    return {
+        "version": FAILURE_COLLECTION_VERSION,
+        "mode": "off",
+        "independent_sources": [],
+        "max_extra_sources": 0,
+        "max_extra_failures": 0,
+        "start_window_ms": 0,
+    }
+
+
+def _validate_failure_collection(
+    value: Any, checks: list[dict[str, Any]]
+) -> tuple[dict[str, Any] | None, str]:
+    if value is None:
+        return _default_failure_collection(), ""
+    fields = {
+        "version", "mode", "independent_sources", "max_extra_sources",
+        "max_extra_failures", "start_window_ms",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        return None, (
+            "Verification `failure_collection` must contain only version, mode, "
+            "independent_sources, max_extra_sources, max_extra_failures, and "
+            "start_window_ms."
+        )
+    if value.get("version") != FAILURE_COLLECTION_VERSION:
+        return None, (
+            f"Verification `failure_collection.version` must be "
+            f"{FAILURE_COLLECTION_VERSION}."
+        )
+    mode = value.get("mode")
+    independent = value.get("independent_sources")
+    extra_sources = value.get("max_extra_sources")
+    extra_failures = value.get("max_extra_failures")
+    start_window_ms = value.get("start_window_ms")
+    if mode not in {"off", "bounded"}:
+        return None, "Verification `failure_collection.mode` must be off or bounded."
+    if (
+        not isinstance(independent, list)
+        or any(
+            not isinstance(item, str)
+            or EVIDENCE_ID_PATTERN.fullmatch(item) is None
+            for item in independent
+        )
+        or len(set(independent)) != len(independent)
+    ):
+        return None, (
+            "Verification `failure_collection.independent_sources` must contain "
+            "distinct evidence ids."
+        )
+    numeric = (extra_sources, extra_failures, start_window_ms)
+    if any(not isinstance(item, int) or isinstance(item, bool) for item in numeric):
+        return None, "Verification failure-collection budgets must be integers."
+    if mode == "off":
+        if independent or any(numeric):
+            return None, "Disabled failure collection must use empty, zero budgets."
+        return _default_failure_collection(), ""
+    submitted_ids = {
+        str(check.get("evidence_id", ""))
+        for check in checks
+        if isinstance(check, dict)
+    }
+    if len(independent) < 2 or not set(independent).issubset(submitted_ids):
+        return None, (
+            "Bounded failure collection requires at least two explicitly submitted "
+            "independent evidence ids."
+        )
+    if not 1 <= extra_sources <= FAILURE_COLLECTION_MAX_EXTRA_SOURCES:
+        return None, "Bounded failure collection allows 1..3 extra sources."
+    if not 1 <= extra_failures <= FAILURE_COLLECTION_MAX_EXTRA_FAILURES:
+        return None, "Bounded failure collection allows 1..3 extra failures."
+    if not 1 <= start_window_ms <= FAILURE_COLLECTION_MAX_START_WINDOW_MS:
+        return None, "Bounded failure collection start_window_ms must be 1..30000."
+    return json.loads(json.dumps(value)), ""
+
+
+def _failure_collection_result_is_valid(value: Any) -> bool:
+    fields = {
+        "version", "batch_ref", "requested_mode", "status", "first_failure_source_id",
+        "admitted_source_ids", "additional_sources_started",
+        "additional_failures", "boundary_checks", "boundary_check_ms",
+        "stop_reason",
+    }
+    return bool(
+        isinstance(value, dict)
+        and set(value) == fields
+        and value.get("version") == FAILURE_COLLECTION_VERSION
+        and isinstance(value.get("batch_ref"), str)
+        and re.fullmatch(r"[0-9a-f]{64}", value["batch_ref"])
+        and value.get("requested_mode") in {"off", "bounded"}
+        and value.get("status") in FAILURE_COLLECTION_RESULT_STATUSES
+        and isinstance(value.get("first_failure_source_id"), str)
+        and isinstance(value.get("admitted_source_ids"), list)
+        and all(
+            isinstance(item, str) and EVIDENCE_ID_PATTERN.fullmatch(item)
+            for item in value["admitted_source_ids"]
+        )
+        and all(
+            isinstance(value.get(field), int)
+            and not isinstance(value.get(field), bool)
+            and value[field] >= 0
+            for field in (
+                "additional_sources_started", "additional_failures",
+                "boundary_checks",
+            )
+        )
+        and isinstance(value.get("boundary_check_ms"), (int, float))
+        and not isinstance(value.get("boundary_check_ms"), bool)
+        and value["boundary_check_ms"] >= 0
+        and isinstance(value.get("stop_reason"), str)
+        and 0 < len(value["stop_reason"]) <= 64
+    )
 
 
 def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
@@ -205,6 +332,12 @@ def _validate_verification_batch(
     if unknown:
         rendered = ", ".join(f"`{field}`" for field in unknown)
         return None, 0, f"Verification batch contains unsupported field(s): {rendered}."
+    reporting, reporting_error = click_diagnostics.validate_reporting(
+        value.get("reporting")
+    )
+    if reporting_error:
+        return None, 0, reporting_error
+    assert reporting is not None
     workdir = value.get("workdir")
     if workdir is not None and (
         not isinstance(workdir, str)
@@ -295,7 +428,15 @@ def _validate_verification_batch(
     normalized_batch = {
         "version": VERIFICATION_PROTOCOL_VERSION,
         "checks": normalized,
+        "reporting": reporting,
     }
+    failure_collection, collection_error = _validate_failure_collection(
+        value.get("failure_collection"), normalized
+    )
+    if collection_error:
+        return None, 0, collection_error
+    assert failure_collection is not None
+    normalized_batch["failure_collection"] = failure_collection
     if isinstance(workdir, str):
         normalized_batch["workdir"] = workdir
     return normalized_batch, units, ""
@@ -335,6 +476,29 @@ def _verification_group_digest(checks: list[dict[str, Any]]) -> str:
     # class or legacy unit heuristic.
     payload = [{"argv": check["argv"]} for check in checks]
     return _capability_digest({"checks": payload})
+
+
+def _verification_command_digest(check: dict[str, Any]) -> str:
+    return _capability_digest({"argv": check["argv"]})
+
+
+def _verification_command_plans(
+    batch: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    plans: dict[str, list[dict[str, Any]]] = {}
+    source_positions: dict[str, int] = {}
+    for position, check in enumerate(batch["checks"], start=1):
+        source_key = _evidence_key(str(check["evidence_id"]))
+        source_position = source_positions.get(source_key, 0) + 1
+        source_positions[source_key] = source_position
+        plans.setdefault(source_key, []).append(
+            {
+                "position": position,
+                "source_position": source_position,
+                "check_digest": _verification_command_digest(check),
+            }
+        )
+    return plans
 
 
 def _verification_group_units(checks: list[dict[str, Any]]) -> int:
@@ -1908,9 +2072,25 @@ def _expand_evidence_shards(
             )
         expanded.extend(parent_checks)
 
+    failure_collection = batch["failure_collection"]
+    expanded_ids = {str(check.get("evidence_id", "")) for check in expanded}
+    if (
+        failure_collection.get("mode") == "bounded"
+        and not set(failure_collection["independent_sources"]).issubset(expanded_ids)
+    ):
+        # Internal shard children are never inferred to be the independent
+        # sources selected by the user for this request.
+        failure_collection = _default_failure_collection()
+        advisories.append(
+            "Click bounded failure collection stayed off because automatic "
+            "sharding changed the submitted source identities; shard independence "
+            "was not inferred."
+        )
     expanded_batch: dict[str, Any] = {
         "version": VERIFICATION_PROTOCOL_VERSION,
         "checks": expanded,
+        "reporting": batch["reporting"],
+        "failure_collection": failure_collection,
     }
     if isinstance(batch.get("workdir"), str):
         expanded_batch["workdir"] = str(batch["workdir"])
@@ -2016,6 +2196,7 @@ def _prepare_verification(
             revision=int(verification.get("mutation_revision", 0)), prepared_ms=elapsed,
             requested=trace.get("requested"), labels=trace.get("labels"),
             reuse_origins=trace.get("reuse_origins"),
+            command_plans=trace.get("command_plans"),
             task={
                 "mode": state.get("runtime_mode"),
                 "id": state.get("contract_id") if state.get("runtime_mode") == "guarded" else state.get("evidence_session_id"),
@@ -2203,6 +2384,8 @@ def _prepare_verification_impl(
     if grouping_error:
         return "", grouping_error, ""
     requested_keys = set(grouped_checks)
+    if measurement is not None:
+        measurement["command_plans"] = _verification_command_plans(batch)
     unassigned_keys = requested_keys - argv_keys
     if unassigned_keys:
         return (
@@ -2838,7 +3021,7 @@ def _prepare_verification_impl(
                 f"{safe_change_reused} repository-declared safe-change cross-revision"
             )
         reuse_message = (
-            f"Click reused {' and '.join(reuse_parts)} verification receipt(s)"
+            f"Click reused {' and '.join(reuse_parts)} verification receipts"
         )
         return (
             f"echo {reuse_message}",
@@ -2849,6 +3032,8 @@ def _prepare_verification_impl(
     batch = {
         "version": VERIFICATION_PROTOCOL_VERSION,
         "workdir": str(batch["workdir"]),
+        "reporting": batch["reporting"],
+        "failure_collection": batch["failure_collection"],
         "checks": [
             check
             for check in batch["checks"]
@@ -3040,6 +3225,9 @@ def _record_verification_result(
     shadow_source_exit_codes: dict[str, int] | None = None,
     shadow_execution_contexts: dict[str, dict[str, Any]] | None = None,
     observer_mode: str | None = None,
+    diagnostic_records: list[dict[str, Any]] | None = None,
+    reporting: dict[str, Any] | None = None,
+    collection_result: dict[str, Any] | None = None,
     *,
     source_results: dict[str, dict[str, Any]] | None = None,
     runner_started_ns: int | None = None,
@@ -3177,6 +3365,34 @@ def _record_verification_result(
     grouped_checks, grouping_error = _verification_groups(batch)
     if grouping_error or set(grouped_checks) != running_keys:
         return False
+    command_plans_by_source = _verification_command_plans(batch)
+    precise_required = click_incremental.current_command_plans(
+        verification, running_keys
+    ) is not None
+    precise_outcomes: dict[str, dict[str, Any]] = {}
+    for source_key in running_keys:
+        source_result = (
+            source_results.get(source_key)
+            if isinstance(source_results, dict) else None
+        )
+        outcome = click_incremental.source_command_outcome(
+            source_result, command_plans_by_source[source_key]
+        )
+        if outcome is not None:
+            precise_outcomes[source_key] = outcome
+        elif precise_required:
+            # A v5 batch cannot fall back to the legacy contiguous-success
+            # counter when its required command record is absent.
+            precise_outcomes[source_key] = {
+                "valid": False,
+                "started": bool(
+                    isinstance(source_result, dict)
+                    and source_result.get("started") is True
+                ),
+                "completed": False,
+                "status": "unknown",
+                "exit_code": None,
+            }
     authoritative_runtime = (
         click_observer_runtime.state_from_verification(verification)
         if selected_observer_mode == "authoritative"
@@ -3290,7 +3506,10 @@ def _record_verification_result(
                     or (exit_code != 0 and min(check_positions) == succeeded_count)
                 )
             )
-            if source_results is not None:
+            precise = precise_outcomes.get(source_key)
+            if precise is not None:
+                source_ran = bool(precise["started"])
+            elif source_results is not None:
                 source_ran = source_results.get(source_key, {}).get("started") is True
             was_current = _evidence_is_current(source, previous_revision)
             if check_positions and source_ran:
@@ -3298,7 +3517,11 @@ def _record_verification_result(
                 source["status"] = "failed"
                 source["attempts"] = int(source.get("attempts", 0)) + 1
                 source["unchanged_failure_retries"] = 1
-                source["last_exit_code"] = exit_code
+                source["last_exit_code"] = (
+                    precise["exit_code"]
+                    if precise is not None and precise["valid"]
+                    else exit_code
+                )
             elif check_positions:
                 # A preceding check stopped the batch before this source executed.
                 source["status"] = "ready"
@@ -3331,12 +3554,20 @@ def _record_verification_result(
             source_ran = first_position < succeeded_count or (
                 exit_code != 0 and first_position == succeeded_count
             )
-            if source_results is not None:
+            precise = precise_outcomes.get(source_key)
+            if precise is not None:
+                source_ran = bool(precise["started"])
+            elif source_results is not None:
                 source_ran = source_results.get(source_key, {}).get("started") is True
             if source_ran:
                 click_evidence.clear_successor_receipt(source)
                 source["attempts"] = int(source.get("attempts", 0)) + 1
-            if all(position < succeeded_count for position in check_positions):
+            source_passed = (
+                bool(precise["valid"] and precise["status"] == "passed")
+                if precise is not None
+                else all(position < succeeded_count for position in check_positions)
+            )
+            if source_passed:
                 source["status"] = "passed"
                 source["verified_revision"] = revision
                 source["last_exit_code"] = 0
@@ -3421,7 +3652,11 @@ def _record_verification_result(
             elif source_ran:
                 source["status"] = "failed"
                 source["verified_revision"] = -1
-                source["last_exit_code"] = exit_code
+                source["last_exit_code"] = (
+                    precise["exit_code"]
+                    if precise is not None and precise["valid"]
+                    else exit_code
+                )
             else:
                 source["status"] = "ready"
                 source["verified_revision"] = -1
@@ -3438,9 +3673,21 @@ def _record_verification_result(
             verification["unchanged_failure_retries"] = 0
             verification["locked_batch_digest"] = batch_digest
         else:
-            verification["status"] = "failed" if exit_code != 0 else "ready"
+            precise_failure = any(
+                outcome is not None
+                and (
+                    not outcome["valid"]
+                    or outcome["started"] and outcome["status"] != "passed"
+                )
+                for outcome in precise_outcomes.values()
+            )
+            verification["status"] = (
+                "failed" if exit_code != 0 or precise_failure else "ready"
+            )
             verification["verified_revision"] = -1
-            verification["failed_revision"] = revision if exit_code != 0 else -1
+            verification["failed_revision"] = (
+                revision if exit_code != 0 or precise_failure else -1
+            )
     if shadow_observer_records:
         try:
             click_dependency_trace.store_records(
@@ -3463,6 +3710,16 @@ def _record_verification_result(
             # Analysis is telemetry only and cannot change an evidence result.
             pass
     try:
+        if _failure_collection_result_is_valid(collection_result):
+            verification[FAILURE_COLLECTION_STATE_FIELD] = json.loads(
+                json.dumps(collection_result)
+            )
+        if isinstance(diagnostic_records, list) and isinstance(reporting, dict):
+            for diagnostic_record in diagnostic_records:
+                if isinstance(diagnostic_record, dict):
+                    click_diagnostics.store_record(
+                        verification, diagnostic_record, reporting
+                    )
         measured_batch = click_incremental.current_batch(verification)
         reused_keys = {
             item["source_key"] for item in (measured_batch or {}).get("sources", [])
@@ -3595,6 +3852,24 @@ def _claim_verification_run(
     )
     if shard_error:
         return None, shard_error
+    runtime_command_plans = _verification_command_plans(batch)
+    persisted_command_plans = click_incremental.current_command_plans(
+        verification, running_keys
+    )
+    if persisted_command_plans is not None:
+        for source_key, runtime_plans in runtime_command_plans.items():
+            persisted_plans = persisted_command_plans.get(source_key)
+            if (
+                not isinstance(persisted_plans, list)
+                or len(persisted_plans) != len(runtime_plans)
+                or any(
+                    persisted["source_position"] != runtime["source_position"]
+                    or persisted["check_digest"] != runtime["check_digest"]
+                    for persisted, runtime in zip(persisted_plans, runtime_plans)
+                )
+            ):
+                return None, "Click verification command outcome binding did not match."
+        runtime_command_plans = persisted_command_plans
     prepared_environment_digests = verification.get("running_environment_digests")
     prepared_executable_digests = verification.get("running_executable_digests")
     for prepared in (prepared_environment_digests, prepared_executable_digests):
@@ -3704,6 +3979,13 @@ def _claim_verification_run(
     _write_json(state_path, state)
     batch["_click_verification_environment"] = verification_environment
     batch["_click_verification_environment_rebound"] = environment_rebound
+    batch["_click_command_plans"] = runtime_command_plans
+    measured_batch = click_incremental.current_batch(verification)
+    batch["_click_incremental_batch_id"] = (
+        str(measured_batch.get("batch_id", ""))
+        if isinstance(measured_batch, dict)
+        else ""
+    )
     batch["_click_shadow_bindings"] = shadow_bindings
     batch["_click_shadow_contexts"] = {
         source_key: {
@@ -3832,7 +4114,16 @@ def _release_unclaimed_verification_reservation(
     return True
 
 
-def _record_incremental_start(path: Path, digest: str, token: str, source_key: str) -> None:
+def _record_incremental_start(
+    path: Path,
+    digest: str,
+    token: str,
+    source_key: str,
+    *,
+    position: int,
+    check_digest: str,
+    started_offset_ms: int | float,
+) -> None:
     """Best-effort live telemetry, authenticated by the already claimed runner."""
     try:
         with _state_lock():
@@ -3850,7 +4141,13 @@ def _record_incremental_start(path: Path, digest: str, token: str, source_key: s
                 )
             ):
                 return
-            if click_incremental.mark_started(verification, source_key):
+            if click_incremental.mark_command_started(
+                verification,
+                source_key,
+                position=position,
+                check_digest=check_digest,
+                started_offset_ms=started_offset_ms,
+            ):
                 _write_json(path, state)
     except Exception:
         pass  # An unavailable telemetry write cannot execute a second command.
@@ -3862,12 +4159,18 @@ def _record_incremental_completion(
     token: str,
     source_key: str,
     *,
+    position: int,
+    check_digest: str,
     status: str,
     reason: str,
+    finished_offset_ms: int | float | None,
     duration_ms: int | float | None,
-    completed: bool = True,
+    source_duration_ms: int | float | None,
+    exit_code: int | None,
+    diagnostic_record: dict[str, Any] | None = None,
+    reporting: dict[str, Any] | None = None,
 ) -> None:
-    """Persist one source result while the claimed batch is still active."""
+    """Persist one command result while the claimed batch is still active."""
     try:
         with _state_lock():
             if not _managed_contract_path(path):
@@ -3884,19 +4187,138 @@ def _record_incremental_completion(
                 )
             ):
                 return
-            if click_incremental.mark_completed(
+            if click_incremental.mark_command_completed(
                 verification,
                 source_key,
+                position=position,
+                check_digest=check_digest,
                 status=status,
                 reason=reason,
+                finished_offset_ms=finished_offset_ms,
                 duration_ms=duration_ms,
-                completed=completed,
+                source_duration_ms=source_duration_ms,
+                exit_code=exit_code,
+                log_ref=(
+                    diagnostic_record.get("log_ref")
+                    if isinstance(diagnostic_record, dict)
+                    else None
+                ),
             ):
+                if isinstance(diagnostic_record, dict) and isinstance(reporting, dict):
+                    click_diagnostics.store_record(
+                        verification, diagnostic_record, reporting
+                    )
                 state["updated_at"] = int(time.time())
                 _write_json(path, state)
     except Exception:
         # Telemetry cannot repeat a check or change evidence authority.
         pass
+
+
+def _collection_boundary_check(
+    state_path: Path,
+    batch_digest: str,
+    runner_token: str,
+    *,
+    next_source_key: str,
+    grouped_checks: dict[str, list[dict[str, Any]]],
+    before: dict[str, Any] | None,
+    verification_environment: dict[str, str],
+    file_content_digest: Callable[[Path], str],
+    git_workspace_snapshot: Callable[..., dict[str, Any] | None],
+) -> tuple[str, float]:
+    """Recheck cancellation, claim, workspace, environment, and executable."""
+
+    started_ns = time.perf_counter_ns()
+    try:
+        with _state_lock():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        verification = state.get("verification")
+        if (
+            not click_runtime_state.view(state).execution_authorized
+            or not isinstance(verification, dict)
+            or verification.get("status") != "running"
+            or verification.get("last_batch_digest") != batch_digest
+            or not secrets.compare_digest(
+                str(verification.get("runner_token_digest", "")),
+                hashlib.sha256(runner_token.encode()).hexdigest(),
+            )
+        ):
+            return "claim-or-cancellation-changed", (
+                time.perf_counter_ns() - started_ns
+            ) / 1_000_000
+        checks = grouped_checks.get(next_source_key)
+        expected_executables = verification.get("running_executable_digests")
+        expected_environments = verification.get("running_environment_digests")
+        if (
+            not isinstance(checks, list)
+            or not checks
+            or not isinstance(expected_executables, dict)
+            or not isinstance(expected_environments, dict)
+        ):
+            return "boundary-binding-unavailable", (
+                time.perf_counter_ns() - started_ns
+            ) / 1_000_000
+        if before is not None:
+            current = git_workspace_snapshot(
+                Path.cwd(), list(before.get("protected_untracked", []))
+            )
+            if (
+                not isinstance(current, dict)
+                or current.get("root") != before.get("root")
+                or current.get("digest") != before.get("digest")
+            ):
+                return "workspace-drift", (
+                    time.perf_counter_ns() - started_ns
+                ) / 1_000_000
+        executable_records = _verification_executable_records(
+            checks,
+            cwd=Path.cwd(),
+            environment=verification_environment,
+            file_content_digest=file_content_digest,
+        )
+        if executable_records is None:
+            return "executable-drift", (
+                time.perf_counter_ns() - started_ns
+            ) / 1_000_000
+        executable_digest = _capability_digest(
+            {"executables": _verification_executable_payload(executable_records)}
+        )
+        environment_digest = _verification_environment_digest_from_records(
+            executable_records,
+            cwd=Path.cwd(),
+            environment=verification_environment,
+        )
+        if not secrets.compare_digest(
+            str(expected_executables.get(next_source_key, "")), executable_digest
+        ):
+            return "executable-drift", (
+                time.perf_counter_ns() - started_ns
+            ) / 1_000_000
+        if not secrets.compare_digest(
+            str(expected_environments.get(next_source_key, "")), environment_digest
+        ):
+            return "environment-drift", (
+                time.perf_counter_ns() - started_ns
+            ) / 1_000_000
+        with _state_lock():
+            current_state = json.loads(state_path.read_text(encoding="utf-8"))
+        current_verification = current_state.get("verification")
+        if (
+            not isinstance(current_verification, dict)
+            or current_verification.get("status") != "running"
+            or current_verification.get("last_batch_digest") != batch_digest
+            or current_verification.get("runner_token_digest")
+            != verification.get("runner_token_digest")
+        ):
+            return "claim-or-cancellation-changed", (
+                time.perf_counter_ns() - started_ns
+            ) / 1_000_000
+        return "", (time.perf_counter_ns() - started_ns) / 1_000_000
+    except Exception:
+        return "boundary-check-failed", (
+            time.perf_counter_ns() - started_ns
+        ) / 1_000_000
 
 
 def _run_verification(
@@ -3949,6 +4371,29 @@ def _run_verification(
     if grouping_error:
         sys.stderr.write(f"{grouping_error}\n")
         return 2
+    command_plans = batch.pop("_click_command_plans", None)
+    if not isinstance(command_plans, dict):
+        sys.stderr.write("Click verification runner lost its command outcome binding.\n")
+        return 2
+    incremental_batch_id = batch.pop("_click_incremental_batch_id", "")
+    if not isinstance(incremental_batch_id, str):
+        incremental_batch_id = ""
+    reporting, reporting_error = click_diagnostics.validate_reporting(
+        batch.get("reporting")
+    )
+    if reporting_error or reporting is None:
+        sys.stderr.write(
+            f"{reporting_error or 'Click verification reporting policy was invalid.'}\n"
+        )
+        return 2
+    failure_collection, collection_error = _validate_failure_collection(
+        batch.get("failure_collection"), checks
+    )
+    if collection_error or failure_collection is None:
+        sys.stderr.write(
+            f"{collection_error or 'Click failure collection policy was invalid.'}\n"
+        )
+        return 2
     verification_environment = batch.pop("_click_verification_environment", None)
     if not isinstance(verification_environment, dict):
         sys.stderr.write(
@@ -3995,14 +4440,114 @@ def _run_verification(
     exit_code = 2 if snapshot_failed else 0
     succeeded_count = 0
     source_durations_ms: dict[str, float] = {}
-    source_results: dict[str, dict[str, Any]] = {}
+    source_results = click_incremental.new_source_results(command_plans)
+    diagnostic_records: list[dict[str, Any]] = []
+    task_ref = hashlib.sha256(
+        (str(state_path.resolve(strict=False)) + ":" + str(shadow_revision)).encode()
+    ).hexdigest()
     source_completed_commands: dict[str, int] = {}
     per_source_shadow_records: dict[str, list[dict[str, Any]]] = {}
     authoritative_envelopes: dict[str, dict[str, Any]] = {}
     source_key = ""
+    command_plan: dict[str, Any] | None = None
+    command_actual_started_ns: int | None = None
+    overall_exit_code = 0
+    collection_active = False
+    collection_first_failure_ns: int | None = None
+    collection_failed_source_key = ""
+    collection_admitted_source_keys: set[str] = set()
+    collection_result: dict[str, Any] = {
+        "version": FAILURE_COLLECTION_VERSION,
+        "batch_ref": batch_digest,
+        "requested_mode": failure_collection["mode"],
+        "status": "not-triggered",
+        "first_failure_source_id": "",
+        "admitted_source_ids": [],
+        "additional_sources_started": 0,
+        "additional_failures": 0,
+        "boundary_checks": 0,
+        "boundary_check_ms": 0.0,
+        "stop_reason": "no-failure",
+    }
+    if snapshot_failed:
+        collection_result.update(
+            status="stopped", stop_reason="runner-admission-failed"
+        )
     if not snapshot_failed:
         try:
             for index, check in enumerate(checks, start=1):
+                candidate_source_key = _evidence_key(str(check["evidence_id"]))
+                if collection_active and candidate_source_key == collection_failed_source_key:
+                    # complete_source_command already marked the remaining
+                    # commands in this same source as not-run.
+                    continue
+                if (
+                    collection_active
+                    and candidate_source_key not in collection_admitted_source_keys
+                ):
+                    elapsed_since_failure_ms = (
+                        (time.perf_counter_ns() - collection_first_failure_ns)
+                        / 1_000_000
+                        if collection_first_failure_ns is not None
+                        else float("inf")
+                    )
+                    next_evidence_id = str(check["evidence_id"])
+                    if next_evidence_id not in failure_collection["independent_sources"]:
+                        collection_result.update(
+                            status="stopped",
+                            stop_reason="source-not-explicitly-independent",
+                        )
+                        break
+                    if (
+                        collection_result["additional_sources_started"]
+                        >= failure_collection["max_extra_sources"]
+                    ):
+                        collection_result.update(
+                            status="stopped", stop_reason="source-budget-exhausted"
+                        )
+                        break
+                    if elapsed_since_failure_ms > failure_collection["start_window_ms"]:
+                        collection_result.update(
+                            status="stopped", stop_reason="start-window-expired"
+                        )
+                        break
+                    boundary_reason, boundary_ms = _collection_boundary_check(
+                        state_path,
+                        batch_digest,
+                        runner_token,
+                        next_source_key=candidate_source_key,
+                        grouped_checks=grouped_checks,
+                        before=before,
+                        verification_environment=verification_environment,
+                        file_content_digest=file_content_digest,
+                        git_workspace_snapshot=git_workspace_snapshot,
+                    )
+                    collection_result["boundary_checks"] += 1
+                    collection_result["boundary_check_ms"] = round(
+                        float(collection_result["boundary_check_ms"]) + boundary_ms,
+                        3,
+                    )
+                    if boundary_reason:
+                        collection_result.update(
+                            status="stopped", stop_reason=boundary_reason
+                        )
+                        break
+                    collection_admitted_source_keys.add(candidate_source_key)
+                    collection_result["additional_sources_started"] += 1
+                    collection_result["admitted_source_ids"].append(
+                        next_evidence_id
+                    )
+                    collection_failed_source_key = ""
+                    print(
+                        "[Click] Bounded failure collection admitted explicitly "
+                        f"independent source {next_evidence_id}.",
+                        flush=True,
+                    )
+                command_plan = None
+                command_actual_started_ns = None
+                command_finished_ns = None
+                diagnostic_record: dict[str, Any] | None = None
+                capture_box: dict[str, Any] = {}
                 argv = check["argv"]
                 rendered = (
                     subprocess.list2cmdline(argv)
@@ -4015,13 +4560,39 @@ def _run_verification(
                     flush=True,
                 )
                 source_key = _evidence_key(str(check["evidence_id"]))
+                source_position = source_completed_commands.get(source_key, 0) + 1
+                plans_for_source = command_plans.get(source_key)
+                if (
+                    not isinstance(plans_for_source, list)
+                    or source_position > len(plans_for_source)
+                ):
+                    raise RuntimeError("command outcome binding unavailable")
+                command_plan = plans_for_source[source_position - 1]
+                command_check_digest = str(command_plan["check_digest"])
                 def on_target_start() -> None:
-                    if source_key not in source_results:
-                        source_results[source_key] = {
-                            "started": True, "completed": False, "status": "running",
-                            "reason_code": "command-started",
-                        }
-                        _record_incremental_start(state_path, batch_digest, runner_token, source_key)
+                    nonlocal command_actual_started_ns
+                    if command_actual_started_ns is not None:
+                        return
+                    command_actual_started_ns = time.perf_counter_ns()
+                    started_offset_ms = (
+                        command_actual_started_ns - runner_started_ns
+                    ) / 1_000_000
+                    if click_incremental.start_source_command(
+                        source_results,
+                        source_key,
+                        position=int(command_plan["position"]),
+                        check_digest=command_check_digest,
+                        started_offset_ms=started_offset_ms,
+                    ):
+                        _record_incremental_start(
+                            state_path,
+                            batch_digest,
+                            runner_token,
+                            source_key,
+                            position=int(command_plan["position"]),
+                            check_digest=command_check_digest,
+                            started_offset_ms=started_offset_ms,
+                        )
                 check_digest = (
                     shadow_bindings.get(source_key)
                     if isinstance(shadow_bindings, dict)
@@ -4049,11 +4620,20 @@ def _run_verification(
                     and isinstance(before.get("digest"), str)
                     and re.fullmatch(r"[0-9a-f]{64}", before["digest"])
                 )
-                command_started = time.perf_counter_ns()
+                command_dispatch_started_ns = time.perf_counter_ns()
                 def execute_current() -> int:
-                    execute_unobserved = lambda current=argv: execute_commands(
-                        [current], environment=verification_environment
-                    )
+                    def execute_unobserved(current: list[str] = argv) -> int:
+                        if execute_commands is _execute_argv_commands:
+                            return execute_commands(
+                                [current],
+                                environment=verification_environment,
+                                capture_output=capture_box,
+                                capture_limit_bytes=int(reporting["max_bytes"]),
+                                capture_tee=reporting["format"] == "raw",
+                            )
+                        return execute_commands(
+                            [current], environment=verification_environment
+                        )
                     observer_compatible = bool(
                         click_inspection.execution_argv(argv) == argv
                         and not click_inspection.is_git_remote_output_request(argv)
@@ -4126,53 +4706,230 @@ def _run_verification(
                             flush=True,
                         )
                         return shadow_result.exit_code
-                    return execute_commands([argv], environment=verification_environment)
+                    return execute_unobserved()
                 try:
                     with click_process.observe_target_start(on_target_start):
                         exit_code = execute_current()
                     # Injected test executors own their admission boundary; the
                     # production executor reports after successful Popen/resume.
-                    if execute_commands is not _execute_argv_commands and source_key not in source_results:
+                    if (
+                        execute_commands is not _execute_argv_commands
+                        and command_actual_started_ns is None
+                    ):
                         on_target_start()
                 finally:
-                    elapsed_ms = (time.perf_counter_ns() - command_started) / 1_000_000
-                    if source_key in source_results:
-                        source_durations_ms[source_key] = source_durations_ms.get(source_key, 0) + elapsed_ms
-                source_completed_commands[source_key] = source_completed_commands.get(source_key, 0) + 1
-                group_completed = source_completed_commands[source_key] == len(grouped_checks[source_key])
-                if source_key in source_results:
-                    source_results[source_key].update(
-                        completed=exit_code != 0 or group_completed,
-                        status="interrupted" if exit_code == 130 else "failed" if exit_code != 0 else "passed" if group_completed else "running",
-                        reason_code="command-interrupted" if exit_code == 130 else "command-failed" if exit_code != 0 else "command-passed",
+                    command_finished_ns = time.perf_counter_ns()
+                    elapsed_ms = (
+                        command_finished_ns - command_dispatch_started_ns
+                    ) / 1_000_000
+                    source_durations_ms[source_key] = (
+                        source_durations_ms.get(source_key, 0) + elapsed_ms
                     )
-                    if source_results[source_key]["completed"]:
-                        _record_incremental_completion(
-                            state_path,
-                            batch_digest,
-                            runner_token,
-                            source_key,
-                            status=str(source_results[source_key]["status"]),
-                            reason=str(source_results[source_key]["reason_code"]),
-                            duration_ms=source_durations_ms.get(source_key),
+                try:
+                    diagnostic_record = click_diagnostics.build_record(
+                        capture_box,
+                        argv=(
+                            check.get("_click_approved_argv")
+                            if isinstance(check.get("_click_approved_argv"), list)
+                            else argv
+                        ),
+                        workspace=shadow_workspace,
+                        state_path=state_path,
+                        batch_ref=batch_digest,
+                        batch_id=incremental_batch_id,
+                        task_ref=task_ref,
+                        revision=int(shadow_revision),
+                        evidence_id=str(check["evidence_id"]),
+                        source_key=source_key,
+                        command_position=int(command_plan["position"]),
+                        check_digest=command_check_digest,
+                        exit_code=int(exit_code),
+                        reporting=reporting,
+                    )
+                    diagnostic_records.append(diagnostic_record)
+                    if reporting["format"] == "actionable":
+                        print(
+                            click_diagnostics.render_actionable(diagnostic_record),
+                            flush=True,
                         )
-                if exit_code != 0:
-                    break
-                succeeded_count += 1
-        except KeyboardInterrupt:
-            exit_code = 130
-            if source_key in source_results:
-                source_results[source_key].update(
-                    status="interrupted", completed=True, reason_code="command-interrupted"
+                except Exception:
+                    diagnostic_record = None
+                    if reporting["format"] == "actionable":
+                        print(
+                            "[Click diagnostic] Structured details were unavailable; "
+                            "the check was not repeated.",
+                            flush=True,
+                        )
+                source_completed_commands[source_key] = source_completed_commands.get(source_key, 0) + 1
+                command_status = (
+                    "interrupted" if exit_code == 130
+                    else "failed" if exit_code != 0
+                    else "passed"
+                )
+                command_reason = (
+                    "command-interrupted" if exit_code == 130
+                    else "command-failed" if exit_code != 0
+                    else "command-passed"
+                )
+                finished_offset_ms = (
+                    (command_finished_ns - runner_started_ns) / 1_000_000
+                    if command_finished_ns is not None
+                    and command_actual_started_ns is not None
+                    else None
+                )
+                command_duration_ms = (
+                    (command_finished_ns - command_actual_started_ns) / 1_000_000
+                    if command_finished_ns is not None
+                    and command_actual_started_ns is not None
+                    else None
+                )
+                click_incremental.complete_source_command(
+                    source_results,
+                    source_key,
+                    position=int(command_plan["position"]),
+                    check_digest=command_check_digest,
+                    status=command_status,
+                    reason=command_reason,
+                    finished_offset_ms=finished_offset_ms,
+                    duration_ms=command_duration_ms,
+                    exit_code=exit_code,
+                    log_ref=(
+                        diagnostic_record.get("log_ref")
+                        if isinstance(diagnostic_record, dict)
+                        else None
+                    ),
                 )
                 _record_incremental_completion(
                     state_path,
                     batch_digest,
                     runner_token,
                     source_key,
+                    position=int(command_plan["position"]),
+                    check_digest=command_check_digest,
+                    status=command_status,
+                    reason=command_reason,
+                    finished_offset_ms=finished_offset_ms,
+                    duration_ms=command_duration_ms,
+                    source_duration_ms=source_durations_ms.get(source_key),
+                    exit_code=exit_code,
+                    diagnostic_record=diagnostic_record,
+                    reporting=reporting,
+                )
+                if exit_code != 0:
+                    if overall_exit_code == 0:
+                        overall_exit_code = int(exit_code)
+                    failure_kind = (
+                        str(diagnostic_record.get("failure_kind", "unknown"))
+                        if isinstance(diagnostic_record, dict)
+                        else "unknown"
+                    )
+                    if collection_active:
+                        collection_result["additional_failures"] += 1
+                        collection_failed_source_key = source_key
+                        if exit_code == 130:
+                            collection_result.update(
+                                status="stopped", stop_reason="command-interrupted"
+                            )
+                            break
+                        if failure_kind != "test-failure":
+                            collection_result.update(
+                                status="stopped",
+                                stop_reason="unsupported-failure-profile",
+                            )
+                            break
+                        if (
+                            collection_result["additional_failures"]
+                            >= failure_collection["max_extra_failures"]
+                        ):
+                            collection_result.update(
+                                status="stopped",
+                                stop_reason="failure-budget-exhausted",
+                            )
+                            break
+                        continue
+                    if failure_collection["mode"] != "bounded":
+                        collection_result.update(
+                            status="disabled", stop_reason="fail-fast-default"
+                        )
+                        break
+                    if (
+                        str(check["evidence_id"])
+                        not in failure_collection["independent_sources"]
+                    ):
+                        collection_result.update(
+                            status="stopped",
+                            stop_reason="source-not-explicitly-independent",
+                        )
+                        break
+                    if exit_code == 130:
+                        collection_result.update(
+                            status="stopped", stop_reason="command-interrupted"
+                        )
+                        break
+                    if failure_kind != "test-failure":
+                        collection_result.update(
+                            status="stopped",
+                            stop_reason="unsupported-failure-profile",
+                        )
+                        break
+                    collection_active = True
+                    collection_first_failure_ns = command_finished_ns
+                    collection_failed_source_key = source_key
+                    collection_admitted_source_keys.add(source_key)
+                    collection_result.update(
+                        status="collecting",
+                        first_failure_source_id=str(check["evidence_id"]),
+                        admitted_source_ids=[str(check["evidence_id"])],
+                        stop_reason="collection-active",
+                    )
+                    continue
+                if overall_exit_code == 0:
+                    succeeded_count += 1
+            if collection_active and collection_result["status"] == "collecting":
+                collection_result.update(
+                    status="completed", stop_reason="batch-exhausted"
+                )
+            if overall_exit_code != 0:
+                exit_code = overall_exit_code
+        except KeyboardInterrupt:
+            exit_code = 130
+            collection_result.update(
+                status="stopped", stop_reason="runner-interrupted"
+            )
+            if source_key in source_results and command_plan is not None:
+                command_finished_ns = time.perf_counter_ns()
+                finished_offset_ms = (
+                    (command_finished_ns - runner_started_ns) / 1_000_000
+                    if command_actual_started_ns is not None else None
+                )
+                command_duration_ms = (
+                    (command_finished_ns - command_actual_started_ns) / 1_000_000
+                    if command_actual_started_ns is not None else None
+                )
+                click_incremental.complete_source_command(
+                    source_results,
+                    source_key,
+                    position=int(command_plan["position"]),
+                    check_digest=str(command_plan["check_digest"]),
                     status="interrupted",
                     reason="command-interrupted",
-                    duration_ms=source_durations_ms.get(source_key),
+                    finished_offset_ms=finished_offset_ms,
+                    duration_ms=command_duration_ms,
+                    exit_code=130,
+                )
+                _record_incremental_completion(
+                    state_path,
+                    batch_digest,
+                    runner_token,
+                    source_key,
+                    position=int(command_plan["position"]),
+                    check_digest=str(command_plan["check_digest"]),
+                    status="interrupted",
+                    reason="command-interrupted",
+                    finished_offset_ms=finished_offset_ms,
+                    duration_ms=command_duration_ms,
+                    source_duration_ms=source_durations_ms.get(source_key),
+                    exit_code=130,
                 )
             sys.stderr.write(
                 "[Click] Verification was interrupted. The active check was stopped "
@@ -4180,19 +4937,43 @@ def _run_verification(
             )
         except Exception:
             exit_code = 2
-            if source_key in source_results:
-                source_results[source_key].update(
-                    status="unknown", completed=False, reason_code="command-error"
+            collection_result.update(
+                status="stopped", stop_reason="runner-error"
+            )
+            if source_key in source_results and command_plan is not None:
+                command_finished_ns = time.perf_counter_ns()
+                finished_offset_ms = (
+                    (command_finished_ns - runner_started_ns) / 1_000_000
+                    if command_actual_started_ns is not None else None
+                )
+                command_duration_ms = (
+                    (command_finished_ns - command_actual_started_ns) / 1_000_000
+                    if command_actual_started_ns is not None else None
+                )
+                click_incremental.complete_source_command(
+                    source_results,
+                    source_key,
+                    position=int(command_plan["position"]),
+                    check_digest=str(command_plan["check_digest"]),
+                    status="unknown",
+                    reason="command-error",
+                    finished_offset_ms=finished_offset_ms,
+                    duration_ms=command_duration_ms,
+                    exit_code=None,
                 )
                 _record_incremental_completion(
                     state_path,
                     batch_digest,
                     runner_token,
                     source_key,
+                    position=int(command_plan["position"]),
+                    check_digest=str(command_plan["check_digest"]),
                     status="unknown",
                     reason="command-error",
-                    duration_ms=source_durations_ms.get(source_key),
-                    completed=False,
+                    finished_offset_ms=finished_offset_ms,
+                    duration_ms=command_duration_ms,
+                    source_duration_ms=source_durations_ms.get(source_key),
+                    exit_code=None,
                 )
             sys.stderr.write("[Click] The command boundary failed; no check was repeated.\n")
 
@@ -4287,20 +5068,18 @@ def _run_verification(
                 shadow_intelligence_baselines[source_key] = baseline
 
     shadow_source_exit_codes: dict[str, int] = {}
-    for source_key, check_positions in (
-        {
-            key: [
-                index
-                for index, check in enumerate(checks)
-                if click_evidence.evidence_key(str(check["evidence_id"])) == key
-            ]
-            for key in combined_shadow_records
-        }.items()
-    ):
-        if check_positions and all(position < succeeded_count for position in check_positions):
+    for source_key in combined_shadow_records:
+        precise = click_incremental.source_command_outcome(
+            source_results.get(source_key), command_plans.get(source_key, [])
+        )
+        if precise is not None and precise["valid"] and precise["status"] == "passed":
             shadow_source_exit_codes[source_key] = 0
-        elif check_positions and succeeded_count in check_positions and exit_code != 0:
-            shadow_source_exit_codes[source_key] = exit_code
+        elif (
+            precise is not None
+            and precise["valid"]
+            and isinstance(precise["exit_code"], int)
+        ):
+            shadow_source_exit_codes[source_key] = int(precise["exit_code"])
 
     with _state_lock():
         recorded = _record_verification_result(
@@ -4324,6 +5103,9 @@ def _run_verification(
                 shadow_contexts if isinstance(shadow_contexts, dict) else {}
             ),
             observer_mode=observer_mode,
+            diagnostic_records=diagnostic_records,
+            reporting=reporting,
+            collection_result=collection_result,
             git_capture=git_capture,
         )
     if not recorded:

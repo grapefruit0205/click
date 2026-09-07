@@ -306,11 +306,37 @@ def redact_git_remote_output(data: bytes) -> bytes:
 
 def write_runner_stream(handle: Any | None, data: bytes, *, error: bool = False) -> None:
     if handle is not None:
-        handle.write(data)
+        try:
+            handle.write(data)
+        except TypeError:
+            handle.write(data.decode("utf-8", errors="replace"))
         return
-    target = sys.stderr.buffer if error else sys.stdout.buffer
-    target.write(data)
+    stream = sys.stderr if error else sys.stdout
+    target = getattr(stream, "buffer", stream)
+    try:
+        target.write(data)
+    except TypeError:
+        target.write(data.decode("utf-8", errors="replace"))
     target.flush()
+
+
+class _RunnerStreamTarget:
+    """Binary writer that preserves the runner's existing output adapters."""
+
+    def __init__(self, handle: Any | None, *, error: bool) -> None:
+        self.handle = handle
+        self.error = error
+
+    def write(self, data: bytes) -> int:
+        write_runner_stream(self.handle, data, error=self.error)
+        return len(data)
+
+    def flush(self) -> None:
+        if self.handle is not None:
+            try:
+                self.handle.flush()
+            except (AttributeError, OSError, ValueError):
+                pass
 
 
 def execute_argv_commands(
@@ -321,6 +347,9 @@ def execute_argv_commands(
     trusted_read_only: bool = False,
     workspace: Path | None = None,
     environment: dict[str, str] | None = None,
+    capture_output: dict[str, Any] | None = None,
+    capture_limit_bytes: int = 64 * 1024,
+    capture_tee: bool = True,
 ) -> int:
     exit_code = 0
     for argv in commands:
@@ -340,25 +369,53 @@ def execute_argv_commands(
                     )
                     return 2
                 prepared[0] = executable
-            result = click_process.run_argv(
-                prepared,
-                target=True,
-                stdout=subprocess.PIPE if redact else stdout_file,
-                stderr=subprocess.PIPE if redact else stderr_file,
-                env=(
-                    sanitized_read_only_environment(workspace=workspace)
-                    if trusted_read_only
-                    else environment
-                ),
+            effective_environment = (
+                sanitized_read_only_environment(workspace=workspace)
+                if trusted_read_only
+                else environment
             )
+            if capture_output is not None and not redact:
+                captured = click_process.run_argv_captured(
+                    prepared,
+                    target=True,
+                    stdout_target=(
+                        _RunnerStreamTarget(stdout_file, error=False)
+                        if capture_tee else None
+                    ),
+                    stderr_target=(
+                        _RunnerStreamTarget(stderr_file, error=True)
+                        if capture_tee else None
+                    ),
+                    capture_limit_bytes=capture_limit_bytes,
+                    env=effective_environment,
+                )
+                capture_output.clear()
+                capture_output.update(status="complete", process=captured)
+                exit_code = int(captured.returncode)
+                result = None
+            else:
+                if capture_output is not None:
+                    capture_output.clear()
+                    capture_output.update(
+                        status="unsupported", reason="redacted-command-output"
+                    )
+                result = click_process.run_argv(
+                    prepared,
+                    target=True,
+                    stdout=subprocess.PIPE if redact else stdout_file,
+                    stderr=subprocess.PIPE if redact else stderr_file,
+                    env=effective_environment,
+                )
             if redact:
+                assert result is not None
                 write_runner_stream(stdout_file, redact_git_remote_output(result.stdout or b""))
                 write_runner_stream(
                     stderr_file,
                     redact_git_remote_output(result.stderr or b""),
                     error=True,
                 )
-            exit_code = int(result.returncode)
+            if result is not None:
+                exit_code = int(result.returncode)
         except OSError as exc:
             message = f"Click could not start `{argv[0]}`: {exc}\n"
             if stderr_file is None:
@@ -366,6 +423,9 @@ def execute_argv_commands(
             else:
                 stderr_file.write(message.encode())
             exit_code = 127
+            if capture_output is not None:
+                capture_output.clear()
+                capture_output.update(status="missing", reason="process-start-failed")
         if exit_code != 0:
             break
     return exit_code

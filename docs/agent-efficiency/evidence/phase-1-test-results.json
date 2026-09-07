@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "kind": "observed-local-phase-1-test-results",
+  "observed_at": "2026-09-07T18:58:07+09:00",
+  "workdir": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "final_product_code_suite": {
+    "evidence_id": "E-P1-final-regression",
+    "parent_argv": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-q"
+    ],
+    "expanded_shards": 8,
+    "tests_run": 822,
+    "passed": 815,
+    "skipped": 7,
+    "failed": 0,
+    "sum_reported_test_seconds": 676.473,
+    "runner_exit_code": 0,
+    "timing_note": "Sum of unittest-reported shard durations; Click reported about 11 minutes 19 seconds including its verification path."
+  },
+  "mandatory_sharding_reuse_matrix": [
+    {
+      "evidence_id": "E-P1-sharding-regression",
+      "tests_run": 74,
+      "passed": 72,
+      "skipped": 2,
+      "failed": 0,
+      "elapsed_seconds": 104.188
+    },
+    {
+      "evidence_id": "E-P1-shard-reuse-regression",
+      "tests_run": 8,
+      "passed": 8,
+      "skipped": 0,
+      "failed": 0,
+      "elapsed_seconds": 33.125
+    }
+  ],
+  "additional_overlapping_checks": [
+    {
+      "evidence_id": "E-P1-verification-suite",
+      "tests_run": 217,
+      "passed": 217,
+      "skipped": 0,
+      "failed": 0,
+      "elapsed_seconds": 154.991
+    },
+    {
+      "evidence_id": "E-P1-interruption-fix",
+      "tests_run": 18,
+      "passed": 18,
+      "skipped": 0,
+      "failed": 0,
+      "elapsed_seconds": 6.072
+    }
+  ],
+  "preliminary_failures": [
+    {
+      "evidence_id": "E-P1-full-regression",
+      "result": "failed",
+      "cause": "A legacy direct record_result test did not provide the command facts required by its newly created v5 batch.",
+      "resolution": "The compatibility wrapper and fixture now pass valid exact outcomes; the final 217-test shard passed."
+    },
+    {
+      "evidence_id": "E-P1-observation-compat",
+      "result": "failed",
+      "cause": "The click_gate compatibility wrapper initially omitted new optional record_result parameters.",
+      "resolution": "The wrapper forwards the optional exact-outcome and timing fields while preserving existing arguments."
+    },
+    {
+      "evidence_id": "E-P1-prestart-interruption",
+      "result": "failed",
+      "cause": "A target interrupted before its observed start was mistaken for a legacy admission rejection, leaving the measurement batch running.",
+      "resolution": "Only an all-planned v5 result uses the admission-rejection path; an explicit unknown outcome now finalizes the batch as interrupted."
+    }
+  ],
+  "skip_reason": "The same two native authoritative automatic-sharding E2E cases require a prepared native authoritative profile; the remaining five skips are existing platform or environment conditions in other shards.",
+  "authority": "Observed Click Evidence output. This JSON is a report artifact, not a receipt and does not grant reuse."
+}

@@ -1,0 +1,96 @@
+{
+  "source_root": "/home/grapefruit/click-agent-efficiency-prompts-v2",
+  "files": {
+    "00-audit-and-baseline.md": {
+      "kind": "file",
+      "sha256": "7e7b55e990f78d9e9e2ce65322d637ada52b912c072f2c7b83d3954b52a4675f",
+      "size": 11440,
+      "mode": 420
+    },
+    "01-command-outcomes.md": {
+      "kind": "file",
+      "sha256": "0698f1a6e289a62c7f77977c0fe5bab38396fa3939f6f24307d4043b3c343048",
+      "size": 2676,
+      "mode": 420
+    },
+    "02-actionable-report.md": {
+      "kind": "file",
+      "sha256": "1bd1fce8f17862b505c7f266f38b776af46a51cfb5922e7064e737b9ed9b8f44",
+      "size": 3893,
+      "mode": 420
+    },
+    "03-bounded-failure-collection.md": {
+      "kind": "file",
+      "sha256": "7c17abd910698e884ccb32ef09107e16b02dea5ab9e29b8fc7e49c95182518e1",
+      "size": 3623,
+      "mode": 420
+    },
+    "04-paired-evaluation.md": {
+      "kind": "file",
+      "sha256": "b3c61daae2d06b1d225178ad184b31349c1f5933843f4e93083fd8a826eb0e74",
+      "size": 6180,
+      "mode": 420
+    },
+    "05-dashboard-and-final.md": {
+      "kind": "file",
+      "sha256": "aab4bd5f9a91a51f6a9994c604067817d82e114588176a10633451f56fe57533",
+      "size": 8254,
+      "mode": 420
+    },
+    "APPLY-TO-EXISTING.md": {
+      "kind": "file",
+      "sha256": "ab430b3554cd6520704890d3bff01b78c15f8cdd4876f207aafd8274f01e3d8e",
+      "size": 4552,
+      "mode": 420
+    },
+    "CHANGELOG.md": {
+      "kind": "file",
+      "sha256": "9f7e494adc9f596b8f3512a9ddbe1e70fffe19417ccc6b3c9f079c3a1bb32cb3",
+      "size": 1404,
+      "mode": 420
+    },
+    "COMMON.md": {
+      "kind": "file",
+      "sha256": "ab539f8c613e990f94d70f313f2ca0cc64da530e4e459db8c0ba679dffa1fd0b",
+      "size": 7069,
+      "mode": 420
+    },
+    "DISPLAY-REQUIREMENTS.md": {
+      "kind": "file",
+      "sha256": "161719f00ecaf9c18d75d6147519be59ebbb2337a90a9c1850a943975d412210",
+      "size": 4145,
+      "mode": 420
+    },
+    "ESTIMATES.md": {
+      "kind": "file",
+      "sha256": "284965431cfe7a7f0b75c99e0fb68746fe1c4c05525573552d880a50b975e38e",
+      "size": 859,
+      "mode": 420
+    },
+    "README.md": {
+      "kind": "file",
+      "sha256": "8836557d9b7c0d190054e4fb84ced6b02a465c4586e015c0626cd663fd9e0d4e",
+      "size": 1963,
+      "mode": 420
+    },
+    "SOURCE.md": {
+      "kind": "file",
+      "sha256": "3b61294e73ebe745aeb822b44d7e3cbee04cff15a936a32b3eab87b217497f1a",
+      "size": 470,
+      "mode": 420
+    },
+    "phase-manifest.json": {
+      "kind": "file",
+      "sha256": "47fc3edb2e3fafefbee362c3dfc1001a868afab3acfb439faba7ae7a0da2f683",
+      "size": 1587,
+      "mode": 420
+    },
+    "prompt-changes.diff": {
+      "kind": "file",
+      "sha256": "956ca39e22a9fccc434a470cae1734c0c5f092f7e6b4c3921137b85a78f2f6e8",
+      "size": 19772,
+      "mode": 420
+    }
+  },
+  "auto_advance": false
+}

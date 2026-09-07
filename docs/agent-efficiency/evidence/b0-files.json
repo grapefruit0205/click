@@ -1,0 +1,1807 @@
+{
+  "schema_version": 1,
+  "snapshot_root": "/home/grapefruit/click-agent-efficiency-baselines/b0-20260907T070638Z",
+  "head": "3b7f8e6ec260729b4ba8a13484ea4c33dce7baeb",
+  "files": {
+    ".agents/plugins/marketplace.json": {
+      "kind": "file",
+      "sha256": "952735897c04581a7abd7c4e4631853ce83e3486d4c1237d9c68836ec86f64ee",
+      "size": 401,
+      "mode": 436
+    },
+    ".click/evidence-reuse.json": {
+      "kind": "file",
+      "sha256": "5d6db003f11840861fd0a0f52c3b72ead3a463882bafda3375644e20acee605b",
+      "size": 4922,
+      "mode": 436
+    },
+    ".click/evidence-shards.json": {
+      "kind": "file",
+      "sha256": "2f6f5159fd4c07df5c7d37b4abb48a67c159c7e7168c05b0224b8daee1466eca",
+      "size": 8677,
+      "mode": 436
+    },
+    ".codex-plugin/plugin.json": {
+      "kind": "file",
+      "sha256": "fffd72296f62b8bcbeb6f5259236301b4a926a65d185bae2713cc8dbc0ef4092",
+      "size": 2698,
+      "mode": 436
+    },
+    ".github/dependabot.yml": {
+      "kind": "file",
+      "sha256": "c4aed7cf542077ddebd4225bd9462b024643d6506768b97223fca500137ad1db",
+      "size": 150,
+      "mode": 436
+    },
+    ".github/workflows/ci.yml": {
+      "kind": "file",
+      "sha256": "24db1ce8d9f39c3af16ed618401d1e6f6dcb707e7ab4cd2b2a9b84972dcb0989",
+      "size": 6146,
+      "mode": 436
+    },
+    ".github/workflows/plugin-security.yml": {
+      "kind": "file",
+      "sha256": "0fa92dfb07d556ae6ab919dde74309798472fd90b706d6358adda905ff317b67",
+      "size": 610,
+      "mode": 436
+    },
+    ".gitignore": {
+      "kind": "file",
+      "sha256": "b6786eb1a962c4550b781fd25496fcbee9d3b9b459f8893a234dae336e35216b",
+      "size": 197,
+      "mode": 436
+    },
+    "COMMUNITY_POSTS.md": {
+      "kind": "file",
+      "sha256": "b557043c94052067553e35076920ee13c2ce4742fd6146657e59fd7622abd8bc",
+      "size": 5512,
+      "mode": 436
+    },
+    "COMPATIBILITY_SURFACE.md": {
+      "kind": "file",
+      "sha256": "2a8eda57532bfe83ee223ad031cbb5aa9cb929833e265df42486fcd85bf47bfc",
+      "size": 3333,
+      "mode": 436
+    },
+    "GUARD_CLASSIFICATION.md": {
+      "kind": "file",
+      "sha256": "8b7ce9c0d1fd3b8e010de64f06aa9ed42f5a84ccc6955982902198e35f587f9a",
+      "size": 21758,
+      "mode": 436
+    },
+    "LICENSE": {
+      "kind": "file",
+      "sha256": "ecc54633274c4443b301dcc8dc7000423c2d284d6de267a99f8944bd660ddde7",
+      "size": 1068,
+      "mode": 436
+    },
+    "PRODUCT_CONSTITUTION.md": {
+      "kind": "file",
+      "sha256": "cccf3931958bde640f24d96855753623e3e9ab82d192628d6807cc26f57d9b51",
+      "size": 7764,
+      "mode": 436
+    },
+    "README.ko.md": {
+      "kind": "file",
+      "sha256": "ded7c91057be376691f11b75e373fd86671b92b6fe175007f684ad7569d6bb2f",
+      "size": 17369,
+      "mode": 436
+    },
+    "README.md": {
+      "kind": "file",
+      "sha256": "0077b441bd06e1304f4e61b717eeea72d20b43a1265011ac1346e1e3789f5289",
+      "size": 18762,
+      "mode": 436
+    },
+    "README.zh-CN.md": {
+      "kind": "file",
+      "sha256": "027b38ae309e2ec8ed0878f8eafca0efe7fab23d2dd63ba12c6479511a5ec962",
+      "size": 12753,
+      "mode": 436
+    },
+    "RELEASE_NOTES.md": {
+      "kind": "file",
+      "sha256": "bca0b363ef4b4bbbbae72be0e76970aec35c8e0192597d871fa567e09804b906",
+      "size": 75897,
+      "mode": 436
+    },
+    "SECURITY.md": {
+      "kind": "file",
+      "sha256": "e8a566f56e983b1d554cf3f9af596e78d7e0daf425413c30b9b0fab734893699",
+      "size": 1636,
+      "mode": 436
+    },
+    "VERIFICATION_EFFICIENCY.md": {
+      "kind": "file",
+      "sha256": "66bd824e3e7d20e647345765a9dfeaa7f8e155caa6db5180fab80b1e75ce63c0",
+      "size": 21995,
+      "mode": 436
+    },
+    "assets/icon.svg": {
+      "kind": "file",
+      "sha256": "776f70c77abb556326a8f6216a06f56e259f5ea24b090f0308fd922db3505468",
+      "size": 643,
+      "mode": 436
+    },
+    "benchmarks/__init__.py": {
+      "kind": "file",
+      "sha256": "09349a8a263256689417c081a7ff470e2f6bd9df23d7b2464e7fa8ac29e6722d",
+      "size": 55,
+      "mode": 436
+    },
+    "benchmarks/incremental_verification.py": {
+      "kind": "file",
+      "sha256": "56ea5b1f840e1129b0673fec82e9ebf953cebbd11aa2cb27630d5d5fa8aa72ce",
+      "size": 78283,
+      "mode": 436
+    },
+    "dist/antigravity/README.md": {
+      "kind": "file",
+      "sha256": "fb08e2ab39620eba8f6ee4fed3e6f207b8ecea5d1d85470012e1e0829da941cb",
+      "size": 6268,
+      "mode": 436
+    },
+    "dist/antigravity/hooks.json": {
+      "kind": "file",
+      "sha256": "4cf3e42557d8e300d9aa5005cbe0b0bc9621353191d03e2791a051392489b7f3",
+      "size": 1030,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/__init__.py": {
+      "kind": "file",
+      "sha256": "f32e0bbdb15daa421ebd0c955168f0ba836408e7bf1e80cc787ca2cde1497c9e",
+      "size": 49,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/antigravity_gate.py": {
+      "kind": "file",
+      "sha256": "ae074dec9b0ee7240526395bb74804fe47c69f22936d70ef7b81e8a87373e642",
+      "size": 24054,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_authoritative_observer.py": {
+      "kind": "file",
+      "sha256": "a98f2576fbc8d2635c96c942e9a71a6b0fdcb966672f4a27a75180fb136ebe51",
+      "size": 34625,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_auto_sharding.py": {
+      "kind": "file",
+      "sha256": "3c35ed8d2c0d72279f6c179125aeacae16debc391a60b88b31ce81c1d9809672",
+      "size": 3776,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_browser.py": {
+      "kind": "file",
+      "sha256": "825884c5ce9b3dcc04ccf03360240492c88db657f3e4dc2fa00607cf5fc74820",
+      "size": 19939,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_browser_advisory.py": {
+      "kind": "file",
+      "sha256": "56c3fcc1405e8e5e25eaee2bef468fab1d1bf943dcadf6a199934f862d02a0d1",
+      "size": 4386,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_capability.py": {
+      "kind": "file",
+      "sha256": "0afec7de1c9fc9200eb1703799c28a9f1a9ba41ac6219d5876a859a790375d94",
+      "size": 6129,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_change_policy.py": {
+      "kind": "file",
+      "sha256": "82a182abc03a74df5f0cacdf73134ab64b93ebd99f3ef2dbe699bb0ab3a3b7cc",
+      "size": 20390,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_claims.py": {
+      "kind": "file",
+      "sha256": "4c2b104adbcdcb2ffa18c67ae225aee13cef9762e97b42bb463ebf9641629d77",
+      "size": 14506,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_collector_runtime.py": {
+      "kind": "file",
+      "sha256": "92673d0b2b03493f5ca9d48442a09b6f565f10af151cc1062bcfac873024c055",
+      "size": 4706,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_contract.py": {
+      "kind": "file",
+      "sha256": "18c5aa12c3b7b7fac6e74f032fd8697e3879a48d42c498b9420500b6c132338d",
+      "size": 12268,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_contract_state.py": {
+      "kind": "file",
+      "sha256": "34f6ff8cd32c9e728cdd920ca643231329fa17914e0a7fbe2496dae64fc73b73",
+      "size": 4199,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_dashboard_projection.py": {
+      "kind": "file",
+      "sha256": "4733edd5992041ef265409e507b1eb9440d1c9094a03ec05ee77a0cfe570fffd",
+      "size": 38816,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_dependency_cache.py": {
+      "kind": "file",
+      "sha256": "cba521044e306d7b0451cb0c1eba4ef23ef7e2b1f0db0fa4666e994c4ab10466",
+      "size": 48949,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_dependency_candidates.py": {
+      "kind": "file",
+      "sha256": "1580d0427e2d3bc81e9d231e3c752a1454034d9c70387e939c33f5fcf287fb49",
+      "size": 13477,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_dependency_trace.py": {
+      "kind": "file",
+      "sha256": "5f69d961a3eef2b6c326934a92a05d81688e7b51880bb2ef2fdf604d910b24be",
+      "size": 7376,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_evidence.py": {
+      "kind": "file",
+      "sha256": "81e3881dbae06331f7f776fd52686db885e91bcf075443375884ff35786f8c85",
+      "size": 33930,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_evidence_shards.py": {
+      "kind": "file",
+      "sha256": "3aa0d7feb6a459b1e28f6fe1bc362d5b517c8ff34db751ca30302583dd52957f",
+      "size": 34148,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_gate.py": {
+      "kind": "file",
+      "sha256": "fe4e215ada98dee9725be4cd0c68a1ddc8af4f1586d7dc3bcc9251879e93ca34",
+      "size": 67772,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_host_coverage.py": {
+      "kind": "file",
+      "sha256": "c80e116b5093bfffc90af4f953a003d4d6777fd1e54b758828f8acb6a1882749",
+      "size": 6343,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_host_router.py": {
+      "kind": "file",
+      "sha256": "89d958423cc05a53dbd4da42d52d9cbee9b5fc00b28f2a7ea0d7d7f734c93b34",
+      "size": 2386,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_import_bootstrap.py": {
+      "kind": "file",
+      "sha256": "23b282d56b5f903f6d5fe0fc57ca2f82401f55ef78ef66aeb0b1c3d3fcae578b",
+      "size": 1101,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_incremental.py": {
+      "kind": "file",
+      "sha256": "d4261d164841f96c48ee0aa8d38629539f295d86c7e8109c336661cf779c7b32",
+      "size": 84106,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_inspection.py": {
+      "kind": "file",
+      "sha256": "2193b8a0c67a614de6d7f899d9f53ff9647bebb4f86dfbc9c492c762962f59e3",
+      "size": 18633,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_inspection_policy.py": {
+      "kind": "file",
+      "sha256": "d81c61fd580b5e6d80eee1a7f39cf31386d172dc5b60207a490d9b48aa259e43",
+      "size": 21689,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_lifecycle.py": {
+      "kind": "file",
+      "sha256": "6bb9a82035d85acd39009dc2b23c283393338a7165c2cda564d91f2919607937",
+      "size": 38299,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_mode.py": {
+      "kind": "file",
+      "sha256": "789fd97eab4c8fede087c8ade96270a435c350e2b4fbef442a6f22d6cbb5ec0a",
+      "size": 3711,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_mutation.py": {
+      "kind": "file",
+      "sha256": "22f626cb3f0b77e45b24ae81d7b6422cbf44e017bbe8d2e8610279bb7858be4c",
+      "size": 23091,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observation.py": {
+      "kind": "file",
+      "sha256": "455e48d53ca4ab85e41298cb5cec340537b5cc29cdd46a5d4ee47721675d118e",
+      "size": 24033,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observation_cache.py": {
+      "kind": "file",
+      "sha256": "6983fffcbf7a47402bb5baf1ba40ab013d68132d23469479c9d2bffe45340985",
+      "size": 23216,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observation_inputs.py": {
+      "kind": "file",
+      "sha256": "ec56d31da3d421517becd2e84031810e8eb330aa85a23e6bb3c543e7385a2b5f",
+      "size": 20934,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_backend.py": {
+      "kind": "file",
+      "sha256": "6438a20666845f13597c6d84457fbf8a1faab858f6fbc96288beb57983262958",
+      "size": 4719,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_bootstrap.py": {
+      "kind": "file",
+      "sha256": "07fbfa51a29f0ac0d0662658cea15f1c0106466e704ef12ce99b3f86e0bc92a2",
+      "size": 2809,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_common.py": {
+      "kind": "file",
+      "sha256": "4b7af8f535ee7d1a33a5eec68794449c8cfe4dad593d4df501d4244d6bb967e1",
+      "size": 9905,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_control.py": {
+      "kind": "file",
+      "sha256": "af2b92d94427b88a06f285ce5293c9624fe5b2e6c7349c183c8e5dec41c10e6e",
+      "size": 1896,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_linux.py": {
+      "kind": "file",
+      "sha256": "334301982596a9752c6389edab8bd5bc07a05ec722536b276c54e146540da39b",
+      "size": 29691,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_macos.py": {
+      "kind": "file",
+      "sha256": "d1689e4c511cb0714781d52e936272d7ca5b4ea4fc80ccb85a3cccec2a9589fe",
+      "size": 43078,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_native.c": {
+      "kind": "file",
+      "sha256": "db226b5cb78d6a568f044eac34479b3f0765221af2de0e5513bcc4ee6fbf5c4c",
+      "size": 16273,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_runtime.py": {
+      "kind": "file",
+      "sha256": "dc44db68c8ecd3302d04ae6b41ec25a5c4fc66153eb1a2591b9b9296c58a20d1",
+      "size": 19433,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_observer_windows.py": {
+      "kind": "file",
+      "sha256": "edadcee9c8fe630bd6bdb8883f164c05b98940c0d9a3ae915f6911a35e77feea",
+      "size": 40004,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_process.py": {
+      "kind": "file",
+      "sha256": "d3b4a6558dca4322a694bed4ec7a8538e5a027ea2359d1702693e5b18942c1c5",
+      "size": 4178,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_prompt.py": {
+      "kind": "file",
+      "sha256": "f4c3e9775813a0b04e3d65cd3519c5980d75730a99308dd7eb38b419d88e554b",
+      "size": 4717,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_pytest_collector.py": {
+      "kind": "file",
+      "sha256": "101065fb3b676113ee52903617d3777777a703722b916599feb8829ee6d6a263",
+      "size": 7686,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_receipt.py": {
+      "kind": "file",
+      "sha256": "66faa04a1c8564c4909695c35fa4dca6f1572d24473733688125a1d773503397",
+      "size": 31456,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_receipt_runtime.py": {
+      "kind": "file",
+      "sha256": "156b9acfbca795b3926ae56e843183128f803759e46849d3e9ea3f9970e43e87",
+      "size": 16127,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_runner_transport.py": {
+      "kind": "file",
+      "sha256": "50fdc5079fbaecb104ac54c92aa2225d56c0c5aaadae115e34cd1b278b8a8183",
+      "size": 4654,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_runtime_state.py": {
+      "kind": "file",
+      "sha256": "1f527d9117bb408d351e8bbe741468239527254a0c03f1e9fd52f9f062d067ec",
+      "size": 2437,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_service.py": {
+      "kind": "file",
+      "sha256": "60fa56c418b3939b243b173bbc9f24d43dcce7ec218d913eb019afe61f42dc94",
+      "size": 29517,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_shadow_dashboard.py": {
+      "kind": "file",
+      "sha256": "b6ddcb129752ab7ccc8246e8558c818d857f737bd878e409fb21c39f9938a08d",
+      "size": 238875,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_shadow_intelligence.py": {
+      "kind": "file",
+      "sha256": "a7e1ea533846a51031282d7b85ab16e341a8b7256e23a9ffd22554ea02823f2e",
+      "size": 48356,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_shard_proposal.py": {
+      "kind": "file",
+      "sha256": "f1bf926a3e9011fd3604a95d7c34cce3d4b6332ee396ca3b52556ed43c874816",
+      "size": 14689,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_sharding_setup.py": {
+      "kind": "file",
+      "sha256": "75ca31099cd565cefc926d8abb4222c87f52d45a20f3a8c69ac34edab2746343",
+      "size": 68361,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_state.py": {
+      "kind": "file",
+      "sha256": "fdab73b5a12c48677543c15904d52ee04bfe931e21605230cc29fa691f89aa5b",
+      "size": 19158,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_test_inventory.py": {
+      "kind": "file",
+      "sha256": "555744d9c7f8670c041f19fd3ede2a8a08c0ac86bd2b5102e0854f6d74417110",
+      "size": 27648,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_unittest_collector.py": {
+      "kind": "file",
+      "sha256": "c6ae6c449e6b1a29ba097cccb47fca5a83ada0b2099e92d59781ca9be6634dc4",
+      "size": 8461,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_verification.py": {
+      "kind": "file",
+      "sha256": "583f7013ebd8e17a5ee9b3f96161b14a2bda0a3f069a2ed55aa87d643aac53fe",
+      "size": 179797,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_verification_meter.py": {
+      "kind": "file",
+      "sha256": "307595658dc9e6e5dfa4da6fb2a7e311f93e071b3c8602e89f8e1c8518397d90",
+      "size": 1593,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/click_verification_policy.py": {
+      "kind": "file",
+      "sha256": "6021b44884f01de07a67b7dcc2a140d57a5c92b244615bb5070370442cd4c70f",
+      "size": 973,
+      "mode": 436
+    },
+    "dist/antigravity/hooks/platform_protocol.py": {
+      "kind": "file",
+      "sha256": "f98c5dc678f310ac4b39a07bb9f59055d150fdbe22d7704dddf6faf7d2e8e917",
+      "size": 3576,
+      "mode": 436
+    },
+    "dist/antigravity/plugin.json": {
+      "kind": "file",
+      "sha256": "d991e764edd96770933964f036c245c1a0eb68545d266c47a0a3e69281346a3e",
+      "size": 238,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/SKILL.md": {
+      "kind": "file",
+      "sha256": "a00884e31d7f072a76062a3f0df205ed716765cde9ea277cd2057ecd7cf0acb1",
+      "size": 13745,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/anti-loop-policy.md": {
+      "kind": "file",
+      "sha256": "68695e8d6bc7d5849792b136ac1107476561897df6e374f0c7a07fd5323d0573",
+      "size": 7917,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/antigravity.md": {
+      "kind": "file",
+      "sha256": "39b5d7106fa9cb5010f6d5cca159563e74eddcbc26475a11cd7b2f44d5a6a007",
+      "size": 3332,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/authoritative-observer-v2.md": {
+      "kind": "file",
+      "sha256": "3b9f369028b6057f90170a86da199ad29eb51441fa173054369f2913b3c34fe4",
+      "size": 5855,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/automatic-sharding-setup.md": {
+      "kind": "file",
+      "sha256": "05d049a040e3c605296191c2dd89d423e50ebe0b158c972c029b394d214fc068",
+      "size": 9755,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/capability-protocol.md": {
+      "kind": "file",
+      "sha256": "17b0d9fd3b7f34ca4cf8f9dcc44b7d736c469d08b441756827a78d177821aaf1",
+      "size": 30007,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/directive-format.md": {
+      "kind": "file",
+      "sha256": "3b7b0c260f2886a44e3d179e604fe1b417f14ef0cf39a5bee4f35d8651940af0",
+      "size": 8233,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/evidence-shards-v1.md": {
+      "kind": "file",
+      "sha256": "ff03c9fff1c0059e3786933babd5342a23824582c10f53656a7f4250abc33fed",
+      "size": 5534,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/modes.md": {
+      "kind": "file",
+      "sha256": "75ec55d92aea55bca5cd81b70a7dc49617d5f0452a027388c27d044f86461efe",
+      "size": 6994,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/observer-v1.md": {
+      "kind": "file",
+      "sha256": "a2926b34daed9e17884fc06c32450ad9c9c88bfabfd9bffa03c282384fd6af9d",
+      "size": 11862,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/shadow-intelligence-v1.md": {
+      "kind": "file",
+      "sha256": "040d3d218ca95d4878912269c2a00e9afc3d5892f25d7897ba68be9c1d8e3ea1",
+      "size": 7380,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/translation-guide.md": {
+      "kind": "file",
+      "sha256": "a160115fff6a2a814ea9a88981d12f4889869ee9cddb857777e2c5ef5e12200b",
+      "size": 4983,
+      "mode": 436
+    },
+    "dist/antigravity/skills/click/references/verification-profiles.md": {
+      "kind": "file",
+      "sha256": "cb30bccbe2bdd41e0e8f2daae69545b8bc1107c8fa1ef343fd1b8fcb0f7319e4",
+      "size": 9459,
+      "mode": 436
+    },
+    "dist/antigravity/skills/fix/SKILL.md": {
+      "kind": "file",
+      "sha256": "273ad626db37a7bd940c9d0a8989da641180db805c828911f62002b5ff23553b",
+      "size": 2354,
+      "mode": 436
+    },
+    "docs/auto-sharding-e2e.md": {
+      "kind": "file",
+      "sha256": "05b0034d20080f9ef4d7f2ff91a8c70d06e6604824f36cf9b5b226fb5f90c983",
+      "size": 7824,
+      "mode": 436
+    },
+    "docs/auto-sharding-plan.md": {
+      "kind": "file",
+      "sha256": "1a78102465f7da6965d445848af74348709f834e7cdc62bb17c78fefb0591f3c",
+      "size": 21418,
+      "mode": 436
+    },
+    "docs/auto-sharding-proposals.md": {
+      "kind": "file",
+      "sha256": "833985e0e9e799223802f4685a65c300e02864328d95d5c1ead51714e16fc484",
+      "size": 4669,
+      "mode": 436
+    },
+    "docs/auto-sharding-setup.md": {
+      "kind": "file",
+      "sha256": "c0bf75e1274fb628a960a12d90cf7462979425d28eefbb71340da5bca559ea9b",
+      "size": 3144,
+      "mode": 436
+    },
+    "docs/auto-sharding/phase-0.md": {
+      "kind": "file",
+      "sha256": "f0cd816be0d45d4aaf3a46d6dbdfe9e6fc790cc21867d8afc0b0b4a15db39555",
+      "size": 4752,
+      "mode": 436
+    },
+    "docs/auto-sharding/phase-1.md": {
+      "kind": "file",
+      "sha256": "a3cee06562014012404fbd4896e1a85c10a28ac1ce8ce480a95cccaec89f1617",
+      "size": 3809,
+      "mode": 436
+    },
+    "docs/auto-sharding/phase-2.md": {
+      "kind": "file",
+      "sha256": "0da74ecfc1b51c75e1321f3652ac1f4a047dc0a68178bfce3301b300c24dd69d",
+      "size": 3677,
+      "mode": 436
+    },
+    "docs/auto-sharding/phase-3.md": {
+      "kind": "file",
+      "sha256": "38b9576c5bf4e1f149a6a7805548d3326d8e07b1c8650f465b6651a1bc72494b",
+      "size": 4149,
+      "mode": 436
+    },
+    "docs/auto-sharding/phase-4.md": {
+      "kind": "file",
+      "sha256": "c2b08bd5add8e1e1403f61f54dca11bf94ffb1b1fc17109180dff32c71267631",
+      "size": 3584,
+      "mode": 436
+    },
+    "docs/auto-sharding/phase-5.md": {
+      "kind": "file",
+      "sha256": "e4563ad095370574e3120b50e5da16eec1065c85daf9a97408b485e30e19b286",
+      "size": 4780,
+      "mode": 436
+    },
+    "docs/auto-sharding/progress.json": {
+      "kind": "file",
+      "sha256": "618c098d2a8833d7315bc89c5e626895b55459c6e381aac0a176f97c8b313b5c",
+      "size": 20811,
+      "mode": 436
+    },
+    "docs/auto-sharding/workflow.json": {
+      "kind": "file",
+      "sha256": "e6dc27abddf83912edc8d5ba20f56610c0ab054bc48f7307aba37ddb9432eb39",
+      "size": 1134,
+      "mode": 436
+    },
+    "docs/dashboard-impact/COMMON.md": {
+      "kind": "file",
+      "sha256": "215ce793e855ff5ddb0e6426a21e5e7f0bb99f4223ed6bbdda19d30d694171db",
+      "size": 1903,
+      "mode": 436
+    },
+    "docs/dashboard-impact/METRICS.md": {
+      "kind": "file",
+      "sha256": "736fd757696e9a578ad35b29ef7b669cf1af6a1059c009ad92b24424348afb64",
+      "size": 2491,
+      "mode": 436
+    },
+    "docs/dashboard-impact/PLAN.md": {
+      "kind": "file",
+      "sha256": "ebec5bb430459c762564e07ae60cdeb3de110a1c2f75c446a6e1520948fd20b0",
+      "size": 1987,
+      "mode": 436
+    },
+    "docs/dashboard-impact/README.md": {
+      "kind": "file",
+      "sha256": "bf999d2659473d53dd46954546ba553155ba27fa7fa1c3dfcc367a708d55ce6b",
+      "size": 1633,
+      "mode": 436
+    },
+    "docs/dashboard-impact/SOURCE-PROMPT.md": {
+      "kind": "file",
+      "sha256": "6bc5ae731a5c07b7cbfdd1a82e5c6c36babe2ac4ff64ffd6366b40f4036d7b03",
+      "size": 25375,
+      "mode": 436
+    },
+    "docs/dashboard-impact/evidence/README.md": {
+      "kind": "file",
+      "sha256": "837e2b2caff65c269cf651765d32d4aeb168e7bebb47350f9fd1c74861ad8482",
+      "size": 1360,
+      "mode": 436
+    },
+    "docs/dashboard-impact/evidence/guarded-workflow.v4.json": {
+      "kind": "file",
+      "sha256": "d0618f23789d0fbf9d2b1dde383114b64b5c703373e37f75d677b4171a666f5a",
+      "size": 231071,
+      "mode": 436
+    },
+    "docs/dashboard-impact/evidence/real-hook-projection.v7.json": {
+      "kind": "file",
+      "sha256": "843cd12b3d019830c0b49fe048fe1ed0e4d72f8d8e7f57dde5dbff0cb1526dfa",
+      "size": 17620,
+      "mode": 436
+    },
+    "docs/dashboard-impact/evidence/real-hook-report.v4.json": {
+      "kind": "file",
+      "sha256": "c7df214923a8c6e54500ef04f98054f5ab4b2575600f3955fc74b879c5d27d92",
+      "size": 9184,
+      "mode": 436
+    },
+    "docs/dashboard-impact/progress.json": {
+      "kind": "file",
+      "sha256": "9a3058b0e7a85e3811b8ec1277ec1e490bd04887feedc68730809856061af1a5",
+      "size": 4295,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reference-dashboard.png": {
+      "kind": "file",
+      "sha256": "47d11778c59dff3f400eac0067e558cde52586b49a51b3c6a8f7c5addb821d07",
+      "size": 460761,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/final.md": {
+      "kind": "file",
+      "sha256": "3cd3effccc72bf0eb495e4b8559ed1cd8b7f3d272cc2a2c6ad7064c135c707cd",
+      "size": 7255,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/languages.md": {
+      "kind": "file",
+      "sha256": "e3dfc320abed8cd0562c43a2e47de682112f5d3520e8477c79865ce5974b58c1",
+      "size": 4453,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/phase-0.md": {
+      "kind": "file",
+      "sha256": "01fedc985ff42eea9add7cc7bb1423aad694afdee3da7b5a4a6fab90dd93169f",
+      "size": 1752,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/phase-1.md": {
+      "kind": "file",
+      "sha256": "9c96b1da7e3543889a1b66ce2ecc97513436d0cda634991cd02bcc3c58e6a5e4",
+      "size": 1444,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/phase-2.md": {
+      "kind": "file",
+      "sha256": "1119ec1e95355c1f999f244bd9310638c15f9d11f841761fe642aa441118ce8f",
+      "size": 1685,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/phase-3.md": {
+      "kind": "file",
+      "sha256": "2208e21916e9baf4b3ca37be9be77160b9a149d39979e0be3652e6b2ab7b2360",
+      "size": 1496,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/phase-4.md": {
+      "kind": "file",
+      "sha256": "712c3d71377a15c6d364f40c630f158755bd157b8de663ef061a08acd962ff24",
+      "size": 1902,
+      "mode": 436
+    },
+    "docs/dashboard-impact/reports/phase-5.md": {
+      "kind": "file",
+      "sha256": "21444c2cea143512f430f926363774c193a493a8c3825b7f21cac1adf5d6186d",
+      "size": 1607,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/desktop.jpg": {
+      "kind": "file",
+      "sha256": "ff15f98f5e5b2ba35067d1c17438b84c78b1e1ba736a932585069e9187076872",
+      "size": 85249,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/languages/desktop-en.jpg": {
+      "kind": "file",
+      "sha256": "fa1aeae892b97c64905516e829b568b57cf7c074ce299b7464e924741d24da50",
+      "size": 65116,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/languages/desktop-zh.jpg": {
+      "kind": "file",
+      "sha256": "4f5ff1be243043b896d4c97a18402d29caf18857970ae3099174e1c6594a5415",
+      "size": 62619,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/languages/mobile-en.jpg": {
+      "kind": "file",
+      "sha256": "f33623d2c316bfa8a18e3bf4cca514ffe44b59fc7c3e595b3fb230a47be12e9e",
+      "size": 35738,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/languages/mobile-zh.jpg": {
+      "kind": "file",
+      "sha256": "872a9ddd18b5c9ce3ee2002e455595f055b862b21ddf2180778ee0eb2650e68d",
+      "size": 35268,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/mobile-failed.jpg": {
+      "kind": "file",
+      "sha256": "d56cc403f7c625d1ab9e93f05a1015c5159984cc5dede31d754a92a694bf5c50",
+      "size": 22192,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/mobile-untimed.jpg": {
+      "kind": "file",
+      "sha256": "6da2ede2c0b2708cd2df27cce7137f3c04a37655459e3504f01e28305eae6f7f",
+      "size": 36630,
+      "mode": 436
+    },
+    "docs/dashboard-impact/screenshots/mobile.jpg": {
+      "kind": "file",
+      "sha256": "ea9948ecf3db5d12ce851c18623edeb955a21b1c02fe7a7d4a71798bd598ff74",
+      "size": 37613,
+      "mode": 436
+    },
+    "docs/revalidation-savings-plan.md": {
+      "kind": "file",
+      "sha256": "ebffaf9b8b74822c41a6cbd210a4fd0c6fe5ed871ce199e21b0d3feab271bd11",
+      "size": 58633,
+      "mode": 436
+    },
+    "evals/SEMANTIC_GRADER.md": {
+      "kind": "file",
+      "sha256": "23d773ac15be59580d921e40d7d87e2e7de1725ba7911d2d7ed8ef6992448be1",
+      "size": 8554,
+      "mode": 436
+    },
+    "evals/golden-prompts.yaml": {
+      "kind": "file",
+      "sha256": "331cff96e77dc384f103ac8b7b2f4ab938f423c5cbb52ac4a53c33128ee3300c",
+      "size": 47771,
+      "mode": 436
+    },
+    "evals/semantic-judgment.schema.json": {
+      "kind": "file",
+      "sha256": "58ef7064dc0af0343dffdc0cb232be2527df5ba8d37255d5c58287f9ca112c9e",
+      "size": 2532,
+      "mode": 436
+    },
+    "evals/semantic_grader.py": {
+      "kind": "file",
+      "sha256": "b806cecd9a27c39ec4110e5e41c58875dbc94373f5b513dc4a335963de176f94",
+      "size": 12103,
+      "mode": 436
+    },
+    "hooks/__init__.py": {
+      "kind": "file",
+      "sha256": "f32e0bbdb15daa421ebd0c955168f0ba836408e7bf1e80cc787ca2cde1497c9e",
+      "size": 49,
+      "mode": 436
+    },
+    "hooks/antigravity_gate.py": {
+      "kind": "file",
+      "sha256": "ae074dec9b0ee7240526395bb74804fe47c69f22936d70ef7b81e8a87373e642",
+      "size": 24054,
+      "mode": 436
+    },
+    "hooks/click_authoritative_observer.py": {
+      "kind": "file",
+      "sha256": "a98f2576fbc8d2635c96c942e9a71a6b0fdcb966672f4a27a75180fb136ebe51",
+      "size": 34625,
+      "mode": 436
+    },
+    "hooks/click_auto_sharding.py": {
+      "kind": "file",
+      "sha256": "3c35ed8d2c0d72279f6c179125aeacae16debc391a60b88b31ce81c1d9809672",
+      "size": 3776,
+      "mode": 436
+    },
+    "hooks/click_browser.py": {
+      "kind": "file",
+      "sha256": "825884c5ce9b3dcc04ccf03360240492c88db657f3e4dc2fa00607cf5fc74820",
+      "size": 19939,
+      "mode": 436
+    },
+    "hooks/click_browser_advisory.py": {
+      "kind": "file",
+      "sha256": "56c3fcc1405e8e5e25eaee2bef468fab1d1bf943dcadf6a199934f862d02a0d1",
+      "size": 4386,
+      "mode": 436
+    },
+    "hooks/click_capability.py": {
+      "kind": "file",
+      "sha256": "0afec7de1c9fc9200eb1703799c28a9f1a9ba41ac6219d5876a859a790375d94",
+      "size": 6129,
+      "mode": 436
+    },
+    "hooks/click_change_policy.py": {
+      "kind": "file",
+      "sha256": "82a182abc03a74df5f0cacdf73134ab64b93ebd99f3ef2dbe699bb0ab3a3b7cc",
+      "size": 20390,
+      "mode": 436
+    },
+    "hooks/click_claims.py": {
+      "kind": "file",
+      "sha256": "4c2b104adbcdcb2ffa18c67ae225aee13cef9762e97b42bb463ebf9641629d77",
+      "size": 14506,
+      "mode": 436
+    },
+    "hooks/click_collector_runtime.py": {
+      "kind": "file",
+      "sha256": "92673d0b2b03493f5ca9d48442a09b6f565f10af151cc1062bcfac873024c055",
+      "size": 4706,
+      "mode": 436
+    },
+    "hooks/click_contract.py": {
+      "kind": "file",
+      "sha256": "18c5aa12c3b7b7fac6e74f032fd8697e3879a48d42c498b9420500b6c132338d",
+      "size": 12268,
+      "mode": 436
+    },
+    "hooks/click_contract_state.py": {
+      "kind": "file",
+      "sha256": "34f6ff8cd32c9e728cdd920ca643231329fa17914e0a7fbe2496dae64fc73b73",
+      "size": 4199,
+      "mode": 436
+    },
+    "hooks/click_dashboard_projection.py": {
+      "kind": "file",
+      "sha256": "4733edd5992041ef265409e507b1eb9440d1c9094a03ec05ee77a0cfe570fffd",
+      "size": 38816,
+      "mode": 436
+    },
+    "hooks/click_dependency_cache.py": {
+      "kind": "file",
+      "sha256": "cba521044e306d7b0451cb0c1eba4ef23ef7e2b1f0db0fa4666e994c4ab10466",
+      "size": 48949,
+      "mode": 436
+    },
+    "hooks/click_dependency_candidates.py": {
+      "kind": "file",
+      "sha256": "1580d0427e2d3bc81e9d231e3c752a1454034d9c70387e939c33f5fcf287fb49",
+      "size": 13477,
+      "mode": 436
+    },
+    "hooks/click_dependency_trace.py": {
+      "kind": "file",
+      "sha256": "5f69d961a3eef2b6c326934a92a05d81688e7b51880bb2ef2fdf604d910b24be",
+      "size": 7376,
+      "mode": 436
+    },
+    "hooks/click_evidence.py": {
+      "kind": "file",
+      "sha256": "81e3881dbae06331f7f776fd52686db885e91bcf075443375884ff35786f8c85",
+      "size": 33930,
+      "mode": 436
+    },
+    "hooks/click_evidence_shards.py": {
+      "kind": "file",
+      "sha256": "3aa0d7feb6a459b1e28f6fe1bc362d5b517c8ff34db751ca30302583dd52957f",
+      "size": 34148,
+      "mode": 436
+    },
+    "hooks/click_gate.py": {
+      "kind": "file",
+      "sha256": "fe4e215ada98dee9725be4cd0c68a1ddc8af4f1586d7dc3bcc9251879e93ca34",
+      "size": 67772,
+      "mode": 436
+    },
+    "hooks/click_hook.py": {
+      "kind": "file",
+      "sha256": "ca24295f2cd1f9756823ea568f798243e2c9b2694ffd44ae7348bd1a57fbe8c7",
+      "size": 2199,
+      "mode": 436
+    },
+    "hooks/click_host_coverage.py": {
+      "kind": "file",
+      "sha256": "c80e116b5093bfffc90af4f953a003d4d6777fd1e54b758828f8acb6a1882749",
+      "size": 6343,
+      "mode": 436
+    },
+    "hooks/click_host_router.py": {
+      "kind": "file",
+      "sha256": "89d958423cc05a53dbd4da42d52d9cbee9b5fc00b28f2a7ea0d7d7f734c93b34",
+      "size": 2386,
+      "mode": 436
+    },
+    "hooks/click_import_bootstrap.py": {
+      "kind": "file",
+      "sha256": "23b282d56b5f903f6d5fe0fc57ca2f82401f55ef78ef66aeb0b1c3d3fcae578b",
+      "size": 1101,
+      "mode": 436
+    },
+    "hooks/click_incremental.py": {
+      "kind": "file",
+      "sha256": "d4261d164841f96c48ee0aa8d38629539f295d86c7e8109c336661cf779c7b32",
+      "size": 84106,
+      "mode": 436
+    },
+    "hooks/click_inspection.py": {
+      "kind": "file",
+      "sha256": "2193b8a0c67a614de6d7f899d9f53ff9647bebb4f86dfbc9c492c762962f59e3",
+      "size": 18633,
+      "mode": 436
+    },
+    "hooks/click_inspection_policy.py": {
+      "kind": "file",
+      "sha256": "d81c61fd580b5e6d80eee1a7f39cf31386d172dc5b60207a490d9b48aa259e43",
+      "size": 21689,
+      "mode": 436
+    },
+    "hooks/click_lifecycle.py": {
+      "kind": "file",
+      "sha256": "6bb9a82035d85acd39009dc2b23c283393338a7165c2cda564d91f2919607937",
+      "size": 38299,
+      "mode": 436
+    },
+    "hooks/click_mode.py": {
+      "kind": "file",
+      "sha256": "789fd97eab4c8fede087c8ade96270a435c350e2b4fbef442a6f22d6cbb5ec0a",
+      "size": 3711,
+      "mode": 436
+    },
+    "hooks/click_mutation.py": {
+      "kind": "file",
+      "sha256": "22f626cb3f0b77e45b24ae81d7b6422cbf44e017bbe8d2e8610279bb7858be4c",
+      "size": 23091,
+      "mode": 436
+    },
+    "hooks/click_observation.py": {
+      "kind": "file",
+      "sha256": "455e48d53ca4ab85e41298cb5cec340537b5cc29cdd46a5d4ee47721675d118e",
+      "size": 24033,
+      "mode": 436
+    },
+    "hooks/click_observation_cache.py": {
+      "kind": "file",
+      "sha256": "6983fffcbf7a47402bb5baf1ba40ab013d68132d23469479c9d2bffe45340985",
+      "size": 23216,
+      "mode": 436
+    },
+    "hooks/click_observation_inputs.py": {
+      "kind": "file",
+      "sha256": "ec56d31da3d421517becd2e84031810e8eb330aa85a23e6bb3c543e7385a2b5f",
+      "size": 20934,
+      "mode": 436
+    },
+    "hooks/click_observer_backend.py": {
+      "kind": "file",
+      "sha256": "6438a20666845f13597c6d84457fbf8a1faab858f6fbc96288beb57983262958",
+      "size": 4719,
+      "mode": 436
+    },
+    "hooks/click_observer_bootstrap.py": {
+      "kind": "file",
+      "sha256": "07fbfa51a29f0ac0d0662658cea15f1c0106466e704ef12ce99b3f86e0bc92a2",
+      "size": 2809,
+      "mode": 436
+    },
+    "hooks/click_observer_common.py": {
+      "kind": "file",
+      "sha256": "4b7af8f535ee7d1a33a5eec68794449c8cfe4dad593d4df501d4244d6bb967e1",
+      "size": 9905,
+      "mode": 436
+    },
+    "hooks/click_observer_control.py": {
+      "kind": "file",
+      "sha256": "af2b92d94427b88a06f285ce5293c9624fe5b2e6c7349c183c8e5dec41c10e6e",
+      "size": 1896,
+      "mode": 436
+    },
+    "hooks/click_observer_linux.py": {
+      "kind": "file",
+      "sha256": "334301982596a9752c6389edab8bd5bc07a05ec722536b276c54e146540da39b",
+      "size": 29691,
+      "mode": 436
+    },
+    "hooks/click_observer_macos.py": {
+      "kind": "file",
+      "sha256": "d1689e4c511cb0714781d52e936272d7ca5b4ea4fc80ccb85a3cccec2a9589fe",
+      "size": 43078,
+      "mode": 436
+    },
+    "hooks/click_observer_native.c": {
+      "kind": "file",
+      "sha256": "db226b5cb78d6a568f044eac34479b3f0765221af2de0e5513bcc4ee6fbf5c4c",
+      "size": 16273,
+      "mode": 436
+    },
+    "hooks/click_observer_runtime.py": {
+      "kind": "file",
+      "sha256": "dc44db68c8ecd3302d04ae6b41ec25a5c4fc66153eb1a2591b9b9296c58a20d1",
+      "size": 19433,
+      "mode": 436
+    },
+    "hooks/click_observer_windows.py": {
+      "kind": "file",
+      "sha256": "edadcee9c8fe630bd6bdb8883f164c05b98940c0d9a3ae915f6911a35e77feea",
+      "size": 40004,
+      "mode": 436
+    },
+    "hooks/click_process.py": {
+      "kind": "file",
+      "sha256": "d3b4a6558dca4322a694bed4ec7a8538e5a027ea2359d1702693e5b18942c1c5",
+      "size": 4178,
+      "mode": 436
+    },
+    "hooks/click_prompt.py": {
+      "kind": "file",
+      "sha256": "f4c3e9775813a0b04e3d65cd3519c5980d75730a99308dd7eb38b419d88e554b",
+      "size": 4717,
+      "mode": 436
+    },
+    "hooks/click_pytest_collector.py": {
+      "kind": "file",
+      "sha256": "101065fb3b676113ee52903617d3777777a703722b916599feb8829ee6d6a263",
+      "size": 7686,
+      "mode": 436
+    },
+    "hooks/click_receipt.py": {
+      "kind": "file",
+      "sha256": "66faa04a1c8564c4909695c35fa4dca6f1572d24473733688125a1d773503397",
+      "size": 31456,
+      "mode": 436
+    },
+    "hooks/click_receipt_runtime.py": {
+      "kind": "file",
+      "sha256": "156b9acfbca795b3926ae56e843183128f803759e46849d3e9ea3f9970e43e87",
+      "size": 16127,
+      "mode": 436
+    },
+    "hooks/click_runner_transport.py": {
+      "kind": "file",
+      "sha256": "50fdc5079fbaecb104ac54c92aa2225d56c0c5aaadae115e34cd1b278b8a8183",
+      "size": 4654,
+      "mode": 436
+    },
+    "hooks/click_runtime_state.py": {
+      "kind": "file",
+      "sha256": "1f527d9117bb408d351e8bbe741468239527254a0c03f1e9fd52f9f062d067ec",
+      "size": 2437,
+      "mode": 436
+    },
+    "hooks/click_service.py": {
+      "kind": "file",
+      "sha256": "60fa56c418b3939b243b173bbc9f24d43dcce7ec218d913eb019afe61f42dc94",
+      "size": 29517,
+      "mode": 436
+    },
+    "hooks/click_shadow_dashboard.py": {
+      "kind": "file",
+      "sha256": "b6ddcb129752ab7ccc8246e8558c818d857f737bd878e409fb21c39f9938a08d",
+      "size": 238875,
+      "mode": 436
+    },
+    "hooks/click_shadow_intelligence.py": {
+      "kind": "file",
+      "sha256": "a7e1ea533846a51031282d7b85ab16e341a8b7256e23a9ffd22554ea02823f2e",
+      "size": 48356,
+      "mode": 436
+    },
+    "hooks/click_shard_proposal.py": {
+      "kind": "file",
+      "sha256": "f1bf926a3e9011fd3604a95d7c34cce3d4b6332ee396ca3b52556ed43c874816",
+      "size": 14689,
+      "mode": 436
+    },
+    "hooks/click_sharding_setup.py": {
+      "kind": "file",
+      "sha256": "75ca31099cd565cefc926d8abb4222c87f52d45a20f3a8c69ac34edab2746343",
+      "size": 68361,
+      "mode": 436
+    },
+    "hooks/click_state.py": {
+      "kind": "file",
+      "sha256": "fdab73b5a12c48677543c15904d52ee04bfe931e21605230cc29fa691f89aa5b",
+      "size": 19158,
+      "mode": 436
+    },
+    "hooks/click_test_inventory.py": {
+      "kind": "file",
+      "sha256": "555744d9c7f8670c041f19fd3ede2a8a08c0ac86bd2b5102e0854f6d74417110",
+      "size": 27648,
+      "mode": 436
+    },
+    "hooks/click_unittest_collector.py": {
+      "kind": "file",
+      "sha256": "c6ae6c449e6b1a29ba097cccb47fca5a83ada0b2099e92d59781ca9be6634dc4",
+      "size": 8461,
+      "mode": 436
+    },
+    "hooks/click_verification.py": {
+      "kind": "file",
+      "sha256": "583f7013ebd8e17a5ee9b3f96161b14a2bda0a3f069a2ed55aa87d643aac53fe",
+      "size": 179797,
+      "mode": 436
+    },
+    "hooks/click_verification_meter.py": {
+      "kind": "file",
+      "sha256": "307595658dc9e6e5dfa4da6fb2a7e311f93e071b3c8602e89f8e1c8518397d90",
+      "size": 1593,
+      "mode": 436
+    },
+    "hooks/click_verification_policy.py": {
+      "kind": "file",
+      "sha256": "6021b44884f01de07a67b7dcc2a140d57a5c92b244615bb5070370442cd4c70f",
+      "size": 973,
+      "mode": 436
+    },
+    "hooks/click_windows.cmd": {
+      "kind": "file",
+      "sha256": "11a78ac75bc6b4a8a5c2ef76957ec4917d10473c0df679e67c09d637e4740e17",
+      "size": 809,
+      "mode": 436
+    },
+    "hooks/click_windows.py": {
+      "kind": "file",
+      "sha256": "3dd6027d637362e3f2bd8e91a46c439e605e46f77f7b9edbdbbc5e58cc1cd07a",
+      "size": 2232,
+      "mode": 436
+    },
+    "hooks/hooks.json": {
+      "kind": "file",
+      "sha256": "dcf5f6d826df10629bf76bdbf3a02a7d54df6429a9b085d3f9911c1e8b7e82d5",
+      "size": 3173,
+      "mode": 436
+    },
+    "hooks/platform_protocol.py": {
+      "kind": "file",
+      "sha256": "f98c5dc678f310ac4b39a07bb9f59055d150fdbe22d7704dddf6faf7d2e8e917",
+      "size": 3576,
+      "mode": 436
+    },
+    "platforms/antigravity/README.md": {
+      "kind": "file",
+      "sha256": "fb08e2ab39620eba8f6ee4fed3e6f207b8ecea5d1d85470012e1e0829da941cb",
+      "size": 6268,
+      "mode": 436
+    },
+    "platforms/antigravity/hooks.json": {
+      "kind": "file",
+      "sha256": "4cf3e42557d8e300d9aa5005cbe0b0bc9621353191d03e2791a051392489b7f3",
+      "size": 1030,
+      "mode": 436
+    },
+    "platforms/antigravity/plugin.json": {
+      "kind": "file",
+      "sha256": "d991e764edd96770933964f036c245c1a0eb68545d266c47a0a3e69281346a3e",
+      "size": 238,
+      "mode": 436
+    },
+    "scripts/__init__.py": {
+      "kind": "file",
+      "sha256": "f0a780ff583063fc98158ceeba94031049274b928849ce29f72952b42a575ba7",
+      "size": 59,
+      "mode": 436
+    },
+    "scripts/build_antigravity_distribution.py": {
+      "kind": "file",
+      "sha256": "f4b4b79234eb881b7bb53abdf4cd3c3392f9b51d7b7329436c7c1c8fd19ff9e5",
+      "size": 6552,
+      "mode": 436
+    },
+    "scripts/validate_distribution.py": {
+      "kind": "file",
+      "sha256": "016b67b5b42bb629ee818e63a31023cfad6f08d0dbcc76c5be70d2a87542d2ee",
+      "size": 12024,
+      "mode": 436
+    },
+    "skills/click/SKILL.md": {
+      "kind": "file",
+      "sha256": "21585932bde0903e456571556fdf083723ee8d4c00e56eb2633b22f64cd19c54",
+      "size": 13341,
+      "mode": 436
+    },
+    "skills/click/agents/openai.yaml": {
+      "kind": "file",
+      "sha256": "7837724f9094383b64af5118257a824a5b31525aa21c1e0f07fc3a38cbe5c990",
+      "size": 407,
+      "mode": 436
+    },
+    "skills/click/references/anti-loop-policy.md": {
+      "kind": "file",
+      "sha256": "68695e8d6bc7d5849792b136ac1107476561897df6e374f0c7a07fd5323d0573",
+      "size": 7917,
+      "mode": 436
+    },
+    "skills/click/references/antigravity.md": {
+      "kind": "file",
+      "sha256": "39b5d7106fa9cb5010f6d5cca159563e74eddcbc26475a11cd7b2f44d5a6a007",
+      "size": 3332,
+      "mode": 436
+    },
+    "skills/click/references/authoritative-observer-v2.md": {
+      "kind": "file",
+      "sha256": "3b9f369028b6057f90170a86da199ad29eb51441fa173054369f2913b3c34fe4",
+      "size": 5855,
+      "mode": 436
+    },
+    "skills/click/references/automatic-sharding-setup.md": {
+      "kind": "file",
+      "sha256": "05d049a040e3c605296191c2dd89d423e50ebe0b158c972c029b394d214fc068",
+      "size": 9755,
+      "mode": 436
+    },
+    "skills/click/references/capability-protocol.md": {
+      "kind": "file",
+      "sha256": "17b0d9fd3b7f34ca4cf8f9dcc44b7d736c469d08b441756827a78d177821aaf1",
+      "size": 30007,
+      "mode": 436
+    },
+    "skills/click/references/directive-format.md": {
+      "kind": "file",
+      "sha256": "3b7b0c260f2886a44e3d179e604fe1b417f14ef0cf39a5bee4f35d8651940af0",
+      "size": 8233,
+      "mode": 436
+    },
+    "skills/click/references/evidence-shards-v1.md": {
+      "kind": "file",
+      "sha256": "ff03c9fff1c0059e3786933babd5342a23824582c10f53656a7f4250abc33fed",
+      "size": 5534,
+      "mode": 436
+    },
+    "skills/click/references/modes.md": {
+      "kind": "file",
+      "sha256": "75ec55d92aea55bca5cd81b70a7dc49617d5f0452a027388c27d044f86461efe",
+      "size": 6994,
+      "mode": 436
+    },
+    "skills/click/references/observer-v1.md": {
+      "kind": "file",
+      "sha256": "a2926b34daed9e17884fc06c32450ad9c9c88bfabfd9bffa03c282384fd6af9d",
+      "size": 11862,
+      "mode": 436
+    },
+    "skills/click/references/shadow-intelligence-v1.md": {
+      "kind": "file",
+      "sha256": "040d3d218ca95d4878912269c2a00e9afc3d5892f25d7897ba68be9c1d8e3ea1",
+      "size": 7380,
+      "mode": 436
+    },
+    "skills/click/references/translation-guide.md": {
+      "kind": "file",
+      "sha256": "a160115fff6a2a814ea9a88981d12f4889869ee9cddb857777e2c5ef5e12200b",
+      "size": 4983,
+      "mode": 436
+    },
+    "skills/click/references/verification-profiles.md": {
+      "kind": "file",
+      "sha256": "cb30bccbe2bdd41e0e8f2daae69545b8bc1107c8fa1ef343fd1b8fcb0f7319e4",
+      "size": 9459,
+      "mode": 436
+    },
+    "skills/fix/SKILL.md": {
+      "kind": "file",
+      "sha256": "165237e729def7ac99b8bbc8b37f6a2a060ffdc3983da8de5304b86752df5276",
+      "size": 2132,
+      "mode": 436
+    },
+    "skills/fix/agents/openai.yaml": {
+      "kind": "file",
+      "sha256": "78634d1b352e29468272cbc61dc3204d591ffdda4e50f508f8a79ad481f9f2a1",
+      "size": 377,
+      "mode": 436
+    },
+    "tests/__init__.py": {
+      "kind": "file",
+      "sha256": "bce086970bb090d5c463a4fde7b767a13dfaf0a40deaf142f41c12e6bfc4f42c",
+      "size": 200,
+      "mode": 436
+    },
+    "tests/click_gate_compatibility_baseline.py": {
+      "kind": "file",
+      "sha256": "27a5116febeb689b4ea5ed4612f7181dd8d0a77fda0851c4a4fe72e3c0ec7cee",
+      "size": 558,
+      "mode": 436
+    },
+    "tests/click_gate_test_support.py": {
+      "kind": "file",
+      "sha256": "f13f18a750ae13ea0235ecc0c72644cc255f0f122c17d9c1c0d40d990aab80ec",
+      "size": 24393,
+      "mode": 436
+    },
+    "tests/fixtures/shadow-observer-v1/complete.json": {
+      "kind": "file",
+      "sha256": "c75502a0cc54a5549cd88c36c7476d533a7a5654717af3c40118cf8f29775eb8",
+      "size": 1106,
+      "mode": 436
+    },
+    "tests/fixtures/shadow-observer-v1/partial.json": {
+      "kind": "file",
+      "sha256": "f1ed980d5cdf8bf925f477bf9d739f0e65c8179103e145694f2ed462becd2b2a",
+      "size": 960,
+      "mode": 436
+    },
+    "tests/fixtures/shadow-observer-v1/unavailable.json": {
+      "kind": "file",
+      "sha256": "0d9cccdacb32abd00c6d679b65e7d8596d19132d1e2a090fe224e7aa8fe0ab89",
+      "size": 675,
+      "mode": 436
+    },
+    "tests/repository_policy_core.py": {
+      "kind": "file",
+      "sha256": "631acbe5865ad425421827cbd5ac5ad3f09b598d12fd7f3a098af5542766f5d4",
+      "size": 42676,
+      "mode": 436
+    },
+    "tests/test_antigravity_adapter.py": {
+      "kind": "file",
+      "sha256": "c32a6ff0e173ab49590e7c33e15f6334e764c4ed84fc2af22de329d00fa19a28",
+      "size": 27393,
+      "mode": 436
+    },
+    "tests/test_click_authoritative_observer.py": {
+      "kind": "file",
+      "sha256": "da7b886311d9bf47a6d43a2ff51ae4a74db3fed5bf0887216a12fabc97090bd7",
+      "size": 33338,
+      "mode": 436
+    },
+    "tests/test_click_authoritative_reuse.py": {
+      "kind": "file",
+      "sha256": "afa280a48b17f60c30210eb822d6a65baeefe993b7b926ec082b8a1adc7525dc",
+      "size": 27660,
+      "mode": 436
+    },
+    "tests/test_click_auto_sharding.py": {
+      "kind": "file",
+      "sha256": "efafa842d07b5af99052a67cc36c2b44bc9e9a900551a9a86701c8c506cba2f0",
+      "size": 21627,
+      "mode": 436
+    },
+    "tests/test_click_browser.py": {
+      "kind": "file",
+      "sha256": "74314bf2dbf0e2be6ea542d5d0449369485aedca3bc49dba331a1387554039e5",
+      "size": 3360,
+      "mode": 436
+    },
+    "tests/test_click_browser_advisory.py": {
+      "kind": "file",
+      "sha256": "0a6ced27a795bec750b943b9ea37058a82a53120a9556753a1ad360dcd6ec424",
+      "size": 2905,
+      "mode": 436
+    },
+    "tests/test_click_capability.py": {
+      "kind": "file",
+      "sha256": "4f8edb7de25daa2d98fefb7fce9a26c19e1722797792c272cb2157dd77e42e2b",
+      "size": 3339,
+      "mode": 436
+    },
+    "tests/test_click_change_policy.py": {
+      "kind": "file",
+      "sha256": "394766663d06873013965a9bd964a531156689f92d20b9ff575ef27248db4d1a",
+      "size": 9328,
+      "mode": 436
+    },
+    "tests/test_click_claims.py": {
+      "kind": "file",
+      "sha256": "1d2d021f768fa4ea3740372767a56271dab5bdf2a2ac209cc823c6d64ede4929",
+      "size": 4197,
+      "mode": 436
+    },
+    "tests/test_click_collector_runtime.py": {
+      "kind": "file",
+      "sha256": "cfcab359814edc2c570adb9f1651a6354c835fb67abcd22355eb8399cca41915",
+      "size": 4423,
+      "mode": 436
+    },
+    "tests/test_click_compatibility_surface.py": {
+      "kind": "file",
+      "sha256": "19a36c81126c49913ebda8c60680cc4ce7ce6d2f7705e14d400c97315ed1f37a",
+      "size": 5688,
+      "mode": 436
+    },
+    "tests/test_click_contract.py": {
+      "kind": "file",
+      "sha256": "67dbe04b34b8067a616731c48f2729f5143a49a972c1c53a3c20c547437807c8",
+      "size": 12427,
+      "mode": 436
+    },
+    "tests/test_click_contract_state.py": {
+      "kind": "file",
+      "sha256": "4a9cb29fbf0b077131f3217cf126118a24ece4367b0d561802f748d2a593fabf",
+      "size": 10408,
+      "mode": 436
+    },
+    "tests/test_click_dashboard_projection.py": {
+      "kind": "file",
+      "sha256": "03b96eacfaebb19b05ef5b8e32cc85305bf0dc678be851ccfb013396a57eee0a",
+      "size": 23764,
+      "mode": 436
+    },
+    "tests/test_click_dependency_cache.py": {
+      "kind": "file",
+      "sha256": "bffc559566c30e28aacb1618f85283e6052dfa8da5d7db00f1313bc4918324a9",
+      "size": 27322,
+      "mode": 436
+    },
+    "tests/test_click_dependency_trace.py": {
+      "kind": "file",
+      "sha256": "2f0d45b1f6f4496a547123e9a7a4de096214c8d1d52f3ea416454a8299cf19aa",
+      "size": 21159,
+      "mode": 436
+    },
+    "tests/test_click_efficiency.py": {
+      "kind": "file",
+      "sha256": "a56603dd08d239d96f5248d7f29502eda2ec1c00dd06017c213870a9dc15f7a6",
+      "size": 63919,
+      "mode": 436
+    },
+    "tests/test_click_evidence.py": {
+      "kind": "file",
+      "sha256": "9e9d3af353f78267f0fefd537dd2beb261d5ea413d1dbd98fb75817e11496187",
+      "size": 12743,
+      "mode": 436
+    },
+    "tests/test_click_evidence_shards.py": {
+      "kind": "file",
+      "sha256": "09ad5fc19ab3bf8740ad562e9cd4b8bf68762d216ae8dfc64a12ddeb9af549e5",
+      "size": 12320,
+      "mode": 436
+    },
+    "tests/test_click_gate_advisory.py": {
+      "kind": "file",
+      "sha256": "d0afc74531916e2714617aa9417a85b8a1e486d8a2332fcf53b08c4f8e48c251",
+      "size": 14946,
+      "mode": 436
+    },
+    "tests/test_click_gate_browser.py": {
+      "kind": "file",
+      "sha256": "9c8092c32ff78422db98c4dc17878af567657b90373bad6316b86b96c2564fd8",
+      "size": 22926,
+      "mode": 436
+    },
+    "tests/test_click_gate_contract.py": {
+      "kind": "file",
+      "sha256": "7656ca24edb9200449bf2bfa7b3edc511c2b0dd99e61753cc4431bc6ba0644aa",
+      "size": 26114,
+      "mode": 436
+    },
+    "tests/test_click_gate_execution.py": {
+      "kind": "file",
+      "sha256": "f22eb1c33a991bdf947742fe2b9831fc254702a2fbb28de162f15aec17aa342e",
+      "size": 22962,
+      "mode": 436
+    },
+    "tests/test_click_gate_inspection.py": {
+      "kind": "file",
+      "sha256": "bc16114d7a4134d11f889acbedad358b5870fd80d16903929cfa665e97c13a44",
+      "size": 56558,
+      "mode": 436
+    },
+    "tests/test_click_gate_lifecycle.py": {
+      "kind": "file",
+      "sha256": "f5671ea7bfd08e64a231fcd113e674649f148904c16f560300cb3c3ac396c7c0",
+      "size": 53582,
+      "mode": 436
+    },
+    "tests/test_click_gate_receipt.py": {
+      "kind": "file",
+      "sha256": "16e9fbb139e19c305c95aac3f26d0c0c83e42dbf32273decdd915ba66daae8e8",
+      "size": 8034,
+      "mode": 436
+    },
+    "tests/test_click_gate_service.py": {
+      "kind": "file",
+      "sha256": "25142b49d85dc2f21eb69e9e73d5c397dc449eb4e556bf68ab981801bd1683db",
+      "size": 17280,
+      "mode": 436
+    },
+    "tests/test_click_gate_verification.py": {
+      "kind": "file",
+      "sha256": "d35206712d77bb62fb4bb24472c1ae74d9652d8e084a1ff0951ce3ae490e1c9e",
+      "size": 171963,
+      "mode": 436
+    },
+    "tests/test_click_hook.py": {
+      "kind": "file",
+      "sha256": "aeebca4bc358aede1e2eb17c6f7dd23f42f33cbff15b44348940946b6ff7ac23",
+      "size": 1593,
+      "mode": 436
+    },
+    "tests/test_click_host_coverage.py": {
+      "kind": "file",
+      "sha256": "4b397a3f72e131c27216e7fde50af88478d20c8783309fb66fcdfb188e0b5a20",
+      "size": 7293,
+      "mode": 436
+    },
+    "tests/test_click_host_router.py": {
+      "kind": "file",
+      "sha256": "ced38eea357c04de9709931fa250f2e6aa2a7a56b81f901d46c9bbce20bfd537",
+      "size": 2803,
+      "mode": 436
+    },
+    "tests/test_click_import_bootstrap.py": {
+      "kind": "file",
+      "sha256": "1c161251d51c3ee69e76eb2632707304fd96a6a02c3456e4f375e8ae01371248",
+      "size": 3330,
+      "mode": 436
+    },
+    "tests/test_click_incremental.py": {
+      "kind": "file",
+      "sha256": "9db1529e3167033625b1d771a55384b368f5a4b12c5432441ef737460f738158",
+      "size": 18620,
+      "mode": 436
+    },
+    "tests/test_click_inspection.py": {
+      "kind": "file",
+      "sha256": "00f7fa3da7236bcf198534b5004ff797e93276d3c0b001f05a8dd95e5e2194c6",
+      "size": 5935,
+      "mode": 436
+    },
+    "tests/test_click_inspection_policy.py": {
+      "kind": "file",
+      "sha256": "fe4dbdb688bdc50297f15cce7ae260d17af9b2107a58685dfc4f34176faeb6d2",
+      "size": 3772,
+      "mode": 436
+    },
+    "tests/test_click_lifecycle.py": {
+      "kind": "file",
+      "sha256": "15b84442b9d6695bf591414896ab1de034f0b4121ed83d2b462072f6bc369cfd",
+      "size": 8593,
+      "mode": 436
+    },
+    "tests/test_click_mode.py": {
+      "kind": "file",
+      "sha256": "63f2b5dac450adc61ca192bbcbf913535ea32a259a40cc407b45d9c8ddc1907d",
+      "size": 5589,
+      "mode": 436
+    },
+    "tests/test_click_mutation.py": {
+      "kind": "file",
+      "sha256": "c7fb84cd5dfc03194526eaa329d19d18a39bcc66184fade273f009f45372af1d",
+      "size": 3423,
+      "mode": 436
+    },
+    "tests/test_click_observation.py": {
+      "kind": "file",
+      "sha256": "0abf2487845bc834567d33df71141c03b9e0025cce4fa12e4f49a8a34ebaf8b5",
+      "size": 3502,
+      "mode": 436
+    },
+    "tests/test_click_observation_cache.py": {
+      "kind": "file",
+      "sha256": "9758bdabb729a14ae6aba4a12ee803c27d13332a79a12c9e231c75ce74730f7d",
+      "size": 7692,
+      "mode": 436
+    },
+    "tests/test_click_observer_backend.py": {
+      "kind": "file",
+      "sha256": "a895b2b2bd5832010dd25e3e0b82944b078debb683c0f4ee48542abf2875c572",
+      "size": 11574,
+      "mode": 436
+    },
+    "tests/test_click_observer_control.py": {
+      "kind": "file",
+      "sha256": "6bdf3c028e69636b8a51e202e0e5cfd35b5b17b0de635e83000049125bc9af09",
+      "size": 4192,
+      "mode": 436
+    },
+    "tests/test_click_observer_macos.py": {
+      "kind": "file",
+      "sha256": "f102d67b5d08eb4b12d596d2149fc8bdc7a98ce6aa9559fd54732a23799056e7",
+      "size": 36783,
+      "mode": 436
+    },
+    "tests/test_click_observer_windows.py": {
+      "kind": "file",
+      "sha256": "32ca50e1559266a223461e7dec805a25c7e7b41dff5d5bd7976a3a43da1ca0d4",
+      "size": 24724,
+      "mode": 436
+    },
+    "tests/test_click_process.py": {
+      "kind": "file",
+      "sha256": "cbcd4732967804f82d6761fc6872886fbe7af98550d8160c45972c58e42e26e7",
+      "size": 10167,
+      "mode": 436
+    },
+    "tests/test_click_prompt.py": {
+      "kind": "file",
+      "sha256": "4557a4c77b71c60ee7f8c1279800445be48a5654b840fd21d5f1b1eb9a688273",
+      "size": 6328,
+      "mode": 436
+    },
+    "tests/test_click_receipt.py": {
+      "kind": "file",
+      "sha256": "30d0264f221dd4e1addeecf585704247d255c52a9ae6cbebbb8f448e3f76abed",
+      "size": 16348,
+      "mode": 436
+    },
+    "tests/test_click_receipt_runtime.py": {
+      "kind": "file",
+      "sha256": "1243bbd8eb425f76edfb150ae1e238fb61b94f9571923e4511f20a4a33c4dc1d",
+      "size": 13127,
+      "mode": 436
+    },
+    "tests/test_click_runner_transport.py": {
+      "kind": "file",
+      "sha256": "6aff2287d98df96ec6223b60d2c98736b3631b83b833e4c2fe79ea7f29782871",
+      "size": 5464,
+      "mode": 436
+    },
+    "tests/test_click_runtime_state.py": {
+      "kind": "file",
+      "sha256": "fae41fa6d1ccae43df1d69e78a0727cf35c86ba1702401fb28a85e1e3ef03e06",
+      "size": 1917,
+      "mode": 436
+    },
+    "tests/test_click_service.py": {
+      "kind": "file",
+      "sha256": "8d32ee344a133f974a7ff07cd9033838049dfb8be6425858443e710f574d0ea4",
+      "size": 3750,
+      "mode": 436
+    },
+    "tests/test_click_shadow_dashboard.py": {
+      "kind": "file",
+      "sha256": "8d86c866c44780eb37eeec2a31084764963739ad6839142d6347dcf590782419",
+      "size": 19209,
+      "mode": 436
+    },
+    "tests/test_click_shadow_intelligence.py": {
+      "kind": "file",
+      "sha256": "41a20b7c18d848de62f78bfb2ec91c1447ee51d605ec937ac23f515af6adbd1e",
+      "size": 13435,
+      "mode": 436
+    },
+    "tests/test_click_shard_proposal.py": {
+      "kind": "file",
+      "sha256": "d59be3286b23989f8699f0c6b84c078af89f4998bf18985292941db6671e74d5",
+      "size": 14919,
+      "mode": 436
+    },
+    "tests/test_click_sharding_boundaries.py": {
+      "kind": "file",
+      "sha256": "f0dea77c6e6f728df6f188f1ac86da0c67d64606fb643b5e4fc29ca0a2295c78",
+      "size": 1748,
+      "mode": 436
+    },
+    "tests/test_click_sharding_setup.py": {
+      "kind": "file",
+      "sha256": "d034b2f05c1002b52be27adccdd8af4d0eb740001fb17a5a47c5672c89b72ec7",
+      "size": 48005,
+      "mode": 436
+    },
+    "tests/test_click_state.py": {
+      "kind": "file",
+      "sha256": "d597e23d18693e94f72882b1d2d12b1497deda8d7c3cb86d3e1a6df035f330b3",
+      "size": 5117,
+      "mode": 436
+    },
+    "tests/test_click_verification.py": {
+      "kind": "file",
+      "sha256": "4632669d0083751af063b0273e006871a9cd853f9a040e8845fbaa3644a51ece",
+      "size": 10391,
+      "mode": 436
+    },
+    "tests/test_click_verification_policy.py": {
+      "kind": "file",
+      "sha256": "203863ea8f5160f552cb629d8562e693c589c8038555901f1c662d58a4a061f3",
+      "size": 4516,
+      "mode": 436
+    },
+    "tests/test_distribution_validation.py": {
+      "kind": "file",
+      "sha256": "955bb8d06a500a3031c12f7ce024431f6961ed81869f6dafc40d00ad9ba3e7ad",
+      "size": 5265,
+      "mode": 436
+    },
+    "tests/test_incremental_benchmark.py": {
+      "kind": "file",
+      "sha256": "a8f8f613b4a006e28a0e8a032cce82ed1cc30791e09cca690205a4011d55bb60",
+      "size": 16386,
+      "mode": 436
+    },
+    "tests/test_repository_policy.py": {
+      "kind": "file",
+      "sha256": "d719a0267f2067789284a482a9fc11b0670323ab10a25285b6a0cfb92820a2f4",
+      "size": 20378,
+      "mode": 436
+    },
+    "tests/test_repository_shard_inventory.py": {
+      "kind": "file",
+      "sha256": "bf3d442a93dfef24c00b8ca222ede5caf063040afe81372fbf81457297d849b3",
+      "size": 1227,
+      "mode": 436
+    },
+    "tests/test_runner_state_recovery.py": {
+      "kind": "file",
+      "sha256": "5ea4af4e2d44dd412926d2b7c32853a7788f236f3f2a6ca4128fb4b45d0779a7",
+      "size": 8241,
+      "mode": 436
+    },
+    "tests/test_semantic_grader.py": {
+      "kind": "file",
+      "sha256": "9f51e0aadf6a38ae7cf413bffbd7591d74f77d186d7934e30cae043f4c38738f",
+      "size": 4556,
+      "mode": 436
+    },
+    "tests/test_windows_hook_commands.py": {
+      "kind": "file",
+      "sha256": "17401bd1b2837a459460e2e58344959f529ba8519872f0280744b360b9b0ecaf",
+      "size": 13889,
+      "mode": 436
+    }
+  }
+}

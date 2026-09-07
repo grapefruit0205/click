@@ -1,0 +1,134 @@
+{
+  "project_root": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "base_version": "0.90.0",
+  "base_commit": "3b7f8e6ec260729b4ba8a13484ea4c33dce7baeb",
+  "status": "completed",
+  "next_phase": null,
+  "approval_bound": false,
+  "execution_authority": "host",
+  "phases": [
+    {
+      "phase": 0,
+      "status": "completed",
+      "changed_files": [
+        "docs/dashboard-impact/COMMON.md",
+        "docs/dashboard-impact/PLAN.md",
+        "docs/dashboard-impact/METRICS.md",
+        "docs/dashboard-impact/SOURCE-PROMPT.md"
+      ],
+      "verification": [
+        "source/HEAD/version/status audit"
+      ],
+      "blockers": [],
+      "next_phase": 1
+    },
+    {
+      "phase": 1,
+      "status": "completed",
+      "changed_files": [
+        "hooks/click_incremental.py",
+        "hooks/click_dashboard_projection.py",
+        "tests/test_click_efficiency.py",
+        "tests/test_click_dashboard_projection.py"
+      ],
+      "verification": [
+        "E_IMPACT_METRICS_UI: 35 tests passed"
+      ],
+      "blockers": [],
+      "next_phase": 2
+    },
+    {
+      "phase": 2,
+      "status": "completed",
+      "changed_files": [
+        "hooks/click_shadow_dashboard.py",
+        "tests/test_click_efficiency.py",
+        "tests/test_click_shadow_dashboard.py"
+      ],
+      "verification": [
+        "E_IMPACT_METRICS_UI",
+        "Chromium 1440x900 and 390x844 visual review",
+        "keyboard filter and reduced-motion CSSOM check"
+      ],
+      "blockers": [],
+      "next_phase": 3
+    },
+    {
+      "phase": 3,
+      "status": "completed",
+      "changed_files": [
+        "hooks/click_shadow_dashboard.py",
+        "hooks/click_incremental.py",
+        "hooks/click_dashboard_projection.py",
+        "tests/test_click_efficiency.py"
+      ],
+      "verification": [
+        "E_IMPACT_METRICS_UI",
+        "browser reused/executed filters, explicit historical selection, refresh invariance"
+      ],
+      "blockers": [],
+      "next_phase": 4
+    },
+    {
+      "phase": 4,
+      "status": "completed",
+      "changed_files": [
+        "hooks/click_shadow_dashboard.py",
+        "tests/test_click_efficiency.py",
+        "tests/test_incremental_benchmark.py",
+        "README.md",
+        "VERIFICATION_EFFICIENCY.md"
+      ],
+      "verification": [
+        "E_IMPACT_METRICS_UI",
+        "E_IMPACT_BENCHMARK_COMPAT: 11 tests passed",
+        "browser real workflow v4 import and summary copy/export actions"
+      ],
+      "blockers": [],
+      "next_phase": 5
+    },
+    {
+      "phase": 5,
+      "status": "completed",
+      "changed_files": [
+        "dist/antigravity/hooks/click_incremental.py",
+        "dist/antigravity/hooks/click_dashboard_projection.py",
+        "dist/antigravity/hooks/click_shadow_dashboard.py",
+        "docs/dashboard-impact"
+      ],
+      "verification": [
+        "35 metrics/projection tests, 20 HTTP/incremental tests, 11 benchmark tests, 45 distribution/policy tests passed",
+        "actual Hook/runner partial reuse to projection/export: N=2 X=1 U=1",
+        "source/distribution consistency and diff check",
+        "screenshots and source-labeled evidence archived"
+      ],
+      "blockers": [],
+      "next_phase": null
+    }
+  ],
+  "verification_limits": [
+    "Canonical Click receipt export failed: an active capability claim remains in the runtime. Test results passed; no completion receipt was fabricated.",
+    "Related 111 tests passed; full repository suite was not rerun.",
+    "OS reduced-motion preference was not toggled; browser CSSOM rules were checked.",
+    "In-app browser download event did not return; exported HTML content was checked by tests, not by reopening the downloaded file.",
+    "Screenshots use synthetic rendering data; runtime fixtures and benchmark raw samples are separate.",
+    "Installed plugin cache was not replaced; no commit, push or deployment."
+  ],
+  "language_selection": {
+    "status": "completed",
+    "locales": [
+      "ko",
+      "en",
+      "zh-CN"
+    ],
+    "default_locale": "ko",
+    "message_count": 507,
+    "report": "reports/languages.md",
+    "verification": {
+      "ui_and_http_tests": 36,
+      "distribution_and_policy_tests": 45,
+      "total_distinct_tests": 81
+    },
+    "installed_cache_replaced": false
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "generated_at": 1788784525,
+  "broad_suite": {
+    "command": "python3 -m unittest discover -s tests -q",
+    "tests_run": 856,
+    "passed": 849,
+    "skipped": 7,
+    "failed": 0,
+    "duration_seconds": 704.821
+  },
+  "mandatory_automatic_sharding": {
+    "tests_run": 74,
+    "passed": 72,
+    "skipped": 2,
+    "failed": 0,
+    "duration_seconds": 104.71
+  },
+  "mandatory_shard_reuse": {
+    "tests_run": 8,
+    "passed": 8,
+    "skipped": 0,
+    "failed": 0,
+    "duration_seconds": 33.062
+  },
+  "development_regression": {
+    "observed": true,
+    "failed_test": "tests.test_repository_shard_inventory.RepositoryShardInventoryTests.test_every_parent_discovery_file_has_one_shard_owner",
+    "cause": "three-new-test-files-had-no-committed-shard-owner",
+    "repair": "assigned-diagnostics-and-failure-collection-to-verification-evidence-and-task-efficiency-to-repository-policy",
+    "corrected_matrix_status": "passed"
+  },
+  "distribution": {
+    "hook_manifest_errors": [],
+    "source_dist_mismatches": [],
+    "hook_file_count": 60
+  },
+  "post_report_repository_checks": {
+    "modules": [
+      "tests.test_repository_policy",
+      "tests.test_distribution_validation",
+      "tests.test_repository_shard_inventory"
+    ],
+    "tests_run": 46,
+    "passed": 46,
+    "skipped": 0,
+    "failed": 0
+  },
+  "new_skips": 0,
+  "native_authoritative_e2e": "not-verified-prepared-profile-required"
+}

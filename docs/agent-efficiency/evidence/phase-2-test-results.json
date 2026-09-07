@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "phase": 2,
+  "generated_at": 1788784525,
+  "suite": "tests.test_click_diagnostics",
+  "tests_run": 12,
+  "passed": 12,
+  "skipped": 0,
+  "failed": 0,
+  "verified": [
+    "raw-default-and-actionable-opt-in",
+    "one-execution-concurrent-bounded-capture",
+    "unittest-and-pytest-failure-parsing",
+    "unsupported-parser-and-missing-or-truncated-output",
+    "unsafe-path-and-secret-redaction",
+    "revision-binding-owner-only-retention-and-status-enrichment"
+  ],
+  "whole_task_effect": null,
+  "whole_task_effect_reason": "no-equivalent-baseline-and-improved-host-task-boundaries"
+}

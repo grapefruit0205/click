@@ -108,7 +108,7 @@ Evidence 模式下直接提出普通请求即可：
 
 ## 更新
 
-当前版本：**v0.90.0**
+当前版本：**v0.91.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -118,6 +118,24 @@ codex plugin add click@click
 更新后请开始一个新任务。
 
 版本历史见 [Release Notes](RELEASE_NOTES.md)。
+
+## 在 Windows 上验证 Hook
+
+安装或更新后，请重新启动 Codex 并打开一个新任务。在 PowerShell 中确认 Click
+已启用，并确认随附 Windows Hook 使用的 Python 3 启动器至少有一个可运行：
+
+~~~powershell
+codex --version
+codex plugin list --json
+py -3 --version
+python --version
+~~~
+
+启动 `codex`，运行 `/hooks`；如果当前 Click Hook 哈希等待审核，请检查并信任
+它。更新后可能需要重新审核。另请检查
+`$env:USERPROFILE\.codex\config.toml`：`hooks = false` 会禁用 Hook，管理员策略
+`allow_managed_hooks_only = true` 会跳过插件附带的 Hook。信任与配置详情请参阅
+官方 [Codex Hooks 文档](https://learn.chatgpt.com/docs/hooks)。
 
 ## evidence 何时可以复用？
 
@@ -190,7 +208,7 @@ exact/dependency/policy 复用、根据最近运行估算的避免时间，以�
 
 ## 完成 receipt
 
-版本说明：v0.90.0 新增持续且带成本门控的 unittest/pytest 分片设置、受限检查结果缓存，以及故障关闭的原生观察器配置。
+版本说明：v0.91.0 新增基于实际命令结果的验证指标、受限故障诊断、完整任务效率评估，以及支持韩语、英语和简体中文的响应式仪表板。
 
 Guarded 的已完成合约 A 可以把真实成功结果作为候选交给新合约 B，但 B 必须使用新 ID 并在独立用户轮次中批准。重新核对当前请求、环境与既有策略后才能复用；批准、runner token、未完成工作和完成状态不会继承。实际应用跨合约复用时使用 receipt v5，保留原合约、检查批次、revision 和重新判定来源；旧版 v1–v4 继续兼容。Evidence 仍是默认模式。
 

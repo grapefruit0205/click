@@ -1,0 +1,29 @@
+{
+  "kind": "click-task-efficiency-evaluation",
+  "version": 1,
+  "generated_at": 1788781860,
+  "measurement_reason": "host-task-and-usage-boundaries-unavailable",
+  "comparisons": [],
+  "evaluation_context": {
+    "planned_variants": [
+      "N",
+      "B0",
+      "B1",
+      "B2"
+    ],
+    "planned_run_kinds": [
+      "first-use",
+      "prepared-repeat"
+    ],
+    "planned_runtime_modes": [
+      "evidence",
+      "guarded"
+    ],
+    "minimum_pairs_per_compatible_scope": 5,
+    "observed_pair_count": 0,
+    "task_boundary_source": "unavailable-on-current-host",
+    "usage_source": "unavailable-on-current-host",
+    "separate_model_tasks_started": false,
+    "synthetic_values_used": false
+  }
+}

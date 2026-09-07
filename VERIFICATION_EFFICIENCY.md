@@ -34,13 +34,127 @@ Evidence Map은 최신 배치의 상세 분석이며 과거 배치의 입력 그
 
 화면의 **JSON 내보내기**, **독립형 HTML 내보내기**는 선택한 실제 배치와 가져온 비교 측정을
 브라우저 다운로드로 저장합니다. HTML은 외부 스크립트·자산·분석 서비스 없이 열립니다.
-공유본은 원시 명령·파일 내용·입력 파일 경로·절대경로·환경 값·runner/access token을 제외합니다.
-계약 문구도 공유본에서 제외합니다. 로컬 상태에는 제한된 name/promises/범위/불변조건과
+공유본은 원시 명령·로그·파일 내용·입력 파일 경로·절대경로·환경 값·runner/access token,
+계약 ID·계약 문구를 제외합니다. 로컬 상태에는 제한된 name/promises/범위/불변조건과
 최근 8개 계약의 표시용 이력이 남습니다. 제한·필터는 완전한 비밀 탐지기가 아닙니다.
-공유본에는 현재/원본 계약과 check digest, 계측 조건, 엔진 버전·파일 digest가 남지만
-어느 것도 서명된 발행자 증명은 아닙니다. 표시 데이터는 실행 권한에 역으로 쓰지 않습니다.
+공유본의 검증 묶음은 허용된 표시명·상태·사유·시간·개수만 남기며 source/check digest와
+reuse origin 계약을 복사하지 않습니다. 표시 데이터는 실행 권한에 역으로 쓰지 않습니다.
 검증을 실행하거나 재사용 권한을 바꾸지 않습니다. 서명이나 발행자 인증이 있는 receipt는 아닙니다.
 사용자 문자열은 DOM textContent로 표시하여 HTML로 실행하지 않습니다.
+
+## 실패 진단 출력
+
+검증 요청의 `reporting`을 생략하면 v1 `raw`가 적용되어 기존 stdout/stderr 전달 동작을 유지합니다.
+`format: actionable`을 명시하면 원래 명령을 다시 실행하지 않고 그 한 번의 stdout/stderr에서
+unittest/pytest 실패 test id, 오류 종류, 안전한 파일/행, 핵심 메시지와 제한된 stack을 정리합니다.
+
+```json
+{
+  "reporting": {
+    "version": 1,
+    "format": "actionable",
+    "max_bytes": 65536,
+    "context": {"enabled": false, "max_files": 2, "max_lines": 120}
+  }
+}
+```
+
+capture는 stdout과 stderr를 동시에 끝까지 drain하되 각각 설정 상한 안의 앞/뒤 구간만 보존합니다.
+기본 상한은 stream당 64 KiB, 허용 범위는 4~128 KiB입니다. 전체 관측 bytes, 잘림, decode 대체,
+reader 오류와 parser 지원 여부를 함께 표시합니다. 원문은 기존 plugin data 아래 owner-only 파일에
+최대 24시간, 128개, 총 8 MiB 범위로 보관합니다. 자격증명 형태는 actionable 요약에서 가립니다.
+
+`context.enabled`는 자동 소스 읽기 허가가 아닙니다. 출력에 나온 workspace 내부의 안전한 파일/행만
+별도 inspect 후보로 반환하며 기존 read claim을 거쳐야 합니다. 진단, status와 `next_action`은 안내이고
+검증 pass, receipt, reuse, 전체 작업 완료 권한을 만들지 않습니다. `등록된 검사가 현재 유효함`과
+`작업 전체가 올바름`도 별도 상태로 표시합니다.
+
+## 제한적 실패 수집
+
+`failure_collection`을 생략하면 v1 `off`이며 첫 실패에서 멈추는 기존 동작입니다. 이미 요청한 source 중
+실행 독립성을 사용자가 명시한 경우에만 `bounded`를 선택할 수 있습니다.
+
+```json
+{
+  "failure_collection": {
+    "version": 1,
+    "mode": "bounded",
+    "independent_sources": ["unitA", "unitB"],
+    "max_extra_sources": 1,
+    "max_extra_failures": 1,
+    "start_window_ms": 30000
+  }
+}
+```
+
+두 개 이상의 제출된 evidence id가 필요합니다. 최대값은 추가 source 3개, 추가 실패 3개, 다음 source
+시작 허용창 30초입니다. 시작창은 실행 중인 명령의 timeout이 아닙니다. 같은 source 안에서는 첫 실패로
+멈추며, parser가 실제 `test-failure`로 확인한 결과만 다음 독립 source로 이어집니다. ERROR/setup 오류,
+취소, claim/state/Git/environment/executable drift, 불명확한 출력은 즉시 중단합니다. source 경계마다
+현재 조건을 다시 확인하고 첫 nonzero exit를 보존합니다. automatic sharding이 source identity를
+바꾸면 독립성을 추측하지 않고 fail-fast로 돌아갑니다.
+
+수정 후에는 현재 조건의 원래 부모 검증 요청을 다시 제출해야 합니다. 앞서 성공한 sibling도 기존 exact,
+dependency 또는 precommitted safe-change 조건을 다시 통과해야 재사용됩니다. 실패 수집 설정 자체는
+재사용 권한이나 검사 범위를 만들지 않습니다.
+
+## 전체 task 평가 파일
+
+내부 v1 평가 파일에서 비율 전용 공개 파일을 만들려면 다음을 명시적으로 실행합니다.
+
+```sh
+python3 benchmarks/task_efficiency.py INTERNAL.json --public-output PUBLIC.json
+```
+
+adapter는 동일한 acceptance version과 completion digest, 유효한 task 시작/종료, 완전한 usage scope가
+있는 pair만 계산합니다. 증분/누적 event 의미를 선언하고 event/response identity로 중복을 제거합니다.
+cached input과 reasoning이 상위 합계에 포함된 경우 다시 더하지 않습니다. 원시 usage와 토큰 절대량은
+내부 파일에만 있고 공개 v1에는 비율, 상태, 비교 범위, 표본·불리한 결과와 허용된 작업 흐름 집계만
+남습니다. 현재 저장된 Phase 4 공개 파일은 실제 pair 0개라 미측정입니다.
+
+
+## 전후 차이와 상태를 읽는 법
+
+첫 화면은 정확한 제목 **절감 시간**과 **토큰 절감률**을 함께 표시하고, 그 위에 전체 N개 중
+실제 실행 X개와 결과 재사용 U개 및 현재 상태를 둡니다. 절감 시간은 실제 재사용에 결속된 적합한
+과거 성공 실행시간 합계이며 `약 … [추정]`입니다. 시간 표본이 없거나 일부만 있으면 큰 값은
+`U / N개`로 바뀌고 부분 추정 상태와 커버리지를 함께 표시합니다. 일부 표본의 합계는 최소
+절약시간이 아닙니다. 실제 재사용 0의 정상 완료는 0ms이고, 진행·실패·취소·미완료는 성과 0과 다릅니다.
+
+토큰 절감률은 `click-task-efficiency-public` v1의 선택한 presentation에 유효한 전체 작업 비율이
+있을 때만 표시합니다. 양수는 감소, 정확한 0은 변화 없음, 음수는 증가입니다. 0이 아닌 아주 작은
+값은 `<0.01%`와 방향을 표시해 0으로 보이지 않게 합니다. baseline·완전한 task 범위 usage·동등한
+완료 조건 중 하나라도 없으면 미측정이며 현재 usage, 실행시간, 생략 묶음 수로 대신 계산하지 않습니다.
+화면·접근성 문구·복사·JSON·HTML에는 원시 usage와 전후/절감 토큰 절대량을 넣지 않습니다.
+
+같은 첫 화면의 **전체 작업 효과**는 동일 presentation의
+`task_completion_time_savings_ratio`만 사용합니다. 양수/0/음수는 빨라짐/변화 없음/느려짐이고,
+직접 비교가 없으면 미측정입니다. 절감 시간, `request_wall_ms`, Click 관리 구간을 합하거나 빼서
+이 값을 만들지 않습니다. 느려진 표본·실패·취소·미완료와 사용자 개입 증가는 첫 화면에도 남습니다.
+N/B0/B1/B2, 첫 사용/준비된 반복 사용, Evidence/Guarded, 시나리오가 다른 presentation은 합치지
+않으며 둘 이상이면 사용자가 하나를 고르기 전까지 대표 결론을 표시하지 않습니다.
+
+전체 기준과 실제 결과의 묶음 블록은 같은 위치에 대응합니다. 숫자/기호/텍스트로 실행·재사용·실패·중단·미확정을 구분하며, 재사용 수를 선택하면 해당 목록과 canonical reason으로 이어집니다. 완전한 시간 근거가 있으면 동일한 0 시작 축에서 F(전체 순차 예상)와 E(이번 실행)를 비교하고, 빗금으로 A(피한 비용 추정)를 표시합니다. 묶음의 횟수 비율과 시간 비율은 별개입니다. F/R이 없으면 횟수 비교만 유지합니다.
+
+N/N 결과 확보는 정상 완료한 요청에서만 표시합니다. 검증의 충분성이나 코드 전체의 정확성 보장이 아닙니다. 실패·진행·취소·실행 전 거부는 상태를 우선 표시합니다. 새 작업에 배치가 없으면 과거 성공을 현재 결과로 고르지 않습니다. 과거 배치를 직접 선택하면 배치 시점과 과거 기록 표시가 함께 바뀌고 polling/기록 새로고침에도 선택을 유지합니다.
+
+누적 보조 지표는 최대 7일/1,000건의 **보관된 정상 완료 요청**만 대상으로 합니다. 같은 batch의 중복 전송은 한 번, 실제 재시도는 각각 집계합니다. 기간·표시 시간대·누락 시간 표본 수를 표시하며, 부분 합계를 전체 대기 절감시간이나 평생 절감으로 해석하지 않습니다. 기존 전체 요청 accounting에는 실패·취소 이력이 계속 남습니다.
+
+공유 요약 문구, JSON(v5), 독립 HTML은 같은 시간/작업 presentation 수치를 사용합니다. projection
+v8은 기본 미측정 `task_efficiency` 공개 객체를 추가하며 v4/v5/v6/v7 읽기 호환성을 유지합니다.
+구형 과거 배치에 집계가 없을 때 현재 배치의 수치로 채우지 않습니다. 공유 묶음명과 Phase 4
+presentation은 별도 allowlist를 통과하며 알 수 없는 필드나 원시 usage key가 있으면 가져오기를
+거부합니다. 로컬에서 고른 원자료 파일명은 상세 화면에만 보이고 공유본에 포함하지 않습니다.
+
+별도 workflow 비교에서는 각 경로의 중앙값과 쌍별 차이의 중앙값을 구분하고, 워밍업·제외 사유·실패·음수·초기 준비·변경·추가 감사 비용을 보존합니다. `same-shards`는 source-command 구간, `parent-suite`는 Click 요청 구간 비교입니다. legacy paired v2의 wall time 비교는 별도로 표시합니다. fixture에서 Click 구간이 더 길었던 사실은 해당 fixture에 귀속하며 현재 요청이 느려졌다고 표시하지 않습니다. 가져오기·제거·공유·새로고침은 검증을 실행하지 않습니다.
+
+참고 이미지와 합성 화면 캡처, 실제 Hook/runner 검증은 [구현 기록](docs/dashboard-impact/PLAN.md)에서 구분합니다. Observer는 기본값인 off 상태에서도 검증·정확 일치/정책 재사용·계측·대시보드가 동작합니다.
+
+상단 언어 선택에서 **한국어 / English / 简体中文(중국어 간체)**를 고를 수 있습니다. 선택은 같은 viewer origin의 브라우저 저장소에 보관하며, 저장소 접근이 제한돼도 현재 페이지의 전환은 가능합니다. 상태·이유·날짜·시간 표현과 복사 문구·공유 리포트가 함께 바뀝니다. 작업명과 사용자가 작성한 검증 묶음 이름, canonical ID·판정·측정값은 원문을 유지합니다.
+
+공유 report v5의 `locale` 필드(`ko`, `en`, `zh-CN`)와 독립 HTML의 `lang` 및 표시 문구는
+보고서를 생성한 언어를 따릅니다. 이후 대시보드 언어를 바꿔도 이미 만든 보고서는 바뀌지 않습니다.
+기존 검증 결과와 시간 산식은 유지하고, task public presentation만 별도 필드로 추가했습니다.
 
 ## 시간을 읽는 법
 
@@ -77,8 +191,7 @@ tracing slowdown은 비교 측정하지 않았으며 Shadow 후보를 실제 재
 python3 benchmarks/incremental_verification.py --guarded-workflow --iterations 3 --warmups 1 --workload-rounds 40000 --output /tmp/click-workflow.json --html-output /tmp/click-workflow.html
 ```
 
-새 출력 파일에만 기록합니다. 이 v3 세 구성 보고서는 독립 HTML로 열고, 아래의 기존
-v2 쌍별 보고서만 현재 dashboard importer에 입력합니다. 새 프레임워크나 서비스가 필요 없습니다.
+새 출력 파일에만 기록합니다. 현재 v4 세 구성 보고서는 독립 HTML로 열거나 대시보드에 가져올 수 있습니다. 기존 v2 paired 보고서도 읽습니다. 새 프레임워크나 서비스가 필요 없습니다.
 
 - baseline: Click Hook 없이 동일한 unittest discover 전체 실행.
 - click-default: Guarded를 명시적으로 선택하고 추가 shard/dependency/reuse 설정 없이 실행.
@@ -86,8 +199,8 @@ v2 쌍별 보고서만 현재 dashboard importer에 입력합니다. 새 프레�
   허용하는 정책을 최초 baseline 전에 커밋. 정책은 관찰기나 자동 의존성 발견이 아닙니다.
 
 제품 기본 모드는 Evidence 그대로입니다. 각 구성은 독립 임시 Git root와 receipt를 사용하며
-첫 실행→beta 코드 변경→alpha 코드 변경→환경 변경→alpha 실패→수정 후 재시도→변경 없음의
-같은 일곱 단계를 진행합니다. 테스트·코드 digest를 매 단계 구성 간 대조합니다. A 완료 뒤
+첫 실행→beta 코드 변경→alpha 코드 변경→전체 코드 변경→환경 변경→alpha 실패→수정 후 재시도→변경 없음의
+같은 여덟 단계를 진행합니다. 테스트·코드 digest를 매 단계 구성 간 대조합니다. A 완료 뒤
 B를 새 ID로 stage하고 별도 fixture 턴에서 승인합니다. 이후 완료된 단계도 별도 계약을
 사용하고 실패·수정은 같은 미완료 계약 안에서 처리합니다. 승인 전 수정·같은 턴 승인·잘못된
 ID가 실제로 거부되는지 확인합니다. 개발 세션의 승인이나 Hook 설정은 변경하지 않습니다.
@@ -98,7 +211,7 @@ suite가 통과해야 보고서를 생성합니다. B와 최종 영수증은 실
 거친 unsigned envelope입니다. 정상 표본의 일치는 모든 프로젝트에서 안전하다는 증명이 아닙니다.
 
 워밍업은 전체 workflow 반복을 제외하며 반복마다 새 checkout을 만듭니다. 세 구성 실행 순서를
-회전하고 bytecode는 비활성화하지만 OS 캐시·스케줄러는 초기화/제어하지 않습니다. 일곱 요청 합계의
+회전하고 bytecode는 비활성화하지만 OS 캐시·스케줄러는 초기화/제어하지 않습니다. 여덟 요청 합계의
 차이와 비율은 기대된 실패·재시도도 포함하고 음수를 보존합니다. Click 요청에는 Hook·runner
 시작 비용도 포함됩니다. Git·첫 fixture 승인 setup, 이후 승인/수정 transition, 추가 full audit를
 별도 기록합니다. 영수증 export·보고서 직렬화 비용은 제외됩니다. Scripted 승인 시간은 사람의

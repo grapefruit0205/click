@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "phase": 4,
+  "generated_at": 1788784525,
+  "suite": "tests.test_task_efficiency",
+  "tests_run": 12,
+  "passed": 12,
+  "skipped": 0,
+  "failed": 0,
+  "public_reproduction": {
+    "input": "evidence/phase-4-internal.json",
+    "output": "evidence/phase-4-public.json",
+    "byte_for_byte_match": true
+  },
+  "actual_pair_count": 0,
+  "measurement_status": "unmeasured",
+  "measurement_reason": "host-task-and-usage-boundaries-unavailable",
+  "synthetic_values_used": false
+}

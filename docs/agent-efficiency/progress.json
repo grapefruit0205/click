@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "package_version": 2,
+  "project_root": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "base_version": "0.90.0",
+  "base_commit": "3b7f8e6ec260729b4ba8a13484ea4c33dce7baeb",
+  "baseline_snapshot": "/home/grapefruit/click-agent-efficiency-baselines/b0-20260907T070638Z",
+  "status": "completed",
+  "current_phase": 5,
+  "next_phase": null,
+  "next_prompt": null,
+  "auto_advance": false,
+  "execution_authority": "host",
+  "approval_bound": false,
+  "release_version_changed": false,
+  "observer_default": "off",
+  "observer_changed": false,
+  "common_acceptance": [
+    "기존 automatic sharding init/status/refresh 및 shard reuse 기능을 회귀시키지 않는 것"
+  ],
+  "amendments": [
+    {
+      "id": "phase-0-total-task-efficiency",
+      "status": "applied",
+      "source_sha256": "5e0f6bfe36a58a71a86d0dbca33ec121ef20b1014ef60daa9d1945c4da99bf40",
+      "report": "reports/phase-0-amendment.md",
+      "baseline_reset": false,
+      "product_code_changed": false
+    }
+  ],
+  "product_success": {
+    "primary": "same-quality task completion time and user intervention",
+    "task_completion_time_savings_ratio": null,
+    "user_intervention_comparison": null,
+    "completion_quality_comparison": null,
+    "measurement_status": "unmeasured",
+    "measurement_reason": "host-task-and-usage-boundaries-unavailable",
+    "first_use_separate": true,
+    "prepared_repeat_use_separate": true,
+    "evidence_guarded_separate": true
+  },
+  "phases": [
+    {"id": 0, "status": "completed", "report": "reports/phase-0.md"},
+    {"id": 1, "status": "completed", "report": "reports/phase-1.md"},
+    {"id": 2, "status": "completed", "report": "reports/phase-2.md"},
+    {"id": 3, "status": "completed", "report": "reports/phase-3.md"},
+    {"id": 4, "status": "completed", "report": "reports/phase-4.md", "actual_pair_count": 0},
+    {"id": 5, "status": "completed", "report": "reports/phase-5.md"}
+  ],
+  "verification": {
+    "execution": "host-direct-unittest",
+    "parent_evidence_id": null,
+    "tests_run": 856,
+    "passed": 849,
+    "skipped": 7,
+    "failed": 0,
+    "duration_seconds": 704.821,
+    "expanded_shards": 8,
+    "mandatory_automatic_sharding": {
+      "tests_run": 74,
+      "passed": 72,
+      "skipped": 2,
+      "failed": 0
+    },
+    "mandatory_shard_reuse": {
+      "tests_run": 8,
+      "passed": 8,
+      "skipped": 0,
+      "failed": 0
+    },
+    "native_authoritative_e2e": "not-verified-in-this-environment",
+    "evidence": "evidence/final-test-results.json"
+  },
+  "phase_1": {
+    "command_outcome_batch_version": 5,
+    "legacy_read_versions": [1, 2, 3, 4],
+    "default_fail_fast_preserved": true,
+    "succeeded_count_authoritative_for_v5": false,
+    "overhead_evidence": "evidence/phase-1-overhead.json",
+    "test_evidence": "evidence/phase-1-test-results.json"
+  },
+  "phase_2": {
+    "reporting_version": 1,
+    "default_format": "raw",
+    "actionable_opt_in": true,
+    "automatic_context_reads": false,
+    "test_evidence": "evidence/phase-2-test-results.json"
+  },
+  "phase_3": {
+    "failure_collection_version": 1,
+    "default_mode": "off",
+    "bounded_opt_in": true,
+    "max_extra_sources": 3,
+    "max_extra_failures": 3,
+    "max_start_window_ms": 30000,
+    "real_runner_repair_and_reuse_verified": true,
+    "test_evidence": "evidence/phase-3-test-results.json"
+  },
+  "phase_4": {
+    "internal_schema": "click-task-efficiency-evaluation-v1",
+    "public_schema": "click-task-efficiency-public-v1",
+    "actual_pair_count": 0,
+    "synthetic_values_used": false,
+    "public_projection_reproduced": true,
+    "test_evidence": "evidence/phase-4-test-results.json"
+  },
+  "phase_5": {
+    "dashboard_projection_version": 8,
+    "share_report_version": 5,
+    "legacy_projection_versions": [4, 5, 6, 7],
+    "languages": ["ko", "en", "zh-CN"],
+    "desktop_visual_qa": "evidence/phase-5-dashboard-1440x900.png",
+    "mobile_visual_qa": "evidence/phase-5-dashboard-390x844.png",
+    "test_evidence": "evidence/phase-5-test-results.json"
+  },
+  "model_evaluation": {
+    "pairs": 0,
+    "task_completion_time_savings_ratio": null,
+    "user_intervention_comparison": null,
+    "token_savings_ratio": null,
+    "model_round_trips": null
+  },
+  "blockers": [],
+  "limitations": [
+    "Two native authoritative sharding E2E cases remain skipped because a prepared native authoritative profile is required.",
+    "No valid N/B0/B1/B2 whole-task comparison was available; whole-task effect, user intervention change and token savings remain unmeasured.",
+    "Phase 2 component cost is recorded per diagnostic, but no equivalent host task pair exists for an end-to-end management-cost conclusion."
+  ],
+  "preserved_existing_work": [
+    "docs/dashboard-impact/",
+    "docs/auto-sharding/",
+    "existing dirty source/tests/dist and ko/en/zh-CN dashboard selection"
+  ],
+  "commit_created": false,
+  "push_performed": false,
+  "plugin_installed": false
+}

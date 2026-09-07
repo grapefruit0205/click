@@ -10,7 +10,7 @@ English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
 Click provides incremental verification for coding agents. It helps constrain unrequested scope expansion through a reviewed Guarded contract, while **revision-aware evidence** lets valid checks survive a new task. Reuse requires matching execution bindings and, after changes, a complete dependency observation or an explicit policy committed before the baseline. Missing authority means a real rerun, not automatic dependency inference.
 
-Release note: v0.90.0 adds continuous, cost-gated unittest/pytest shard setup, bounded inspection-result caching, and fail-closed native observer profiles.
+Release note: v0.91.0 adds outcome-aware verification telemetry, bounded failure diagnostics, whole-task efficiency evaluation, and a responsive Korean, English, and Simplified Chinese dashboard.
 
 Click does not prove that the code is correct or that the selected tests are sufficient. It tracks whether existing verification evidence still applies to the current code.
 
@@ -110,7 +110,7 @@ Or explicitly choose Guarded:
 
 ## Update
 
-Current release: **v0.90.0**
+Current release: **v0.91.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -120,6 +120,26 @@ codex plugin add click@click
 Start a fresh task after updating.
 
 See [release notes](RELEASE_NOTES.md) for version history.
+
+## Verify Hooks on Windows
+
+After installing or updating, restart Codex and open a new task. In PowerShell,
+confirm that Click is enabled and that one of the launchers used by the bundled
+Windows Hook can start Python 3:
+
+~~~powershell
+codex --version
+codex plugin list --json
+py -3 --version
+python --version
+~~~
+
+Start `codex`, run `/hooks`, and review or trust the current Click Hook hash if
+it is pending. An update can require a new review. Also check
+`$env:USERPROFILE\.codex\config.toml`: `hooks = false` disables Hooks, and an
+administrator policy with `allow_managed_hooks_only = true` skips
+plugin-bundled Hooks. See the official [Codex Hooks
+guide](https://learn.chatgpt.com/docs/hooks) for trust and configuration details.
 
 ## What makes evidence reusable?
 
@@ -218,6 +238,28 @@ that have not been requested. It also reports which registered checks remain,
 which are valid for the current mutation revision, and which a mutation
 invalidated. This view cannot create reuse authority or complete a task.
 
+Verification protocol v2 also accepts a versioned `reporting` object. The
+compatibility default is `{"version":1,"format":"raw",...}`: the original
+stdout/stderr still streams and Click retains only a bounded owner-readable
+copy. Explicit `format:"actionable"` replaces repeated raw failure output with
+the failing test identity, error, safe workspace-relative frame, truncation
+state, remaining registered checks, and an opaque local detail reference.
+`click-gate status` joins that diagnosis to the exact task, batch, revision and
+check digest. It separately says that current registered checks are current;
+it does not claim whole-task correctness. Retained output is capped per stream,
+pruned by age/count/total bytes, and never becomes a receipt or reuse input.
+Automatic source-code context is disabled; any suggested context read requires
+its own normal read authority.
+
+The optional `failure_collection` object is also versioned. Its default mode is
+`off`, preserving source-order fail-fast. Explicit `mode:"bounded"` requires a
+caller-provided list of distinct submitted evidence IDs plus limits for extra
+sources, extra failures and the admission window. Click rechecks the claim,
+workspace, environment and executable before each extra source. It continues
+only after parser-classified test failures; setup/import errors, cancellation,
+drift, unknown output and the first failure inside one source stop collection.
+Automatic shards are never inferred to be independent for this policy.
+
 During Evidence, approved Guarded work, or read-only review, Click can reuse a
 complete result for one explicit local `cat`, bounded `sed -n`, or supported
 `rg` request. The cache binds the request, cwd, trusted executable, relevant
@@ -230,7 +272,9 @@ targets, failures, output over 48 KB, missing entries, and corrupt entries use
 the normal read-only runner. For an intentional same-request rerun, use
 `click-gate inspect` with `"fresh":true` in its version 1 request.
 
-Use `click-gate dashboard start`, `status`, or `stop` for actual **verification-group** outcomes, batch history and JSON/standalone HTML exports. Planned, started, reused and unstarted groups are distinct; partial processing measurements, full request wait (unknown when unmeasured), baseline-cost estimates and Shadow remain separate. Run `python3 benchmarks/incremental_verification.py --iterations 3 --warmups 1 --output /tmp/click-comparison.json`, then select that JSON in the viewer for a real hook/runner comparison. Short checks can be slower with runtime overhead. See [measurement scope, mode boundaries and exports](VERIFICATION_EFFICIENCY.md).
+Use `click-gate dashboard start`, `status`, or `stop` for actual **verification-group** outcomes, batch history and JSON/standalone HTML exports. Planned, started, reused and unstarted groups are distinct; partial processing measurements, full request wait (unknown when unmeasured), baseline-cost estimates and Shadow remain separate. The first screen keeps **Time saved** and **Token savings rate** together with the whole-task effect. Time saved is the existing estimate from actually reused groups and suitable prior successful durations. The token card and whole-task faster/unchanged/slower result accept only the Phase 4 public comparison schema; without equivalent task boundaries and complete usage they remain unmeasured. Absolute token counts and raw usage never enter the viewer, copied summary, public JSON or standalone HTML. Run `python3 benchmarks/task_efficiency.py INTERNAL.json --public-output PUBLIC.json` to build that allowlisted public file. The existing verification-interval benchmark imports remain supported. Short checks can be slower with runtime overhead. See [measurement scope, mode boundaries and exports](VERIFICATION_EFFICIENCY.md).
+
+The dashboard language selector supports **한국어, English, and 简体中文**. The default is Korean; a browser-local preference persists across reloads of the same viewer origin. If browser storage is unavailable, language switching still works for the open page. Navigation, state explanations, dates, duration labels, comparisons and shared reports follow the selected language. Task names and user-authored check labels retain their original text. Switching language redraws cached data without running checks or changing the selected batch, filters or authority.
 
 An opened dashboard remains attached to the same host session and workspace across successive Evidence tasks. Each verification group is persisted as soon as it finishes, so an already-passed group remains visible while the next group runs and after cancellation. Viewer connectivity does not carry Guarded approval, runner tokens, unfinished commands, or completion authority into the next task. A completed Evidence task may pass real successful results forward as **candidates only**; Click rechecks the exact source and check, workspace and mutation boundary, environment, executable, host coverage, and existing dependency or committed safe-change rules. Equal revision numbers, dashboard history, exports, timing, and Shadow predictions never authorize reuse.
 
@@ -251,9 +295,9 @@ The receipt binds request lineage, mutation revision, final workspace, checks, e
 python3 benchmarks/incremental_verification.py --guarded-workflow --iterations 3 --warmups 1 --workload-rounds 40000 --output /tmp/click-workflow.json --html-output /tmp/click-workflow.html
 ~~~
 
-This uses independent real Hook/runner fixtures, not approval in your development session. It compares no Click, explicitly selected Guarded with default reuse settings, and Guarded with precommitted shards/sibling-code policy. Evidence remains the product default mode. The fixed flow includes first run, unrelated/related code, environment change, failure, repair and unchanged retry; every step is audited against the same-state full suite. Warmups, rotating execution order, setup/transition/audit costs and negative timing differences are retained. The offline HTML is the v3 three-configuration report; the existing dashboard importer accepts the older v2 paired report. Neither sample results nor unsigned exports prove universal safety or total development-time savings.
+This uses independent real Hook/runner fixtures, not approval in your development session. It compares no Click, explicitly selected Guarded with default reuse settings, and Guarded with precommitted shards/sibling-code policy. Evidence remains the product default mode. The fixed flow includes first run, unrelated/related code, environment change, failure, repair and unchanged retry; every step is audited against the same-state full suite. Warmups, rotating execution order, setup/transition/audit costs and negative timing differences are retained. The offline HTML and dashboard importer support the current v4 workflow report; the importer also retains v2 paired-report compatibility. Neither sample results nor unsigned exports prove universal safety or total development-time savings.
 
-The result-first dashboard shows promises and approval, group outcomes, prior-contract provenance, estimated avoided rerun cost and whether a separate comparison exists. A bounded local display copy of contract summaries is retained; it is not an authority source or guaranteed secret redactor. Shared exports omit contract prose, raw commands, input paths and environment values. Request timing is partial (`hook-entry-to-result-recording`), not the full host wait. [Detailed measurement and privacy boundaries](VERIFICATION_EFFICIENCY.md).
+The dashboard uses a mint and teal layout with two first-screen metric cards, a count-based fallback when timing is missing, aligned verification-group blocks, and a shared zero-origin time comparison. Reuse links filter the actual groups and their canonical reasons. Selected historical requests are explicitly labeled; retained successful-request totals include their time coverage and retention window. Different N/B0/B1/B2, first-use/prepared-repeat, Evidence/Guarded and scenario scopes stay separate and require selection when more than one is present. Copy, JSON and standalone HTML share the same projected metrics and labels. Imported losses, warmups, failures, incomplete samples and additional costs remain visible in their own scope. Shared exports omit contract identifiers and prose, raw commands and logs, input paths, environment values, raw usage and absolute token counts. Request timing is partial (`hook-entry-to-result-recording`), not the full host wait. [Detailed measurement and privacy boundaries](VERIFICATION_EFFICIENCY.md).
 
 Receipt verification currently reports **unsigned-integrity-only**. It detects accidental or uncoordinated changes to the receipt, but it does not yet prove the publisher's identity.
 

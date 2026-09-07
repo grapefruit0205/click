@@ -344,6 +344,11 @@ def decision(
 # share the existing age/count/byte budget with legacy planning events.
 BATCH_STATUSES = frozenset({"planned", "running", "passed", "failed", "interrupted", "rejected", "incomplete"})
 SOURCE_STATUSES = frozenset({"planned", "reuse-pending", "running", "passed", "failed", "interrupted", "not-run", "reused", "unknown"})
+COMMAND_STATUSES = frozenset(
+    {"planned", "started", "passed", "failed", "interrupted", "not-run", "unknown"}
+)
+COMMAND_MEASUREMENT_SCOPE = "target-start-through-command-return"
+COMMAND_MEASUREMENT_SCOPES = frozenset({"unmeasured", COMMAND_MEASUREMENT_SCOPE})
 REUSE_ORIGIN_KINDS = frozenset({"successor-evidence", "successor-contract"})
 EXECUTION_REASONS = frozenset({
     "", "batch-finished", "request-rejected", "runner-admission-rejected",
@@ -364,10 +369,384 @@ _SOURCE_FIELDS_V1 = _DECISION_FIELDS | {
     "duration_ms", "execution_reason_code",
 }
 _SOURCE_FIELDS = _SOURCE_FIELDS_V1 | {"reuse_origin"}
+_COMMAND_PLAN_FIELDS = frozenset(
+    {"position", "source_position", "check_digest"}
+)
+_COMMAND_FIELDS = _COMMAND_PLAN_FIELDS | {
+    "status", "started", "completed", "started_offset_ms",
+    "finished_offset_ms", "duration_ms", "exit_code", "reason_code",
+    "measurement_scope", "log_ref",
+}
+_SOURCE_FIELDS_WITH_COMMANDS = _SOURCE_FIELDS | {"commands"}
 _REUSE_ORIGIN_FIELDS = frozenset({
     "kind", "batch_id", "evidence_session_id", "candidate_digest",
     "origin_revision",
 })
+
+
+def command_plan_is_valid(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and set(value) == _COMMAND_PLAN_FIELDS
+        and _is_integer(value.get("position"), minimum=1)
+        and _is_integer(value.get("source_position"), minimum=1)
+        and isinstance(value.get("check_digest"), str)
+        and _DIGEST.fullmatch(value["check_digest"])
+    )
+
+
+def planned_command_outcome(plan: dict[str, Any]) -> dict[str, Any]:
+    if not command_plan_is_valid(plan):
+        raise ValueError("invalid verification command plan")
+    return {
+        **plan,
+        "status": "planned",
+        "started": False,
+        "completed": False,
+        "started_offset_ms": None,
+        "finished_offset_ms": None,
+        "duration_ms": None,
+        "exit_code": None,
+        "reason_code": "",
+        "measurement_scope": "unmeasured",
+        "log_ref": None,
+    }
+
+
+def command_outcome_is_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != _COMMAND_FIELDS:
+        return False
+    if not command_plan_is_valid(
+        {key: value.get(key) for key in _COMMAND_PLAN_FIELDS}
+    ):
+        return False
+    status = value.get("status")
+    started = value.get("started")
+    completed = value.get("completed")
+    started_offset = value.get("started_offset_ms")
+    finished_offset = value.get("finished_offset_ms")
+    duration = value.get("duration_ms")
+    exit_code = value.get("exit_code")
+    reason = value.get("reason_code")
+    scope = value.get("measurement_scope")
+    log_ref = value.get("log_ref")
+    if (
+        status not in COMMAND_STATUSES
+        or not isinstance(started, bool)
+        or not isinstance(completed, bool)
+        or reason not in EXECUTION_REASONS
+        or scope not in COMMAND_MEASUREMENT_SCOPES
+        or not (
+            log_ref is None
+            or isinstance(log_ref, str) and _DIGEST.fullmatch(log_ref)
+        )
+        or not (
+            exit_code is None
+            or isinstance(exit_code, int) and not isinstance(exit_code, bool)
+        )
+    ):
+        return False
+    timed = all(
+        is_duration(item) for item in (started_offset, finished_offset, duration)
+    )
+    unmeasured_timing = all(
+        item is None for item in (started_offset, finished_offset, duration)
+    )
+    if timed and (
+        finished_offset < started_offset
+        or abs(duration - (finished_offset - started_offset)) > 0.001
+    ):
+        return False
+    started_only = bool(
+        is_duration(started_offset)
+        and finished_offset is None
+        and duration is None
+    )
+    if (
+        any(item is not None for item in (started_offset, finished_offset, duration))
+        and not timed
+        and not started_only
+    ):
+        return False
+    if status == "planned":
+        return bool(
+            not started and not completed and not reason and exit_code is None
+            and unmeasured_timing and scope == "unmeasured"
+        )
+    if status == "not-run":
+        return bool(
+            not started and not completed and reason
+            and exit_code is None and unmeasured_timing and scope == "unmeasured"
+        )
+    if status == "started":
+        return bool(
+            started and not completed and reason == "command-started"
+            and exit_code is None and is_duration(started_offset)
+            and finished_offset is None and duration is None
+            and scope == COMMAND_MEASUREMENT_SCOPE
+        )
+    if status == "unknown":
+        return bool(
+            not completed and reason in {"command-error", "outcome-unconfirmed"}
+            and exit_code is None
+            and (
+                not started and unmeasured_timing and scope == "unmeasured"
+                or started and (timed or started_only)
+                and scope == COMMAND_MEASUREMENT_SCOPE
+            )
+        )
+    if status == "interrupted" and not completed:
+        return bool(
+            started and reason in {"command-interrupted", "user-cancelled"}
+            and exit_code is None and is_duration(started_offset)
+            and finished_offset is None and duration is None
+            and scope == COMMAND_MEASUREMENT_SCOPE
+        )
+    if not (started and completed and timed and scope == COMMAND_MEASUREMENT_SCOPE):
+        return False
+    if status == "passed":
+        return exit_code == 0 and reason == "command-passed"
+    if status == "failed":
+        return bool(
+            exit_code not in {None, 0, 130} and reason == "command-failed"
+        )
+    return status == "interrupted" and exit_code == 130 and reason == "command-interrupted"
+
+
+def command_outcomes_match_plans(
+    outcomes: Any, plans: Any, *, require_positions: bool = True
+) -> bool:
+    if (
+        not isinstance(outcomes, list)
+        or not isinstance(plans, list)
+        or len(outcomes) != len(plans)
+        or not outcomes
+        or not all(command_outcome_is_valid(item) for item in outcomes)
+        or not all(command_plan_is_valid(item) for item in plans)
+    ):
+        return False
+    for outcome, plan in zip(outcomes, plans):
+        identity_fields = _COMMAND_PLAN_FIELDS if require_positions else {
+            "source_position", "check_digest"
+        }
+        if any(outcome[field] != plan[field] for field in identity_fields):
+            return False
+    return True
+
+
+def _folded_command_fields(
+    commands: list[dict[str, Any]],
+) -> tuple[str, bool, int | None, str]:
+    statuses = [str(item["status"]) for item in commands]
+    if all(status == "passed" for status in statuses):
+        return "passed", True, 0, "command-passed"
+    if "interrupted" in statuses:
+        selected = next(item for item in commands if item["status"] == "interrupted")
+        return (
+            "interrupted",
+            bool(selected["completed"]),
+            selected["exit_code"],
+            str(selected["reason_code"]),
+        )
+    if "failed" in statuses:
+        selected = next(item for item in commands if item["status"] == "failed")
+        return "failed", True, selected["exit_code"], "command-failed"
+    if "unknown" in statuses:
+        return "unknown", False, None, "command-error"
+    if (
+        any(
+            item["status"] == "not-run"
+            and item["reason_code"] == "user-cancelled"
+            for item in commands
+        )
+        and any(item["started"] for item in commands)
+    ):
+        return "interrupted", False, None, "user-cancelled"
+    if "started" in statuses or "passed" in statuses:
+        return "running", False, None, "command-started"
+    return "planned", False, None, ""
+
+
+def source_command_outcome(
+    source_result: Any, plans: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Validate and fold one runner source without inferring a success prefix."""
+    if not isinstance(source_result, dict) or "commands" not in source_result:
+        return None
+    if set(source_result) != {
+        "started", "completed", "status", "reason_code", "commands"
+    }:
+        return {
+            "valid": False, "started": bool(source_result.get("started")),
+            "completed": False, "status": "unknown", "exit_code": None,
+        }
+    commands = source_result.get("commands")
+    if not command_outcomes_match_plans(commands, plans, require_positions=False):
+        return {
+            "valid": False, "started": bool(source_result.get("started")),
+            "completed": False, "status": "unknown", "exit_code": None,
+        }
+    assert isinstance(commands, list)
+    started = any(item["started"] for item in commands)
+    status, completed, exit_code, reason = _folded_command_fields(commands)
+    valid_aggregate = bool(
+        source_result.get("started") is started
+        and source_result.get("completed") is completed
+        and source_result.get("status") == status
+        and source_result.get("reason_code") == reason
+    )
+    return {
+        "valid": valid_aggregate,
+        "started": started,
+        "completed": completed,
+        "status": status if valid_aggregate else "unknown",
+        "exit_code": exit_code if valid_aggregate else None,
+    }
+
+
+def new_source_results(
+    command_plans: dict[str, list[dict[str, Any]]]
+) -> dict[str, dict[str, Any]]:
+    if (
+        not isinstance(command_plans, dict)
+        or not command_plans
+        or any(
+            not isinstance(source_key, str)
+            or _DIGEST.fullmatch(source_key) is None
+            or not isinstance(plans, list)
+            or not plans
+            or not all(command_plan_is_valid(plan) for plan in plans)
+            for source_key, plans in command_plans.items()
+        )
+    ):
+        raise ValueError("invalid source command plans")
+    return {
+        source_key: {
+            "started": False,
+            "completed": False,
+            "status": "planned",
+            "reason_code": "",
+            "commands": [planned_command_outcome(plan) for plan in plans],
+        }
+        for source_key, plans in command_plans.items()
+    }
+
+
+def start_source_command(
+    source_results: dict[str, dict[str, Any]],
+    source_key: str,
+    *,
+    position: int,
+    check_digest: str,
+    started_offset_ms: int | float,
+) -> bool:
+    result = source_results.get(source_key)
+    commands = result.get("commands") if isinstance(result, dict) else None
+    if not isinstance(commands, list) or not is_duration(started_offset_ms):
+        return False
+    selected = next(
+        (
+            command for command in commands
+            if command["position"] == position
+            and command["check_digest"] == check_digest
+        ),
+        None,
+    )
+    if not isinstance(selected, dict) or selected["status"] != "planned":
+        return False
+    selected.update(
+        status="started",
+        started=True,
+        started_offset_ms=started_offset_ms,
+        reason_code="command-started",
+        measurement_scope=COMMAND_MEASUREMENT_SCOPE,
+    )
+    result.update(
+        started=True,
+        completed=False,
+        status="running",
+        reason_code="command-started",
+    )
+    return command_outcome_is_valid(selected)
+
+
+def complete_source_command(
+    source_results: dict[str, dict[str, Any]],
+    source_key: str,
+    *,
+    position: int,
+    check_digest: str,
+    status: str,
+    reason: str,
+    finished_offset_ms: int | float | None,
+    duration_ms: int | float | None,
+    exit_code: int | None,
+    log_ref: str | None = None,
+) -> bool:
+    result = source_results.get(source_key)
+    commands = result.get("commands") if isinstance(result, dict) else None
+    if not isinstance(commands, list):
+        return False
+    selected = next(
+        (
+            command for command in commands
+            if command["position"] == position
+            and command["check_digest"] == check_digest
+        ),
+        None,
+    )
+    if not isinstance(selected, dict) or selected["status"] not in {
+        "planned", "started"
+    }:
+        return False
+    candidate = dict(selected)
+    if selected["started"]:
+        candidate.update(
+            status=status,
+            completed=status != "unknown",
+            finished_offset_ms=finished_offset_ms,
+            duration_ms=duration_ms,
+            exit_code=exit_code,
+            reason_code=reason,
+            measurement_scope=COMMAND_MEASUREMENT_SCOPE,
+            log_ref=log_ref,
+        )
+    else:
+        candidate.update(
+            status="unknown",
+            completed=False,
+            reason_code="command-error",
+            measurement_scope="unmeasured",
+        )
+    if not command_outcome_is_valid(candidate):
+        return False
+    selected.clear()
+    selected.update(candidate)
+    if candidate["status"] != "passed":
+        for command in commands:
+            if command["status"] == "planned":
+                command.update(
+                    status="not-run",
+                    reason_code="preceding-check-stopped",
+                    measurement_scope="unmeasured",
+                )
+    aggregate_status, completed, _, aggregate_reason = _folded_command_fields(
+        commands
+    )
+    result.update(
+        started=any(command["started"] for command in commands),
+        completed=completed,
+        status=aggregate_status,
+        reason_code=aggregate_reason,
+    )
+    plans = [
+        {key: command[key] for key in _COMMAND_PLAN_FIELDS}
+        for command in commands
+    ]
+    folded = source_command_outcome(result, plans)
+    return bool(folded and folded["valid"])
+
+
 SUMMARY_FIELDS = (
     "total_source_count", "planned_execution_source_count", "planned_reuse_source_count",
     "executed_source_count", "completed_source_count", "passed_source_count",
@@ -587,7 +966,7 @@ def reuse_origin_is_valid(value: Any) -> bool:
 
 def source_result_is_valid(value: Any) -> bool:
     if not isinstance(value, dict) or set(value) not in {
-        _SOURCE_FIELDS_V1, _SOURCE_FIELDS
+        _SOURCE_FIELDS_V1, _SOURCE_FIELDS, _SOURCE_FIELDS_WITH_COMMANDS
     }:
         return False
     planned = {key: value[key] for key in _DECISION_FIELDS | {"duration_baseline"}}
@@ -596,7 +975,7 @@ def source_result_is_valid(value: Any) -> bool:
     if not decision_is_valid(planned):
         return False
     reuse_origin = value.get("reuse_origin")
-    return bool(
+    base_valid = bool(
         value["label"] == safe_label(value["label"], "")
         and value["label"]
         and value["status"] in SOURCE_STATUSES
@@ -612,15 +991,56 @@ def source_result_is_valid(value: Any) -> bool:
         and (reuse_origin is None or reuse_origin_is_valid(reuse_origin))
         and (reuse_origin is None or value["decision"] in REUSE_DECISIONS)
     )
+    if not base_valid or "commands" not in value:
+        return base_valid
+    commands = value.get("commands")
+    if (
+        not isinstance(commands, list)
+        or not commands
+        or not all(command_outcome_is_valid(item) for item in commands)
+        or [item["source_position"] for item in commands]
+        != list(range(1, len(commands) + 1))
+        or len({item["position"] for item in commands}) != len(commands)
+    ):
+        return False
+    status = value["status"]
+    if status in {"planned", "reuse-pending"}:
+        return all(item["status"] == "planned" for item in commands)
+    if status == "reused":
+        return all(
+            item["status"] == "not-run"
+            and item["reason_code"] == "reuse-applied"
+            for item in commands
+        )
+    if status == "not-run":
+        return all(item["status"] == "not-run" for item in commands)
+    folded = source_command_outcome(
+        {
+            "started": value["started"],
+            "completed": value["completed"],
+            "status": status,
+            "reason_code": value["execution_reason_code"],
+            "commands": commands,
+        },
+        [
+            {key: item[key] for key in _COMMAND_PLAN_FIELDS}
+            for item in commands
+        ],
+    )
+    return bool(folded and folded["valid"])
 
 
 def batch_is_valid(value: Any) -> bool:
-    if not isinstance(value, dict) or set(value) != (_BATCH_FIELDS | {"task"} if value.get("version") == 4 else _BATCH_FIELDS):
+    if not isinstance(value, dict):
+        return False
+    version = value.get("version")
+    expected_fields = _BATCH_FIELDS | {"task"} if version in {4, 5} else _BATCH_FIELDS
+    if set(value) != expected_fields:
         return False
     items = value.get("sources")
-    return bool(
-        value.get("event") == BATCH_EVENT and value.get("version") in {1, 2, 3, 4}
-        and (value["version"] != 4 or batch_task_is_valid(value.get("task")))
+    valid = bool(
+        value.get("event") == BATCH_EVENT and version in {1, 2, 3, 4, 5}
+        and (version not in {4, 5} or batch_task_is_valid(value.get("task")))
         and not isinstance(value.get("version"), bool)
         and isinstance(value.get("batch_id"), str)
         and re.fullmatch(r"[0-9a-f]{32}", value["batch_id"])
@@ -634,7 +1054,8 @@ def batch_is_valid(value: Any) -> bool:
         and all(source_result_is_valid(item) for item in items)
         and all(
             (value["version"] == 1 and "reuse_origin" not in item)
-            or (value["version"] in {2, 3, 4} and "reuse_origin" in item)
+            or (value["version"] in {2, 3, 4} and set(item) == _SOURCE_FIELDS)
+            or (value["version"] == 5 and set(item) == _SOURCE_FIELDS_WITH_COMMANDS)
             for item in items
         )
         and len({item["source_key"] for item in items}) == len(items)
@@ -645,9 +1066,21 @@ def batch_is_valid(value: Any) -> bool:
         and (
             value.get("request_wall_ms") is None
             and value.get("measurement_scope") in {"unknown", "prepare-only", "prepare-and-runner-segments"}
-            or value["version"] in {3, 4} and is_duration(value.get("request_wall_ms"))
+            or value["version"] in {3, 4, 5} and is_duration(value.get("request_wall_ms"))
             and value.get("measurement_scope") == "hook-entry-to-result-recording"
         )
+    )
+    if not valid or version != 5:
+        return valid
+    positions = [
+        command["position"]
+        for source in items
+        for command in source["commands"]
+    ]
+    return bool(
+        positions
+        and len(set(positions)) == len(positions)
+        and sorted(positions) == list(range(1, len(positions) + 1))
     )
 
 
@@ -656,6 +1089,7 @@ def new_batch(
     prepared_ms: float | None, requested: list[dict[str, str]] | None = None,
     labels: dict[str, str] | None = None,
     reuse_origins: dict[str, dict[str, Any]] | None = None,
+    command_plans: dict[str, list[dict[str, Any]]] | None = None,
     task: dict[str, Any] | None = None,
     now: int | None = None,
 ) -> dict[str, Any]:
@@ -669,6 +1103,32 @@ def new_batch(
         }
         for item in requested or []
     ]
+    item_keys = {item["source_key"] for item in items}
+    if command_plans is not None:
+        if (
+            set(command_plans) != item_keys
+            or not all(
+                isinstance(commands, list)
+                and commands
+                and all(command_plan_is_valid(command) for command in commands)
+                and [command["source_position"] for command in commands]
+                == list(range(1, len(commands) + 1))
+                for commands in command_plans.values()
+            )
+            or sorted(
+                command["position"]
+                for commands in command_plans.values()
+                for command in commands
+            )
+            != list(
+                range(
+                    1,
+                    1 + sum(len(commands) for commands in command_plans.values()),
+                )
+            )
+            or not batch_task_is_valid(task)
+        ):
+            raise ValueError("invalid verification command plans")
     batch = {
         "event": BATCH_EVENT, "version": 2, "batch_id": batch_id,
         "timestamp": timestamp, "finished_at": None, "current_revision": revision,
@@ -678,7 +1138,9 @@ def new_batch(
         # Host queue/handoff/return is not measured by these separate processes.
         "request_wall_ms": None, "measurement_scope": "prepare-only",
     }
-    if batch_task_is_valid(task):
+    if command_plans is not None:
+        batch.update(version=5, task=dict(task))
+    elif batch_task_is_valid(task):
         batch.update(version=4, task=dict(task))
     for index, item in enumerate(items, start=1):
         source = dict(item)
@@ -691,6 +1153,11 @@ def new_batch(
             if reuse_origin_is_valid((reuse_origins or {}).get(item["source_key"]))
             else None,
         )
+        if command_plans is not None:
+            source["commands"] = [
+                planned_command_outcome(command)
+                for command in command_plans[item["source_key"]]
+            ]
         batch["sources"].append(source)
     if not batch_is_valid(batch):
         raise ValueError("invalid verification batch measurement")
@@ -736,6 +1203,199 @@ def current_batch(verification: Any) -> dict[str, Any] | None:
     return None
 
 
+def current_command_plans(
+    verification: Any, source_keys: Iterable[str] | None = None
+) -> dict[str, list[dict[str, Any]]] | None:
+    """Return content-free command identities from the current v5 batch."""
+    batch = current_batch(verification)
+    if batch is None or batch.get("version") != 5:
+        return None
+    selected = set(source_keys) if source_keys is not None else {
+        item["source_key"] for item in batch["sources"]
+    }
+    result = {
+        item["source_key"]: [
+            {key: command[key] for key in _COMMAND_PLAN_FIELDS}
+            for command in item["commands"]
+        ]
+        for item in batch["sources"]
+        if item["source_key"] in selected
+    }
+    return result if set(result) == selected else None
+
+
+def _mark_unstarted_commands(source: dict[str, Any], reason: str) -> None:
+    commands = source.get("commands")
+    if not isinstance(commands, list):
+        return
+    for command in commands:
+        if command.get("status") == "planned":
+            command.update(
+                status="not-run",
+                reason_code=reason,
+                measurement_scope="unmeasured",
+            )
+
+
+def _mark_source_outcome_unknown(source: dict[str, Any]) -> bool:
+    """Preserve witnessed commands and fail closed at the first missing result."""
+    commands = source.get("commands")
+    if not isinstance(commands, list):
+        return False
+    _mark_unstarted_commands(source, "outcome-unconfirmed")
+    selected = next(
+        (command for command in commands if command["status"] == "started"),
+        None,
+    )
+    if selected is None:
+        selected = next(
+            (command for command in commands if command["status"] == "not-run"),
+            None,
+        )
+    if selected is None:
+        return False
+    selected.update(
+        status="unknown",
+        completed=False,
+        exit_code=None,
+        reason_code="outcome-unconfirmed",
+    )
+    source.update(
+        status="unknown",
+        started=any(command["started"] for command in commands),
+        completed=False,
+        execution_reason_code="command-error",
+        duration_ms=None,
+    )
+    return source_result_is_valid(source)
+
+
+def mark_command_started(
+    verification: dict[str, Any],
+    source_key: str,
+    *,
+    position: int,
+    check_digest: str,
+    started_offset_ms: int | float,
+) -> bool:
+    batch = current_batch(verification)
+    if (
+        batch is None
+        or batch.get("version") != 5
+        or batch["status"] not in {"planned", "running"}
+        or not is_duration(started_offset_ms)
+    ):
+        return False
+    for source in batch["sources"]:
+        if source["source_key"] != source_key:
+            continue
+        for command in source["commands"]:
+            if (
+                command["position"] != position
+                or command["check_digest"] != check_digest
+                or command["status"] != "planned"
+            ):
+                continue
+            command.update(
+                status="started",
+                started=True,
+                started_offset_ms=started_offset_ms,
+                reason_code="command-started",
+                measurement_scope=COMMAND_MEASUREMENT_SCOPE,
+            )
+            source.update(
+                status="running",
+                started=True,
+                completed=False,
+                execution_reason_code="command-started",
+            )
+            batch["status"] = "running"
+            return store_batch(verification, batch)
+    return False
+
+
+def mark_command_completed(
+    verification: dict[str, Any],
+    source_key: str,
+    *,
+    position: int,
+    check_digest: str,
+    status: str,
+    reason: str,
+    finished_offset_ms: int | float | None,
+    duration_ms: int | float | None,
+    source_duration_ms: int | float | None,
+    exit_code: int | None,
+    log_ref: str | None = None,
+) -> bool:
+    batch = current_batch(verification)
+    if (
+        batch is None
+        or batch.get("version") != 5
+        or batch["status"] not in {"planned", "running"}
+        or status not in {"passed", "failed", "interrupted", "unknown"}
+        or source_duration_ms is not None and not is_duration(source_duration_ms)
+    ):
+        return False
+    for source in batch["sources"]:
+        if source["source_key"] != source_key:
+            continue
+        selected = next(
+            (
+                command
+                for command in source["commands"]
+                if command["position"] == position
+                and command["check_digest"] == check_digest
+            ),
+            None,
+        )
+        if not isinstance(selected, dict) or selected["status"] not in {
+            "planned", "started"
+        }:
+            return False
+        candidate = dict(selected)
+        if selected["started"]:
+            candidate.update(
+                status=status,
+                completed=status != "unknown",
+                finished_offset_ms=finished_offset_ms,
+                duration_ms=duration_ms,
+                exit_code=exit_code,
+                reason_code=reason,
+                measurement_scope=COMMAND_MEASUREMENT_SCOPE,
+                log_ref=log_ref,
+            )
+        else:
+            candidate.update(
+                status="unknown",
+                completed=False,
+                exit_code=None,
+                reason_code="command-error",
+                measurement_scope="unmeasured",
+            )
+        if not command_outcome_is_valid(candidate):
+            return False
+        selected.clear()
+        selected.update(candidate)
+        if candidate["status"] != "passed":
+            _mark_unstarted_commands(source, "preceding-check-stopped")
+        aggregate_status, completed, _, aggregate_reason = _folded_command_fields(
+            source["commands"]
+        )
+        source.update(
+            status=aggregate_status,
+            started=any(command["started"] for command in source["commands"]),
+            completed=completed,
+            duration_ms=source_duration_ms if completed else None,
+            execution_reason_code=aggregate_reason,
+        )
+        if not source_result_is_valid(source):
+            return False
+        batch["status"] = "running"
+        return store_batch(verification, batch)
+    return False
+
+
 def batch_history(verification: Any, *, now: int | None = None) -> list[dict[str, Any]]:
     if not isinstance(verification, dict):
         return []
@@ -760,6 +1420,7 @@ def reject_batch(
         batch.update(runner_duration_ms=runner_duration_ms, measurement_scope="prepare-and-runner-segments")
     for item in batch["sources"]:
         item.update(status="not-run", execution_reason_code=reason)
+        _mark_unstarted_commands(item, reason)
     complete_request_timing(verification, batch)
     return store_batch(verification, batch)
 
@@ -771,6 +1432,7 @@ def finish_reuse(verification: dict[str, Any]) -> bool:
     batch.update(status="passed", reason_code="batch-finished", finished_at=int(time.time()))
     for item in batch["sources"]:
         item.update(status="reused", execution_reason_code="reuse-applied")
+        _mark_unstarted_commands(item, "reuse-applied")
     complete_request_timing(verification, batch)
     return store_batch(verification, batch)
 
@@ -781,6 +1443,8 @@ def mark_started(verification: dict[str, Any], source_key: str) -> bool:
         return False
     for item in batch["sources"]:
         if item["source_key"] == source_key and item["decision"] not in REUSE_DECISIONS:
+            if "commands" in item:
+                return False
             item.update(status="running", started=True, execution_reason_code="command-started")
             batch["status"] = "running"
             return store_batch(verification, batch)
@@ -804,6 +1468,8 @@ def mark_completed(
     for item in batch["sources"]:
         if item["source_key"] != source_key or not item["started"]:
             continue
+        if "commands" in item:
+            return False
         if item["completed"]:
             return bool(
                 item["status"] == status
@@ -833,6 +1499,29 @@ def interrupt_batch(verification: dict[str, Any]) -> bool:
             # Cancellation revokes current authority, not the already witnessed
             # fact that this source finished before the cancellation boundary.
             continue
+        commands = item.get("commands")
+        if isinstance(commands, list):
+            for command in commands:
+                if command["status"] == "started":
+                    command.update(
+                        status="interrupted",
+                        completed=False,
+                        reason_code="user-cancelled",
+                    )
+                elif command["status"] == "planned":
+                    command.update(
+                        status="not-run",
+                        reason_code="user-cancelled",
+                        measurement_scope="unmeasured",
+                    )
+            if item["started"]:
+                status, completed, _, reason = _folded_command_fields(commands)
+                item.update(
+                    status=status,
+                    execution_reason_code=reason,
+                    completed=completed,
+                )
+                continue
         item.update(
             status="interrupted" if item["started"] else "not-run",
             execution_reason_code="user-cancelled", completed=False,
@@ -1070,7 +1759,7 @@ def revalidation_savings(batch: Any) -> dict[str, Any]:
             for source in sources
         )
     )
-    scope_complete = bool(batch["status"] == "passed" and source_scope_complete)
+    scope_complete = bool(request_finalized and batch["status"] == "passed" and source_scope_complete)
     if not scope_complete:
         reasons.add("scope-incomplete")
 
@@ -1161,6 +1850,59 @@ def revalidation_savings(batch: Any) -> dict[str, Any]:
     if not revalidation_savings_is_valid(value):
         raise ValueError("invalid revalidation-savings projection")
     return value
+
+
+def retained_impact(batches: list[dict[str, Any]]) -> dict[str, Any]:
+    """Read-only totals for retained, successfully completed group requests."""
+    unique = {batch["batch_id"]: batch for batch in batches if batch_is_valid(batch)}
+    completed = []
+    for batch in unique.values():
+        savings = revalidation_savings(batch)
+        if savings["scope_complete"]:
+            completed.append((batch, savings))
+    reused = sum(item["coverage"]["actual_reused_source_count"] for _, item in completed)
+    timed = sum(item["coverage"]["timed_reused_source_count"] for _, item in completed)
+    return {
+        "unit": "verification-group-request", "window": "retained-completed-history",
+        "completed_request_count": len(completed),
+        "reused_group_request_count": reused,
+        "timed_reused_group_count": timed,
+        "missing_timing_group_count": reused - timed,
+        "avoided_execution_ms": (
+            sum(item["omitted_test_execution_ms"] or 0 for _, item in completed)
+            if completed and (timed or not reused) else None
+        ),
+        "timing_status": "unmeasured" if not completed or reused and not timed else "partial" if timed < reused else "estimated",
+        "from_timestamp": min((batch["timestamp"] for batch, _ in completed), default=None),
+        "through_timestamp": max((batch["finished_at"] for batch, _ in completed), default=None),
+        "max_age_seconds": MAX_HISTORY_AGE_SECONDS, "max_events": MAX_HISTORY_EVENTS,
+    }
+
+
+def retained_impact_is_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != set(retained_impact([])):
+        return False
+    if value["unit"] != "verification-group-request" or value["window"] != "retained-completed-history":
+        return False
+    counts = ("completed_request_count", "reused_group_request_count", "timed_reused_group_count", "missing_timing_group_count", "max_age_seconds", "max_events")
+    if any(not _is_integer(value[key]) for key in counts):
+        return False
+    if value["reused_group_request_count"] != value["timed_reused_group_count"] + value["missing_timing_group_count"]:
+        return False
+    expected_status = ("unmeasured" if not value["completed_request_count"] or value["reused_group_request_count"] and not value["timed_reused_group_count"] else "partial" if value["missing_timing_group_count"] else "estimated")
+    if value["timing_status"] != expected_status:
+        return False
+    duration = value["avoided_execution_ms"]
+    if (duration is None) != (expected_status == "unmeasured") or duration is not None and not is_duration(duration):
+        return False
+    if value["completed_request_count"] and not value["reused_group_request_count"] and duration != 0:
+        return False
+    start, end = value["from_timestamp"], value["through_timestamp"]
+    return bool(
+        value["max_age_seconds"] == MAX_HISTORY_AGE_SECONDS and value["max_events"] == MAX_HISTORY_EVENTS
+        and (not value["completed_request_count"] and start is None and end is None and not value["reused_group_request_count"]
+             or value["completed_request_count"] and _is_integer(start, minimum=1) and _is_integer(end, minimum=1) and start <= end)
+    )
 
 
 def revalidation_savings_is_valid(value: Any) -> bool:
@@ -1366,7 +2108,7 @@ def host_summary(verification: Any) -> str:
                 f"{omitted_text}의 테스트 재실행 생략〔추정〕"
             )
     elif savings["omitted_test_execution_status"] == "partial":
-        omitted_text = f"확인된 표본 합계 ≥ {_host_duration(omitted)}"
+        omitted_text = f"부분 추정 합계 약 {_host_duration(omitted)}〔추정〕"
         headline = (
             f"{requested}개 중 {executed_count}개 실행 · {reused_count}개 재사용 · "
             f"시간 표본 {timed_reused}/{actual_reused}개 · {omitted_text}"
@@ -1588,8 +2330,40 @@ def record_execution(
         return False
     if batch["status"] not in {"planned", "running"}:
         return True  # A delivered final result is idempotent.
-    if not any(item.get("started") for item in source_results.values()) and exit_code != 0:
-        return reject_batch(verification, reason="runner-admission-rejected", runner_duration_ms=runner_duration_ms)
+    any_started = any(
+        isinstance(item, dict) and item.get("started") is True
+        for item in source_results.values()
+    )
+    if not any_started and exit_code != 0:
+        admission_only = batch.get("version") != 5
+        if batch.get("version") == 5:
+            admission_only = True
+            for source in batch["sources"]:
+                plans = [
+                    {field: command[field] for field in _COMMAND_PLAN_FIELDS}
+                    for command in source["commands"]
+                ]
+                result = source_results.get(source["source_key"])
+                folded = source_command_outcome(result, plans)
+                commands = (
+                    result.get("commands") if isinstance(result, dict) else None
+                )
+                if not (
+                    folded is not None
+                    and folded["valid"]
+                    and folded["status"] == "planned"
+                    and command_outcomes_match_plans(
+                        commands, plans, require_positions=True
+                    )
+                ):
+                    admission_only = False
+                    break
+        if admission_only:
+            return reject_batch(
+                verification,
+                reason="runner-admission-rejected",
+                runner_duration_ms=runner_duration_ms,
+            )
     reused = set(reused_keys) if not workspace_changed else set()
     for source in batch["sources"]:
         key = source["source_key"]
@@ -1597,21 +2371,94 @@ def record_execution(
         if source["completed"]:
             # A source-level completion was already persisted under the claimed
             # runner. The final batch fold must not roll that fact backward.
+            if key in source_durations_ms and is_duration(source_durations_ms[key]):
+                source["duration_ms"] = source_durations_ms[key]
+            if batch.get("version") == 5 and isinstance(result, dict):
+                plans = [
+                    {field: command[field] for field in _COMMAND_PLAN_FIELDS}
+                    for command in source["commands"]
+                ]
+                commands = result.get("commands")
+                if command_outcomes_match_plans(
+                    commands, plans, require_positions=True
+                ):
+                    source["commands"] = json.loads(json.dumps(commands))
             continue
         if result is not None:
-            source.update({
-                "status": result["status"], "started": result["started"],
-                "completed": result["completed"],
-                "execution_reason_code": result["reason_code"],
-                "duration_ms": source_durations_ms.get(key),
-            })
+            if batch.get("version") == 5:
+                plans = [
+                    {field: command[field] for field in _COMMAND_PLAN_FIELDS}
+                    for command in source["commands"]
+                ]
+                commands = result.get("commands") if isinstance(result, dict) else None
+                folded = source_command_outcome(result, plans)
+                if (
+                    folded is not None
+                    and folded["valid"]
+                    and command_outcomes_match_plans(
+                        commands, plans, require_positions=True
+                    )
+                ):
+                    if folded["status"] == "planned":
+                        source.update(
+                            status="not-run",
+                            started=False,
+                            completed=False,
+                            execution_reason_code=(
+                                "workspace-invalidated" if workspace_changed
+                                else "preceding-check-stopped"
+                            ),
+                            duration_ms=None,
+                        )
+                        _mark_unstarted_commands(
+                            source, source["execution_reason_code"]
+                        )
+                    else:
+                        source.update(
+                            status=folded["status"],
+                            started=folded["started"],
+                            completed=folded["completed"],
+                            execution_reason_code=result["reason_code"],
+                            duration_ms=(
+                                source_durations_ms.get(key)
+                                if folded["started"] else None
+                            ),
+                            commands=json.loads(json.dumps(commands)),
+                        )
+                else:
+                    _mark_source_outcome_unknown(source)
+            else:
+                source.update({
+                    "status": result["status"], "started": result["started"],
+                    "completed": result["completed"],
+                    "execution_reason_code": result["reason_code"],
+                    "duration_ms": source_durations_ms.get(key),
+                })
+        elif (
+            batch.get("version") == 5
+            and any(command["started"] for command in source["commands"])
+        ):
+            _mark_source_outcome_unknown(source)
         elif key in reused and source["decision"] in REUSE_DECISIONS:
             source.update(status="reused", execution_reason_code="reuse-applied")
+            _mark_unstarted_commands(source, "reuse-applied")
         else:
             source.update(status="not-run", execution_reason_code=(
                 "workspace-invalidated" if workspace_changed else "preceding-check-stopped"
             ))
-    batch["status"] = "interrupted" if exit_code == 130 else "passed" if exit_code == 0 else "failed"
+            _mark_unstarted_commands(
+                source,
+                "workspace-invalidated" if workspace_changed
+                else "preceding-check-stopped",
+            )
+    source_statuses = {source["status"] for source in batch["sources"]}
+    batch["status"] = (
+        "interrupted"
+        if exit_code == 130 or "interrupted" in source_statuses
+        else "passed"
+        if exit_code == 0 and source_statuses <= {"passed", "reused"}
+        else "failed"
+    )
     batch["reason_code"] = "workspace-invalidated" if workspace_changed else "batch-finished"
     batch["finished_at"] = int(time.time())
     batch["runner_duration_ms"] = runner_duration_ms

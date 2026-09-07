@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import unittest
 import tempfile
@@ -24,6 +25,32 @@ class IncrementalVerificationBenchmarkTests(unittest.TestCase):
         cls.workflow_result = benchmark.run_guarded_workflow_benchmark(
             iterations=1, warmups=0, workload_rounds=20,
         )
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable for dashboard importer")
+    def test_actual_workflow_output_imports_with_costs_and_all_paired_samples(self):
+        from tests.test_click_efficiency import UI_ASSERTIONS
+        from hooks import click_shadow_dashboard
+        script = UI_ASSERTIONS.split("const b={wall_ms", 1)[0] + r'''
+const result=api.readComparison(input.workflow);
+assert.equal(result.samples.length,input.workflow.comparison_samples.length);
+assert.equal(result.cost_samples.length,3);
+assert(result.samples.some(item=>item.excluded_reason==='verification-not-passed'));
+assert(result.samples.some(item=>item.excluded_reason==='scope-not-equivalent'));
+assert(result.cost_samples.every(item=>Number.isFinite(item.setup_ms)&&Number.isFinite(item.additional_full_audit_ms)));
+console.log('Actual driver v4 imports without fixture authority or lost samples.');
+'''
+        checked = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=json.dumps({"script": click_shadow_dashboard.JS, "workflow": self.workflow_result}),
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        artifact = Path(tempfile.mkdtemp(prefix="click-impact-benchmark-")) / "workflow.json"
+        artifact.write_text(
+            json.dumps(self.workflow_result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"Actual benchmark/importer evidence: {artifact}")
 
     def test_guarded_workflow_compares_three_configs_and_audits_real_successor_reuse(self):
         result = json.loads(json.dumps(self.workflow_result))

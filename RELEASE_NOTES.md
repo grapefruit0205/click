@@ -1,5 +1,38 @@
 # Release notes
 
+## v0.91.0 — 2026-09-08
+
+- Verification receipts now preserve each command's actual lifecycle and
+  outcome, including planned, started, passed, failed, interrupted, not-run,
+  and legacy-unknown states, together with exit status, digest, and measured
+  duration. Parent, shard, successor, and Shadow projections fold those facts
+  without turning estimates into execution evidence.
+- Bounded stdout and stderr capture supports opt-in actionable diagnostics for
+  unittest and pytest failures. Raw output remains the default, diagnostic
+  parsing is size-limited and redacted, and it never gains file-reading or
+  verification authority.
+- Windows diagnostic parsing recognizes native `.exe` interpreters and the
+  `py -3` launcher, while dashboard and benchmark interchange stays UTF-8
+  regardless of the active Windows console code page.
+- Verification remains fail-fast by default. An opt-in independent-source
+  collection mode can report up to three distinct failures while rechecking
+  revision and execution bindings between commands; dependent or ambiguous
+  work stops rather than running past a failed prerequisite.
+- Whole-task evaluation compares equivalent completed outcomes and reports
+  measured elapsed-time and token ratios. Public dashboard and share exports
+  omit absolute token counts, keep estimates separate, and show unmeasured
+  states when paired evidence is unavailable.
+- The local dashboard is redesigned around execution impact and reuse evidence,
+  with responsive desktop and mobile layouts and Korean, English, and
+  Simplified Chinese interfaces. The language selector now sits in the top
+  toolbar so it remains visible throughout the dashboard.
+- Observer remains off by default and independent of the dashboard. Existing
+  `sharding init`, `sharding status`, and `sharding refresh` behavior, complete
+  shard fallback, and authoritative shard reuse remain backward compatible.
+- Canonical Codex sources, the generated Antigravity distribution, release
+  documentation, deterministic fixtures, and dashboard evidence are updated
+  together.
+
 ## v0.90.0 — 2026-09-07
 
 - Click can now analyze supported CPython 3.10–3.14 `unittest` and `pytest`

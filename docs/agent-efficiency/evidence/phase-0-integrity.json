@@ -1,0 +1,21 @@
+{
+  "kind": "phase-0-source-preservation-and-restore-audit",
+  "result": "passed",
+  "baseline_manifest_sha256": "141ec42934f8b3c5694d3fc6e48b11277fe3be74aba88bf5b9a38adf7b6c3886",
+  "baseline_head": "3b7f8e6ec260729b4ba8a13484ea4c33dce7baeb",
+  "verified_original_paths": 300,
+  "source_matches_b0": true,
+  "snapshot_matches_manifest": true,
+  "new_temporary_git_restore_matches_head_files_modes_and_dirty_status": true,
+  "original_index_unchanged": true,
+  "original_prompt_package_unchanged": true,
+  "original_common_prefix_preserved": true,
+  "user_sharding_acceptance_present": true,
+  "new_project_files_only_in": "docs/agent-efficiency/",
+  "completed_phases": [
+    0
+  ],
+  "next_phase": 1,
+  "raw_token_usage_copied": false,
+  "completion_receipt": false
+}

@@ -30,6 +30,21 @@ BACKEND = "a" * 64
 
 
 class ClickDashboardProjectionTests(unittest.TestCase):
+    def test_projection_v6_and_v7_remain_readable_and_new_fields_are_validated(self) -> None:
+        value = click_dashboard_projection.dashboard_projection({})
+        self.assertTrue(click_dashboard_projection.projection_is_valid(value))
+        v7 = copy.deepcopy(value)
+        v7["version"] = 7
+        v7.pop("task_efficiency")
+        self.assertTrue(click_dashboard_projection.projection_is_valid(v7))
+        previous = copy.deepcopy(value)
+        previous["version"] = 6
+        previous.pop("retained_impact")
+        previous.pop("task_efficiency")
+        self.assertTrue(click_dashboard_projection.projection_is_valid(previous))
+        value["retained_impact"]["reused_group_request_count"] = 999
+        self.assertFalse(click_dashboard_projection.projection_is_valid(value))
+
     def test_display_copy_rejects_paths_secrets_and_html_without_authority(self) -> None:
         state = {"status": "staged", "runtime_mode": "guarded", "presentation": {
             "name": "password abc", "promises": ["/home/private/repo", "<script>alert(1)</script>"],
@@ -338,7 +353,11 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         )
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
-        self.assertEqual(projection["version"], 6)
+        self.assertEqual(projection["version"], 8)
+        self.assertEqual(
+            projection["task_efficiency"]["measurement_status"], "unmeasured"
+        )
+        self.assertEqual(projection["task_efficiency"]["presentations"], [])
         self.assertEqual(projection["setup"]["status"], "unconfigured")
         incremental = projection["summary"]["incremental"]
         self.assertEqual(incremental["total_source_count"], 3)
@@ -552,6 +571,8 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         legacy["version"] = 4
         legacy.pop("batch_summaries")
         legacy.pop("setup")
+        legacy.pop("retained_impact")
+        legacy.pop("task_efficiency")
         legacy["summary"].pop("revalidation_savings")
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(legacy))
@@ -559,6 +580,8 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v5 = copy.deepcopy(projection)
         v5["version"] = 5
         v5.pop("setup")
+        v5.pop("retained_impact")
+        v5.pop("task_efficiency")
         self.assertTrue(click_dashboard_projection.projection_is_valid(v5))
 
     def test_setup_projection_preserves_measured_loss(self) -> None:

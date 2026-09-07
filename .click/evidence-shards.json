@@ -123,8 +123,10 @@
               "unittest",
               "tests.test_click_change_policy",
               "tests.test_click_dependency_cache",
+              "tests.test_click_diagnostics",
               "tests.test_click_evidence_shards",
               "tests.test_click_efficiency",
+              "tests.test_click_failure_collection",
               "tests.test_click_gate_verification",
               "tests.test_click_incremental",
               "tests.test_click_receipt",
@@ -136,8 +138,10 @@
           "covers": [
             "tests/test_click_change_policy.py",
             "tests/test_click_dependency_cache.py",
+            "tests/test_click_diagnostics.py",
             "tests/test_click_evidence_shards.py",
             "tests/test_click_efficiency.py",
+            "tests/test_click_failure_collection.py",
             "tests/test_click_gate_verification.py",
             "tests/test_click_incremental.py",
             "tests/test_click_receipt.py",
@@ -236,6 +240,7 @@
               "tests.test_repository_shard_inventory",
               "tests.test_repository_policy",
               "tests.test_semantic_grader",
+              "tests.test_task_efficiency",
               "tests.test_windows_hook_commands",
               "-q"
             ]
@@ -250,6 +255,7 @@
             "tests/test_repository_shard_inventory.py",
             "tests/test_repository_policy.py",
             "tests/test_semantic_grader.py",
+            "tests/test_task_efficiency.py",
             "tests/test_windows_hook_commands.py"
           ]
         }

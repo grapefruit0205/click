@@ -11,7 +11,7 @@
 
 Click은 코딩 에이전트를 위한 증분 검증(Incremental verification)을 제공합니다. Guarded 계약으로 승인 범위를 명확히 하고, **revision-aware evidence**로 새 작업에서도 유효한 검증을 이어갑니다. 변경 뒤 재사용하려면 실행 조건 일치와 완전한 의존성 관찰 또는 기준 실행 전에 커밋한 명시적 정책이 필요합니다. 근거가 없으면 실제로 다시 실행하며 의존성을 자동 발견했다고 주장하지 않습니다.
 
-릴리스 안내: v0.90.0에는 지속적 비용 gate 기반 unittest/pytest 샤딩 설정, 제한된 조회 결과 캐시, fail-closed native observer profile이 포함됩니다.
+릴리스 안내: v0.91.0에는 실제 명령 결과 기반 검증 측정, 제한된 실패 진단, 전체 작업 효율 평가, 한·영·중 반응형 대시보드가 포함됩니다.
 
 Click은 코드가 올바르거나 선택한 테스트가 충분하다고 증명하지 않습니다. 기존 검증 결과가 현재 코드에도 적용되는지만 추적합니다.
 
@@ -108,7 +108,7 @@ Guarded를 직접 선택할 수도 있습니다.
 
 ## 업데이트
 
-현재 릴리스: **v0.90.0**
+현재 릴리스: **v0.91.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -118,6 +118,26 @@ codex plugin add click@click
 업데이트 후에는 새 작업을 시작하세요.
 
 변경 이력은 [릴리스 노트](RELEASE_NOTES.md)에 있습니다.
+
+## Windows에서 Hook 확인
+
+설치 또는 업데이트 뒤 Codex를 다시 시작하고 새 작업을 여세요. PowerShell에서
+Click 활성화 상태와 번들 Windows Hook이 사용하는 Python 3 실행기 중 하나가
+동작하는지 확인합니다.
+
+~~~powershell
+codex --version
+codex plugin list --json
+py -3 --version
+python --version
+~~~
+
+`codex`를 시작해 `/hooks`를 실행하고 Click의 현재 Hook 해시가 검토 대기라면
+내용을 확인한 뒤 신뢰 처리하세요. 업데이트하면 다시 검토해야 할 수 있습니다.
+`$env:USERPROFILE\.codex\config.toml`도 확인하세요. `hooks = false`이면 Hook이
+꺼지고, 관리자 정책의 `allow_managed_hooks_only = true`는 플러그인 번들 Hook을
+건너뜁니다. 신뢰와 설정 방법은 공식 [Codex Hooks
+안내](https://learn.chatgpt.com/docs/hooks)를 참고하세요.
 
 ## evidence를 언제 재사용하나요?
 
