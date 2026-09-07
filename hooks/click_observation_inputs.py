@@ -128,6 +128,7 @@ def _portable_runtime_roots(project: Path, artifact: Path) -> dict[str, Path]:
         candidates["environment-prefix"] = environment_prefix
     if sys.platform == "darwin":
         candidates.update({
+            "host-root": Path("/"),
             "system-libraries": Path("/System/Library"),
             "system-frameworks": Path("/System/Library/Frameworks"),
             "local-frameworks": Path("/Library/Frameworks"),

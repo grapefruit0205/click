@@ -297,15 +297,16 @@ def _darwin_command(
     terminate_group: Callable[[subprocess.Popen[Any]], int],
     capture_limit: int,
 ) -> AuthoritativeExecution:
-    if any(
-        key in environment
-        for key in (
-            "DYLD_INSERT_LIBRARIES",
-            "DYLD_FORCE_FLAT_NAMESPACE",
-            "CLICK_NATIVE_OBSERVER_CHANNEL",
-            "CLICK_NATIVE_OBSERVER_ROOT",
-        )
-    ):
+    injection_keys = (
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_FORCE_FLAT_NAMESPACE",
+        "CLICK_NATIVE_OBSERVER_BOOTSTRAP",
+        "CLICK_NATIVE_OBSERVER_CHANNEL",
+        "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH",
+        "CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT",
+        "CLICK_NATIVE_OBSERVER_ROOT",
+    )
+    if any(key in environment for key in injection_keys):
         return fallback("unsupported-runtime")
     artifact = click_observer_runtime.validate(observation_root, runtime)
     if artifact is None:
@@ -349,13 +350,22 @@ def _darwin_command(
             os.close(descriptor)
         click_observer_linux._remove_trace_fifo(directory, native_fifo)
         return fallback("input-snapshot-failed")
+    original_pythonpath = str(environment.get("PYTHONPATH", ""))
+    artifact_directory = str(artifact.parent)
     observed_environment = dict(environment)
     observed_environment.update(
         {
-            "DYLD_INSERT_LIBRARIES": str(artifact),
-            "DYLD_FORCE_FLAT_NAMESPACE": "1",
+            "CLICK_NATIVE_OBSERVER_BOOTSTRAP": artifact_directory,
             "CLICK_NATIVE_OBSERVER_CHANNEL": str(native_fifo),
+            "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH": original_pythonpath,
+            "CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT": (
+                "1" if "PYTHONPATH" in environment else "0"
+            ),
             "CLICK_NATIVE_OBSERVER_ROOT": str(observation_root),
+            "PYTHONPATH": (
+                artifact_directory
+                + (os.pathsep + original_pythonpath if original_pythonpath else "")
+            ),
         }
     )
     try:

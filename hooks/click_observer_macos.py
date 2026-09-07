@@ -791,13 +791,27 @@ def collect_command(
         if not strict_pid_scope:
             filters.append(str(target.command_name))
         collector_environment = dict(environment)
+        original_pythonpath = collector_environment.get(
+            "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH", ""
+        )
+        pythonpath_present = (
+            collector_environment.get("CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT")
+            == "1"
+        )
         for key in (
             "DYLD_INSERT_LIBRARIES",
             "DYLD_FORCE_FLAT_NAMESPACE",
+            "CLICK_NATIVE_OBSERVER_BOOTSTRAP",
             "CLICK_NATIVE_OBSERVER_CHANNEL",
+            "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH",
+            "CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT",
             "CLICK_NATIVE_OBSERVER_ROOT",
         ):
             collector_environment.pop(key, None)
+        if pythonpath_present:
+            collector_environment["PYTHONPATH"] = original_pythonpath
+        else:
+            collector_environment.pop("PYTHONPATH", None)
         collector = spawn_argv(
             [
                 executable,

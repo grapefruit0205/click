@@ -537,10 +537,12 @@ class ClickObserverMacOSTests(unittest.TestCase):
             workspace=self.workspace,
             environment={
                 "PATH": os.environ.get("PATH", os.defpath),
-                "DYLD_INSERT_LIBRARIES": "/tmp/monitor.dylib",
-                "DYLD_FORCE_FLAT_NAMESPACE": "1",
+                "CLICK_NATIVE_OBSERVER_BOOTSTRAP": "/tmp/observer",
                 "CLICK_NATIVE_OBSERVER_CHANNEL": "/tmp/native.pipe",
+                "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH": "/tmp/original",
+                "CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT": "1",
                 "CLICK_NATIVE_OBSERVER_ROOT": "/tmp/project",
+                "PYTHONPATH": "/tmp/observer:/tmp/original",
             },
             executable="/usr/bin/fs_usage",
             spawn_argv=spawn_collector,
@@ -561,10 +563,15 @@ class ClickObserverMacOSTests(unittest.TestCase):
             ["-w", "-f", "pathname", "-f", "exec"],
         )
         self.assertNotIn("sudo", collector_launches[0])
-        self.assertIn("DYLD_INSERT_LIBRARIES", target_environments[0])
+        self.assertIn("CLICK_NATIVE_OBSERVER_BOOTSTRAP", target_environments[0])
         self.assertEqual(
             collector_environments,
-            [{"PATH": os.environ.get("PATH", os.defpath)}],
+            [
+                {
+                    "PATH": os.environ.get("PATH", os.defpath),
+                    "PYTHONPATH": "/tmp/original",
+                }
+            ],
         )
         self.assertEqual(terminated, [4322])
         self.assertFalse(result.process_scope_complete)

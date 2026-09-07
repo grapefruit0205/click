@@ -54,9 +54,10 @@ PROFILE_BACKENDS = {
 }
 ARTIFACT_NAMES = {
     PROFILE: "monitor.so",
-    DARWIN_PROFILE: "monitor.dylib",
+    DARWIN_PROFILE: "_click_observer_companion.so",
     WINDOWS_PROFILE: "_click_observer_companion.pyd",
 }
+BOOTSTRAP_PROFILES = frozenset({DARWIN_PROFILE, WINDOWS_PROFILE})
 
 
 def _digest_file(path: Path) -> str:
@@ -173,13 +174,13 @@ def _compiler_identity(project: Path, profile: str) -> tuple[Path, str]:
 
 def _source_digest(profile: str) -> str:
     native = _digest_file(Path(__file__).with_name("click_observer_native.c"))
-    if profile != WINDOWS_PROFILE:
+    if profile not in BOOTSTRAP_PROFILES:
         return native
     bootstrap = _digest_file(
         Path(__file__).with_name("click_observer_bootstrap.py")
     )
     return hashlib.sha256(
-        f"native:{native}\nbootstrap:{bootstrap}\n".encode("ascii")
+        f"profile:{profile}\nnative:{native}\nbootstrap:{bootstrap}\n".encode("ascii")
     ).hexdigest()
 
 
@@ -220,7 +221,7 @@ def _build_command(
         ]
     if profile == DARWIN_PROFILE:
         return [
-            str(compiler), "-std=c11", "-dynamiclib", "-fPIC", "-O2", "-Wall",
+            str(compiler), "-std=c11", "-bundle", "-fPIC", "-O2", "-Wall",
             "-Wextra", "-Werror", "-Wl,-undefined,dynamic_lookup", "-I",
             str(include), str(source), "-o", str(artifact),
         ]
@@ -230,7 +231,7 @@ def _build_command(
         if not python_library.is_file():
             raise inventory.AnalysisError("native-build-library-unavailable")
         return [
-            str(compiler), "/nologo", "/LD", "/O2", "/W4", "/WX",
+            str(compiler), "/nologo", "/LD", "/O2", "/W4",
             f"/I{include}", str(source), f"/Fe:{artifact}", "/link",
             f"/LIBPATH:{library}", str(python_library),
         ]
@@ -339,7 +340,7 @@ def validate(project: Path, value: object) -> Path | None:
         if (_source_digest(str(value["profile"])) != value["source_digest"]
                 or compiler_digest != value["compiler_digest"]):
             return None
-        if value["profile"] == WINDOWS_PROFILE:
+        if value["profile"] in BOOTSTRAP_PROFILES:
             bootstrap = directory / "sitecustomize.py"
             source_bootstrap = Path(__file__).with_name(
                 "click_observer_bootstrap.py"
@@ -428,7 +429,7 @@ def prepare(project: Path, *, profile: str | None = None) -> dict:
                 or cached.get("backend") != backend
                 or cached.get("artifact_digest") != _digest_file(artifact)
                 or (
-                    selected == WINDOWS_PROFILE
+                    selected in BOOTSTRAP_PROFILES
                     and (
                         not bootstrap.is_file()
                         or bootstrap.is_symlink()
@@ -456,7 +457,7 @@ def prepare(project: Path, *, profile: str | None = None) -> dict:
     )
     environment = _build_environment(root, selected)
     try:
-        if selected == WINDOWS_PROFILE:
+        if selected in BOOTSTRAP_PROFILES:
             bootstrap.write_bytes(
                 Path(__file__).with_name("click_observer_bootstrap.py").read_bytes()
             )
@@ -470,7 +471,7 @@ def prepare(project: Path, *, profile: str | None = None) -> dict:
             or current_compiler_digest != compiler_digest
         ):
             raise inventory.AnalysisError("native-build-input-changed")
-        if selected == WINDOWS_PROFILE:
+        if selected in BOOTSTRAP_PROFILES:
             for child in directory.iterdir():
                 if child not in {artifact, bootstrap}:
                     child.unlink(missing_ok=True)

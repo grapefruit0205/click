@@ -1,4 +1,4 @@
-"""Early Windows bootstrap for the authoritative CPython companion.
+"""Early portable bootstrap for the authoritative CPython companion.
 
 The runtime copies this file to its owner-controlled artifact directory as
 ``sitecustomize.py``. It restores the caller's PYTHONPATH before any project

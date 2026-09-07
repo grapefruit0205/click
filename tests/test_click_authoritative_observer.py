@@ -215,7 +215,13 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
             side_effect=collector_effect,
         )
         with (
-            mock.patch.object(runtime, "validate", return_value=Path("/tmp/monitor.dylib")),
+            mock.patch.object(
+                runtime,
+                "validate",
+                return_value=Path(
+                    "/tmp/click-native-observer-portable/_click_observer_companion.so"
+                ),
+            ),
             mock.patch.object(authoritative.click_observer_macos, "native_fs_usage", return_value=True),
             mock.patch.object(authoritative.click_observer_macos, "probe_macos_version", return_value="15.0"),
             mock.patch.object(
@@ -250,11 +256,11 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
                 resolve_backend=lambda *_args, **_kwargs: ("/usr/bin/fs_usage", ""),
                 digest_file=lambda _path: "d" * 64,
             )
-        return result, fallback
+        return result, fallback, collector
 
     @unittest.skipIf(os.name == "nt", "Darwin FIFO adapter requires POSIX")
     def test_darwin_adapter_issues_a_profile_bound_signed_observation(self) -> None:
-        result, fallback = self.run_darwin()
+        result, fallback, collector = self.run_darwin()
         observation = result.envelope["observation"]
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(observation["status"], "complete")
@@ -262,6 +268,17 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
         self.assertEqual(observation["backend"], self.runtime["backend"])
         self.assertEqual(observation["paths"], ["input.txt"])
         fallback.assert_not_called()
+        observed_environment = collector.call_args.kwargs["environment"]
+        self.assertEqual(
+            observed_environment["CLICK_NATIVE_OBSERVER_BOOTSTRAP"],
+            "/tmp/click-native-observer-portable",
+        )
+        self.assertTrue(
+            observed_environment["PYTHONPATH"].startswith(
+                "/tmp/click-native-observer-portable"
+            )
+        )
+        self.assertNotIn("DYLD_INSERT_LIBRARIES", observed_environment)
         self.assertIsNotNone(
             authoritative.verified_observation(
                 result.envelope,
@@ -272,7 +289,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "Darwin FIFO adapter requires POSIX")
     def test_darwin_native_reason_is_non_reusable_without_rerunning(self) -> None:
-        result, fallback = self.run_darwin(
+        result, fallback, _ = self.run_darwin(
             native_events={
                 *authoritative.NORMAL_NATIVE_EVENTS,
                 "time-random-input",
@@ -285,7 +302,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "Darwin FIFO adapter requires POSIX")
     def test_darwin_ambiguous_collector_exception_never_reruns_target(self) -> None:
-        result, fallback = self.run_darwin(
+        result, fallback, _ = self.run_darwin(
             collector_effect=RuntimeError("collector boundary failed")
         )
         self.assertEqual(result.exit_code, 127)
@@ -297,7 +314,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
         fallback.assert_not_called()
 
     def test_profile_backend_pairs_are_strict(self) -> None:
-        result, _ = self.run_darwin()
+        result, _, _ = self.run_darwin()
         changed = json.loads(json.dumps(result.envelope["observation"]))
         changed["backend"]["name"] = "strace"
         self.assertFalse(
@@ -435,7 +452,7 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
         self.assertFalse(runtime.state_is_valid(changed))
 
     def test_portable_build_commands_select_native_artifact_shapes(self) -> None:
-        darwin_artifact = Path("/tmp/monitor.dylib")
+        darwin_artifact = Path("/tmp/_click_observer_companion.so")
         darwin = runtime._build_command(
             runtime.DARWIN_PROFILE,
             compiler=Path("/usr/bin/cc"),
@@ -443,7 +460,7 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
             source=Path("/source.c"),
             artifact=darwin_artifact,
         )
-        self.assertIn("-dynamiclib", darwin)
+        self.assertIn("-bundle", darwin)
         self.assertIn("-Wl,-undefined,dynamic_lookup", darwin)
         self.assertEqual(darwin[-1], str(darwin_artifact))
 
@@ -462,7 +479,8 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
                     artifact=windows_artifact,
                 )
         self.assertIn("/LD", windows)
-        self.assertIn("/WX", windows)
+        self.assertIn("/W4", windows)
+        self.assertNotIn("/WX", windows)
         self.assertIn(f"/Fe:{windows_artifact}", windows)
         self.assertEqual(windows[-1], str(library))
         with tempfile.TemporaryDirectory(prefix="click-portable-venv-roots-") as raw:
@@ -484,6 +502,11 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
                     "base_prefix",
                     str(directory / "base"),
                 ),
+                mock.patch.object(
+                    authoritative.click_observation_inputs.sys,
+                    "platform",
+                    "darwin",
+                ),
             ):
                 roots = authoritative.click_observation_inputs._portable_runtime_roots(
                     project, artifact
@@ -491,13 +514,16 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
             self.assertEqual(
                 roots["environment-prefix"], environment.resolve()
             )
+            self.assertEqual(roots["host-root"], Path("/"))
 
-    def test_windows_source_identity_binds_the_bootstrap(self) -> None:
-        native_only = runtime._source_digest(runtime.DARWIN_PROFILE)
+    def test_portable_source_identity_binds_the_bootstrap_and_profile(self) -> None:
+        native_only = runtime._source_digest(runtime.PROFILE)
+        darwin = runtime._source_digest(runtime.DARWIN_PROFILE)
         windows = runtime._source_digest(runtime.WINDOWS_PROFILE)
         self.assertRegex(native_only, r"^[0-9a-f]{64}$")
+        self.assertRegex(darwin, r"^[0-9a-f]{64}$")
         self.assertRegex(windows, r"^[0-9a-f]{64}$")
-        self.assertNotEqual(native_only, windows)
+        self.assertEqual(len({native_only, darwin, windows}), 3)
 
     def test_input_snapshot_read_flags_are_portable(self) -> None:
         module = authoritative.click_observation_inputs
