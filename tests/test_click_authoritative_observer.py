@@ -258,6 +258,12 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
             return_value=collected,
             side_effect=collector_effect,
         )
+        events = set(
+            authoritative.NORMAL_NATIVE_EVENTS
+            if native_events is None
+            else native_events
+        )
+        events.add("native-main-thread:20")
         with (
             mock.patch.object(
                 runtime,
@@ -278,14 +284,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
             mock.patch.object(
                 authoritative,
                 "_read_native_events",
-                return_value=(
-                    set(
-                        authoritative.NORMAL_NATIVE_EVENTS
-                        if native_events is None
-                        else native_events
-                    ),
-                    False,
-                ),
+                return_value=(events, False),
             ),
         ):
             result = authoritative.run_command(
@@ -610,11 +609,14 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
             ):
                 roots = module._portable_runtime_roots(project, artifact)
 
-            self.assertEqual(roots["runtime-dlls"], base / "DLLs")
+            self.assertEqual(roots["runtime-dlls"], (base / "DLLs").resolve())
             self.assertEqual(
-                roots["python-build-modules"], directory / "Python" / "Modules"
+                roots["python-build-modules"],
+                (directory / "Python" / "Modules").resolve(),
             )
-            self.assertEqual(roots["windows-appcompat"], windows / "AppPatch")
+            self.assertEqual(
+                roots["windows-appcompat"], (windows / "AppPatch").resolve()
+            )
 
     def test_system32_snapshot_indexes_one_resource_directory_level(self) -> None:
         module = authoritative.click_observation_inputs

@@ -196,6 +196,33 @@ class ClickObserverMacOSTests(unittest.TestCase):
             authoritative.absolute_inputs,
         )
 
+    def test_authoritative_parser_keeps_only_the_bound_main_thread(self) -> None:
+        root = self.workspace.as_posix()
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                f"12:00:00.000001 open F=3 (R_____) {root}/wanted.txt "
+                "0.000010 Python.20",
+                f"12:00:00.000002 open F=4 (R_____) {root}/other.txt "
+                "0.000011 Python.21",
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+            root_thread_id=20,
+        )
+
+        self.assertEqual(
+            parsed.inputs,
+            (
+                {
+                    "path": "wanted.txt",
+                    "kind": "file",
+                    "operations": ["read"],
+                },
+            ),
+        )
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+
     def test_native_suspended_spawn_rejects_invalid_inputs_before_launch(self) -> None:
         with self.assertRaises(ValueError):
             click_observer_macos._spawn_suspended_macos(
@@ -660,8 +687,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
 
         self.assertTrue(result.target_started)
         self.assertTrue(result.process_scope_complete)
-        self.assertEqual(launches[0][-1], "4421")
-        self.assertNotIn("Python", launches[0])
+        self.assertEqual(launches[0][-2:], ["4421", "Python"])
         self.assertEqual(drained, [click_observer_macos.COLLECTOR_DRAIN_SECONDS])
 
     def test_collector_interrupt_stops_both_retained_groups(self) -> None:

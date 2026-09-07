@@ -17,9 +17,13 @@
 #include <fcntl.h>
 #endif
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #ifndef _WIN32
 #include <unistd.h>
+#endif
+#ifdef __APPLE__
+#include <pthread.h>
 #endif
 
 #ifdef _WIN32
@@ -84,6 +88,23 @@ static void note(unsigned int bit, const char *message) {
     }
 #else
     if (write(channel, message, length) != (ssize_t)length) close(channel), channel = -1;
+#endif
+}
+
+static void note_main_thread(void) {
+#ifdef __APPLE__
+    uint64_t thread_id = 0;
+    char message[64];
+    if (pthread_threadid_np(NULL, &thread_id) != 0 || !thread_id) {
+        note(5, "native-profile-unavailable\n");
+        return;
+    }
+    if (snprintf(message, sizeof(message), "native-main-thread:%llu\n",
+                 (unsigned long long)thread_id) <= 0) {
+        note(5, "native-profile-unavailable\n");
+        return;
+    }
+    note(12, message);
 #endif
 }
 
@@ -360,6 +381,7 @@ static void initialize(void) {
     if (root && root[0]) project_root = _strdup(root);
     if (channel == INVALID_HANDLE_VALUE) return;
 #endif
+    note_main_thread();
     note(0, "native-started\n");
     if (!project_root) note(5, "native-profile-unavailable\n");
     if (register_hook(audit, NULL) != 0) note(5, "native-profile-unavailable\n");

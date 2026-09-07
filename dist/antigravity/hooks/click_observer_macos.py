@@ -59,7 +59,8 @@ _PROCESS_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]{0,63}$")
 _EVENT = re.compile(
     r"^\s*\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+"
     r"(?P<operation>\S+)\s+(?P<details>.*?)\s+"
-    r"\d+\.\d+(?:\s+[A-Z]+)?\s+\S+\s*$"
+    r"\d+\.\d+(?:\s+[A-Z]+)?\s+"
+    r"(?P<process>\S+)\.(?P<thread_id>\d+)\s*$"
 )
 _ABSOLUTE_PATH = re.compile(
     r"(?<!\S)((?:/|[A-Za-z]:/)(?:[^\x00\r\n])*?)\s*$"
@@ -539,6 +540,7 @@ def parse_fs_usage(
     root_execution_bound: bool = False,
     process_scope_complete: bool = True,
     allow_workspace_root: bool = False,
+    root_thread_id: int | None = None,
 ) -> ParsedTrace:
     """Parse bounded fs_usage text into content-free repository inputs."""
 
@@ -652,6 +654,14 @@ def parse_fs_usage(
             if re.match(r"^\s*\d{2}:\d{2}:\d{2}", line):
                 unresolved = _bounded_add(unresolved, 1)
             continue
+        if root_thread_id is not None:
+            try:
+                observed_thread_id = int(match.group("thread_id"))
+            except (IndexError, TypeError, ValueError):
+                unresolved = _bounded_add(unresolved, 1)
+                continue
+            if observed_thread_id != root_thread_id:
+                continue
         operation_name = match.group("operation").rstrip("*").lower()
         details = match.group("details")
         if operation_name in _CHILD_OPERATIONS:
@@ -838,9 +848,11 @@ def collect_command(
             env=dict(environment),
         )
         collector_started = time.monotonic()
-        filters = [str(target.pid)]
-        if not strict_pid_scope:
-            filters.append(str(target.command_name))
+        # ktrace's PID selection can stop producing events across the target's
+        # initial exec on current macOS runners.  Keep the command-name filter
+        # as a collection superset; the authoritative adapter accepts only the
+        # native companion's exact main-thread identifier from that stream.
+        filters = [str(target.pid), str(target.command_name)]
         collector_environment = dict(environment)
         original_pythonpath = collector_environment.get(
             "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH", ""

@@ -130,6 +130,9 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         original_windows_collect = (
             authoritative.click_observer_windows.collect_command
         )
+        original_windows_bounded_add = (
+            authoritative.click_observer_windows._bounded_add
+        )
 
         def diagnosed_records(snapshot, inputs):
             try:
@@ -228,7 +231,22 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
             return collected
 
         def diagnosed_windows_parse(raw, *args, **kwargs):
-            parsed = original_windows_parse(raw, *args, **kwargs)
+            unresolved_sources = {}
+
+            def traced_bounded_add(left, right):
+                frame = sys._getframe(1)
+                key = f"{frame.f_code.co_name}:{frame.f_lineno}"
+                unresolved_sources[key] = (
+                    unresolved_sources.get(key, 0) + int(right)
+                )
+                return original_windows_bounded_add(left, right)
+
+            with mock.patch.object(
+                authoritative.click_observer_windows,
+                "_bounded_add",
+                traced_bounded_add,
+            ):
+                parsed = original_windows_parse(raw, *args, **kwargs)
             if sys.platform != "win32" or (
                 not parsed.unresolved_event_count
                 and not parsed.child_process_count
@@ -339,6 +357,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                         ],
                         "xml_unresolved": xml_unresolved,
                         "unresolved": parsed.unresolved_event_count,
+                        "unresolved_sources": unresolved_sources,
                         "children": parsed.child_process_count,
                         "process_scope_complete": kwargs.get(
                             "process_scope_complete"

@@ -58,6 +58,7 @@ FULL_BINDING_FIELDS = click_dependency_cache.AUTHORITATIVE_BINDING_FIELDS - {
     "execution_digest"
 }
 DIGEST = re.compile(r"^[0-9a-f]{64}$")
+NATIVE_MAIN_THREAD = re.compile(r"^native-main-thread:([1-9][0-9]{0,19})$")
 MAX_AUTHORITATIVE_CAPTURE_BYTES = click_observer_windows.MAX_RAW_TRACE_BYTES
 
 
@@ -209,11 +210,29 @@ def _read_native_events(descriptor: int) -> tuple[set[str], bool]:
 
 def _native_event_reasons(events: set[str], failed: bool) -> set[str]:
     reasons: set[str] = set()
-    if failed or not NORMAL_NATIVE_EVENTS.issubset(events):
+    ordinary_events = {
+        event for event in events if NATIVE_MAIN_THREAD.fullmatch(event) is None
+    }
+    if failed or not NORMAL_NATIVE_EVENTS.issubset(ordinary_events):
         reasons.add("event-loss")
-    for event in events - NORMAL_NATIVE_EVENTS:
+    for event in ordinary_events - NORMAL_NATIVE_EVENTS:
         reasons.add(event if event in NATIVE_REASON_EVENTS else "event-loss")
     return reasons
+
+
+def _native_main_thread(events: set[str]) -> int | None:
+    matches = [
+        match
+        for event in events
+        if (match := NATIVE_MAIN_THREAD.fullmatch(event)) is not None
+    ]
+    if len(matches) != 1:
+        return None
+    try:
+        value = int(matches[0].group(1))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
 
 
 def _windows_native_channel() -> tuple[int, int, int]:
@@ -411,6 +430,11 @@ def _darwin_command(
     reasons: set[str] = set()
     records: list[dict[str, Any]] = []
     try:
+        events, native_failed = _read_native_events(descriptor)
+        reasons.update(_native_event_reasons(events, native_failed))
+        root_thread_id = _native_main_thread(events)
+        if root_thread_id is None:
+            reasons.add("event-loss")
         parsed = click_observer_macos.parse_fs_usage(
             collected.raw,
             workspace=observation_root,
@@ -418,9 +442,8 @@ def _darwin_command(
             root_execution_bound=True,
             process_scope_complete=collected.process_scope_complete,
             allow_workspace_root=True,
+            root_thread_id=root_thread_id,
         )
-        events, native_failed = _read_native_events(descriptor)
-        reasons.update(_native_event_reasons(events, native_failed))
         if collected.failed or collected.truncated:
             reasons.add("capture-failed")
         if parsed.unresolved_event_count:
