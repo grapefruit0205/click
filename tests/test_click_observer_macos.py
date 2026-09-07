@@ -408,7 +408,9 @@ class ClickObserverMacOSTests(unittest.TestCase):
         parsed = click_observer_macos.parse_fs_usage(
             self.trace_text(
                 f"12:00:00.000001 open F=3 (R_____) {rootless}/module.so "
-                "0.000010 Python.20"
+                "0.000010 Python.20",
+                f"12:00:00.000002 stat64 {rootless}/module.so "
+                "0.000011 Python.20",
             ),
             workspace=self.workspace,
             root_execution_bound=True,
@@ -424,7 +426,7 @@ class ClickObserverMacOSTests(unittest.TestCase):
                     f"{runtime.as_posix()}/module.so"
                 ),
                 "kind": "file",
-                "operations": ["read"],
+                "operations": ["metadata", "read"],
             },
             parsed.absolute_inputs,
         )

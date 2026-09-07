@@ -743,7 +743,16 @@ def parse_fs_usage(
         path_text = _candidate_path(details)
         projected_relative_path = False
         if not path_text and root_execution_bound:
-            relative_path = _bound_relative_candidate(operation_name, details)
+            path_text = _known_rootless_absolute_candidate(
+                details.strip(),
+                workspace=workspace,
+                absolute_roots=absolute_roots,
+            )
+            relative_path = (
+                ""
+                if path_text
+                else _bound_relative_candidate(operation_name, details)
+            )
             if relative_path:
                 path_text = _known_rootless_absolute_candidate(
                     relative_path,

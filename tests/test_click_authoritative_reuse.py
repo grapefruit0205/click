@@ -928,7 +928,10 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
             row
             for row in origin_alpha_observation["inputs"]
             if not observation_inputs.records_current(
-                self.workspace, successor_runtime["artifact_id"], [row]
+                self.workspace,
+                successor_runtime["artifact_id"],
+                [row],
+                profile=successor_runtime["profile"],
             )
         ]
         self.assertEqual(stale_rows, [], stale_rows)
