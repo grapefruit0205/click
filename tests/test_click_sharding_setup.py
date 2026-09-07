@@ -235,9 +235,10 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
         applied = setup.apply(self.root, self.application_contract)
         self.assertEqual(applied["status"], "commit-required")
         self.assertEqual(hashlib.sha256(index.read_bytes()).hexdigest(), index_before)
-        self.assertEqual(
-            stat.S_IMODE((self.root / ".click").stat().st_mode), 0o755
-        )
+        if os.name != "nt":
+            self.assertEqual(
+                stat.S_IMODE((self.root / ".click").stat().st_mode), 0o755
+            )
         for relative in setup.POLICY_PATHS:
             self.assertTrue((self.root / relative).is_file())
 

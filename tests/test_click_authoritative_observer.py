@@ -316,10 +316,9 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
             observed_environment["CLICK_NATIVE_OBSERVER_BOOTSTRAP"],
             "/tmp/click-native-observer-portable",
         )
-        self.assertTrue(
-            observed_environment["PYTHONPATH"].startswith(
-                "/tmp/click-native-observer-portable"
-            )
+        self.assertEqual(
+            Path(observed_environment["PYTHONPATH"].split(os.pathsep, 1)[0]),
+            Path("/tmp/click-native-observer-portable"),
         )
         self.assertNotIn("DYLD_INSERT_LIBRARIES", observed_environment)
         self.assertIsNotNone(
@@ -381,10 +380,9 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
             observed_environment["CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH"],
             "C:\\existing",
         )
-        self.assertTrue(
-            observed_environment["PYTHONPATH"].startswith(
-                "/tmp/click-native-observer-portable"
-            )
+        self.assertEqual(
+            Path(observed_environment["PYTHONPATH"].split(os.pathsep, 1)[0]),
+            Path("/tmp/click-native-observer-portable"),
         )
         self.assertIsNotNone(
             authoritative.verified_observation(

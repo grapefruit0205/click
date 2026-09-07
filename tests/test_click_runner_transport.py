@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import io
+import json
+import os
 from pathlib import Path
 import shlex
+import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -75,6 +80,47 @@ class ClickRunnerTransportTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.assertFalse(hasattr(click_gate, name))
+
+    def test_oversized_json_report_uses_a_bounded_one_shot_file(self) -> None:
+        calls: list[list[str]] = []
+
+        def renderer(arguments: list[str]) -> str:
+            calls.append(arguments)
+            return "exit 2" if arguments[1] == "-c" else "bounded-report"
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with (
+                mock.patch.dict(os.environ, {"PLUGIN_DATA": temporary}),
+                mock.patch.object(
+                    click_gate.click_runner_transport,
+                    "render_runner_shell_command",
+                    side_effect=renderer,
+                ),
+            ):
+                command = click_gate._json_report_command(
+                    {"payload": "large-status-report"}
+                )
+            self.assertEqual(command, "bounded-report")
+            self.assertEqual(calls[1][-2], "run-json-report")
+            report_path = Path(calls[1][-1])
+            self.assertTrue(report_path.is_file())
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            runner_argv = [calls[1][1], *calls[1][2:]]
+            with (
+                mock.patch.object(sys, "argv", runner_argv),
+                mock.patch.object(sys, "stdout", stdout),
+                mock.patch.object(sys, "stderr", stderr),
+            ):
+                returncode = click_gate.main()
+
+            self.assertEqual(returncode, 0, stderr.getvalue())
+            self.assertEqual(
+                json.loads(stdout.getvalue()),
+                {"payload": "large-status-report"},
+            )
+            self.assertFalse(report_path.exists())
 
 
 if __name__ == "__main__":

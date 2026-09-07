@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -90,6 +91,11 @@ else:  # Executed directly from the bundled hooks directory.
 # Compatibility alias for direct callers and the deterministic suite. Contract
 # schema validation now lives in the one-way click_contract boundary.
 _validate_contract = click_contract.validate_contract
+
+
+JSON_REPORT_FILE_PREFIX = ".click-json-report-"
+JSON_REPORT_MAX_BYTES = 2 * 1024 * 1024
+JSON_REPORT_MAX_AGE_SECONDS = 60 * 60
 
 
 STATE_LOCK_STALE_SECONDS = click_state.STATE_LOCK_STALE_SECONDS
@@ -440,7 +446,7 @@ def _prepare_verification(
 
 
 def _json_report_command(report: dict[str, Any]) -> str:
-    return click_runner_transport.render_runner_shell_command(
+    inline = click_runner_transport.render_runner_shell_command(
         [
             sys.executable,
             "-c",
@@ -448,6 +454,37 @@ def _json_report_command(report: dict[str, Any]) -> str:
             json.dumps(report, sort_keys=True, ensure_ascii=False),
         ]
     )
+    if inline != "exit 2":
+        return inline
+
+    encoded = json.dumps(report, ensure_ascii=False, separators=(",", ":")).encode()
+    if len(encoded) > JSON_REPORT_MAX_BYTES:
+        return inline
+    root = click_state.state_root()
+    report_path = root / f"{JSON_REPORT_FILE_PREFIX}{secrets.token_hex(16)}.json"
+    click_state.write_json(report_path, report)
+    now = time.time()
+    try:
+        candidates = list(root.glob(f"{JSON_REPORT_FILE_PREFIX}*.json"))[:128]
+    except OSError:
+        candidates = []
+    for candidate in candidates:
+        if candidate == report_path:
+            continue
+        try:
+            if now - candidate.stat().st_mtime > JSON_REPORT_MAX_AGE_SECONDS:
+                candidate.unlink()
+        except OSError:
+            pass
+    bounded = click_runner_transport.render_runner_shell_command(
+        [
+            *_stateful_runner_prefix("run-json-report"),
+            str(report_path.resolve()),
+        ]
+    )
+    if bounded == "exit 2":
+        report_path.unlink(missing_ok=True)
+    return bounded
 
 
 def _verification_progress_report(event: dict[str, Any]) -> dict[str, Any]:
@@ -1508,6 +1545,50 @@ def _run_receipt_verify(arguments: list[str]) -> int:
     return 0
 
 
+def _run_json_report(arguments: list[str]) -> int:
+    if len(arguments) != 1:
+        sys.stderr.write("Click JSON report runner arguments were invalid.\n")
+        return 2
+    path = Path(arguments[0])
+    try:
+        root = click_state.state_root().resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        metadata = path.lstat()
+        if (
+            path != resolved
+            or resolved.parent != root
+            or not resolved.name.startswith(JSON_REPORT_FILE_PREFIX)
+            or resolved.suffix != ".json"
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_size > JSON_REPORT_MAX_BYTES
+        ):
+            raise ValueError("invalid report path")
+        flags = os.O_RDONLY | int(getattr(os, "O_BINARY", 0))
+        flags |= int(getattr(os, "O_NOFOLLOW", 0))
+        descriptor = os.open(resolved, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size > JSON_REPORT_MAX_BYTES:
+                raise ValueError("invalid report file")
+            with os.fdopen(descriptor, "rb", closefd=True) as stream:
+                descriptor = -1
+                raw = stream.read(JSON_REPORT_MAX_BYTES + 1)
+            if len(raw) > JSON_REPORT_MAX_BYTES:
+                raise ValueError("report too large")
+            report = json.loads(raw)
+            if not isinstance(report, dict):
+                raise ValueError("invalid report")
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            resolved.unlink(missing_ok=True)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        sys.stderr.write("Click JSON report was unavailable.\n")
+        return 2
+    sys.stdout.write(json.dumps(report, sort_keys=True, ensure_ascii=False) + "\n")
+    return 0
+
+
 STATEFUL_RUNNER_ACTIONS = {
     "run-observation",
     "run-mutation",
@@ -1519,6 +1600,7 @@ STATEFUL_RUNNER_ACTIONS = {
     "run-dashboard-stop",
     "run-dashboard-status",
     "run-dashboard-server",
+    "run-json-report",
     "run-verification",
 }
 
@@ -1592,6 +1674,8 @@ def main() -> int:
         return _run_dashboard_status(arguments[1:])
     if arguments and arguments[0] == "run-dashboard-server":
         return _run_dashboard_server(arguments[1:])
+    if arguments and arguments[0] == "run-json-report":
+        return _run_json_report(arguments[1:])
     if arguments and arguments[0] == "run-verification":
         return _run_verification(arguments[1:])
     if arguments and arguments[0] == "run-receipt-export":
