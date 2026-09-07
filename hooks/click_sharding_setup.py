@@ -23,6 +23,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Any, Iterator
 
@@ -73,6 +74,8 @@ CONTRACT_ID = re.compile(r"^ctr_[0-9a-f]{32}$")
 AUTHORITY_ID = re.compile(r"^(?:ctr|evs)_[0-9a-f]{32}$")
 DIGEST = re.compile(r"^[0-9a-f]{64}$")
 RUNTIME_MODES = frozenset({"guarded", "evidence"})
+_PROCESS_LOCK_GUARD = threading.Lock()
+_PROCESS_LOCKS: set[str] = set()
 DEFAULT_MIN_PARENT_MS = 250.0
 DEFAULT_MIN_AVOIDABLE_MS = 100.0
 DEFAULT_MANAGEMENT_RESERVE_MS = 25.0
@@ -142,7 +145,8 @@ def _canonical(value: Any) -> bytes:
 
 
 def _project_key(root: Path) -> str:
-    return hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest()
+    canonical = root.resolve(strict=True)
+    return hashlib.sha256(os.path.normcase(str(canonical)).encode()).hexdigest()
 
 
 def _setup_root() -> Path:
@@ -161,6 +165,23 @@ def _secure_directory(path: Path) -> None:
     path.chmod(0o700)
 
 
+def _restrict_file_permissions(descriptor: int, path: str | Path) -> None:
+    if hasattr(os, "fchmod"):
+        os.fchmod(descriptor, 0o600)
+    else:  # Windows exposes path-based permission compatibility only.
+        Path(path).chmod(0o600)
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def state_path(project: Path) -> Path:
     root = inventory.project_root(project)
     return _setup_root() / f"{_project_key(root)}.json"
@@ -168,16 +189,23 @@ def state_path(project: Path) -> Path:
 
 @contextmanager
 def _project_lock(root: Path) -> Iterator[None]:
+    root = root.resolve(strict=True)
     directory = _setup_root()
     _secure_directory(directory)
-    lock_path = directory / f"{_project_key(root)}.lock"
+    project_key = _project_key(root)
+    lock_path = directory / f"{project_key}.lock"
     flags = os.O_CREAT | os.O_RDWR
     flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    with _PROCESS_LOCK_GUARD:
+        if project_key in _PROCESS_LOCKS:
+            raise SetupError("concurrent-initialization")
+        _PROCESS_LOCKS.add(project_key)
+    descriptor: int | None = None
     try:
-        descriptor = os.open(lock_path, flags, 0o600)
-    except OSError as exc:
-        raise SetupError("setup-lock-unavailable") from exc
-    try:
+        try:
+            descriptor = os.open(lock_path, flags, 0o600)
+        except OSError as exc:
+            raise SetupError("setup-lock-unavailable") from exc
         if fcntl is not None:
             try:
                 fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -203,10 +231,17 @@ def _project_lock(root: Path) -> Iterator[None]:
                 except OSError:
                     pass
     finally:
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
+        with _PROCESS_LOCK_GUARD:
+            _PROCESS_LOCKS.discard(project_key)
 
 
 def _state_is_valid(value: Any, root: Path) -> bool:
+    try:
+        root = root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
     if (
         not isinstance(value, dict)
         or frozenset(value) not in {STATE_FIELDS, LEGACY_STATE_FIELDS}
@@ -337,17 +372,13 @@ def _write_state(root: Path, value: dict[str, Any]) -> None:
         prefix=f".{target.name}.", dir=directory
     )
     try:
-        os.fchmod(descriptor, 0o600)
+        _restrict_file_permissions(descriptor, temporary)
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
             stream.write(_canonical(value) + b"\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, target)
-        directory_descriptor = os.open(directory, os.O_RDONLY)
-        try:
-            os.fsync(directory_descriptor)
-        finally:
-            os.close(directory_descriptor)
+        _fsync_directory(directory)
     except BaseException:
         try:
             os.close(descriptor)
@@ -1236,7 +1267,7 @@ def _write_policy_no_replace(target: Path, content: bytes) -> None:
         raise SetupError("policy-directory-unavailable")
     descriptor, temporary = tempfile.mkstemp(prefix=".click-proposal-", dir=directory)
     try:
-        os.fchmod(descriptor, 0o600)
+        _restrict_file_permissions(descriptor, temporary)
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
             stream.write(content)
             stream.flush()
@@ -1272,7 +1303,7 @@ def _write_policy_replace_exact(
         raise SetupError("policy-worktree-changed")
     descriptor, temporary = tempfile.mkstemp(prefix=".click-update-", dir=target.parent)
     try:
-        os.fchmod(descriptor, 0o600)
+        _restrict_file_permissions(descriptor, temporary)
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
             stream.write(content)
             stream.flush()

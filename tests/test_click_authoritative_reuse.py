@@ -128,7 +128,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
             environment=environment,
             binding_context=self.context(),
             runtime=self.runtime,
-            runner_token="unit-runner-token",
+            runner_token=self.id(),
             execute_unobserved=fallback,
             resolve_backend=resolve_backend,
             digest_file=file_digest,
@@ -161,7 +161,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(
             authoritative.verified_observation(
                 result.envelope,
-                secret="unit-runner-token",
+                secret=self.id(),
                 expected_binding=self.context(),
             )
         )

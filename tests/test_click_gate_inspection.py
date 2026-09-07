@@ -73,7 +73,10 @@ class ClickGateInspectionTests(ClickGateTestCase):
         self.assertEqual(second_result.stdout, first_result.stdout)
         self.assertIn("no read/search child process ran", second_result.stderr)
         self.assertIn("Sources: notes.txt", second_result.stderr)
-        self.assertIn("stdout 11 bytes / 2 lines", second_result.stderr)
+        self.assertIn(
+            f"stdout {first_entry['output_bytes']} bytes / 2 lines",
+            second_result.stderr,
+        )
         second_entry = self.observation_entry(request)
         self.assertEqual(second_entry["status"], "reused")
         self.assertFalse(second_entry["actual_process_executed"])

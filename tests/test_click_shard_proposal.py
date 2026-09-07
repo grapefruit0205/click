@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -284,7 +285,8 @@ class ProposalTests(unittest.TestCase):
         directory = cli.save_proposal(value, self.root)
         try:
             self.assertFalse(inventory.inside(self.root, directory))
-            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+            if os.name != "nt":
+                self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
             self.assertEqual(json.loads((directory / ".click/evidence-shards.json").read_text()),
                              value["proposals"][".click/evidence-shards.json"])
             self.assertFalse(json.loads((directory / "proposal.json").read_text())["authority"])

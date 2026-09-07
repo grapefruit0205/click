@@ -308,6 +308,13 @@ def parse_command(argv: list[str], root: Path, cwd: Path) -> dict:
         )
     ):
         raise AnalysisError("unsupported-command")
+    try:
+        root = root.resolve(strict=True)
+        cwd = cwd.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise AnalysisError("project-boundary") from None
+    if not inside(root, cwd):
+        raise AnalysisError("project-boundary")
     module, index, prefix = _python_module_command(argv)
     if module == "unittest":
         return _parse_unittest_command(argv, root, cwd, index, prefix)

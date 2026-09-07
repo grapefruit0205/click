@@ -121,17 +121,19 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
         )
 
         def channel():
-            read_descriptor, write_descriptor = os.pipe()
-            os.set_blocking(read_descriptor, False)
             events = set(
                 authoritative.NORMAL_NATIVE_EVENTS
                 if native_events is None
                 else native_events
             )
-            os.write(
-                write_descriptor,
-                "".join(f"{event}\n" for event in sorted(events)).encode("ascii"),
+            event_path = self.project / "native-events.log"
+            event_path.write_bytes(
+                "".join(f"{event}\n" for event in sorted(events)).encode("ascii")
             )
+            read_descriptor = os.open(
+                event_path, os.O_RDONLY | int(getattr(os, "O_BINARY", 0))
+            )
+            write_descriptor = os.open(os.devnull, os.O_WRONLY)
             return read_descriptor, write_descriptor, 731
 
         def digest(path):
@@ -192,7 +194,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
                 },
                 binding_context=self.context,
                 runtime=windows_runtime,
-                runner_token="portable-runner-token",
+                runner_token=self.id(),
                 execute_unobserved=fallback,
                 resolve_backend=lambda name, **_kwargs: (
                     f"C:\\Windows\\System32\\{name}.exe",
@@ -243,13 +245,14 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
                 environment={"PYTHONHASHSEED": "0", "PYTHONDONTWRITEBYTECODE": "1"},
                 binding_context=self.context,
                 runtime=self.runtime,
-                runner_token="portable-runner-token",
+                runner_token=self.id(),
                 execute_unobserved=fallback,
                 resolve_backend=lambda *_args, **_kwargs: ("/usr/bin/fs_usage", ""),
                 digest_file=lambda _path: "d" * 64,
             )
         return result, fallback
 
+    @unittest.skipIf(os.name == "nt", "Darwin FIFO adapter requires POSIX")
     def test_darwin_adapter_issues_a_profile_bound_signed_observation(self) -> None:
         result, fallback = self.run_darwin()
         observation = result.envelope["observation"]
@@ -262,11 +265,12 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
         self.assertIsNotNone(
             authoritative.verified_observation(
                 result.envelope,
-                secret="portable-runner-token",
+                secret=self.id(),
                 expected_binding=self.context,
             )
         )
 
+    @unittest.skipIf(os.name == "nt", "Darwin FIFO adapter requires POSIX")
     def test_darwin_native_reason_is_non_reusable_without_rerunning(self) -> None:
         result, fallback = self.run_darwin(
             native_events={
@@ -279,6 +283,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
         self.assertEqual(observation["ineligibility_reasons"], ["time-random-input"])
         fallback.assert_not_called()
 
+    @unittest.skipIf(os.name == "nt", "Darwin FIFO adapter requires POSIX")
     def test_darwin_ambiguous_collector_exception_never_reruns_target(self) -> None:
         result, fallback = self.run_darwin(
             collector_effect=RuntimeError("collector boundary failed")
@@ -324,7 +329,7 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
         self.assertIsNotNone(
             authoritative.verified_observation(
                 result.envelope,
-                secret="portable-runner-token",
+                secret=self.id(),
                 expected_binding=self.context,
             )
         )
@@ -430,16 +435,17 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
         self.assertFalse(runtime.state_is_valid(changed))
 
     def test_portable_build_commands_select_native_artifact_shapes(self) -> None:
+        darwin_artifact = Path("/tmp/monitor.dylib")
         darwin = runtime._build_command(
             runtime.DARWIN_PROFILE,
             compiler=Path("/usr/bin/cc"),
             include=Path("/headers"),
             source=Path("/source.c"),
-            artifact=Path("/tmp/monitor.dylib"),
+            artifact=darwin_artifact,
         )
         self.assertIn("-dynamiclib", darwin)
         self.assertIn("-Wl,-undefined,dynamic_lookup", darwin)
-        self.assertEqual(darwin[-1], "/tmp/monitor.dylib")
+        self.assertEqual(darwin[-1], str(darwin_artifact))
 
         with tempfile.TemporaryDirectory(prefix="click-win-build-shape-") as raw:
             prefix = Path(raw)
@@ -447,16 +453,17 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
             library.parent.mkdir()
             library.write_bytes(b"placeholder")
             with mock.patch.object(runtime.sys, "base_prefix", str(prefix)):
+                windows_artifact = Path("C:/tmp/_click_observer_companion.pyd")
                 windows = runtime._build_command(
                     runtime.WINDOWS_PROFILE,
                     compiler=Path("C:/tools/cl.exe"),
                     include=Path("C:/Python/include"),
                     source=Path("C:/source.c"),
-                    artifact=Path("C:/tmp/_click_observer_companion.pyd"),
+                    artifact=windows_artifact,
                 )
         self.assertIn("/LD", windows)
         self.assertIn("/WX", windows)
-        self.assertIn("/Fe:C:/tmp/_click_observer_companion.pyd", windows)
+        self.assertIn(f"/Fe:{windows_artifact}", windows)
         self.assertEqual(windows[-1], str(library))
         with tempfile.TemporaryDirectory(prefix="click-portable-venv-roots-") as raw:
             directory = Path(raw)
@@ -503,12 +510,14 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
 
     def test_input_snapshot_keys_use_platform_case_normalization(self) -> None:
         module = authoritative.click_observation_inputs
+        value = Path("/TMP/Runtime.py")
+        expected = os.path.normpath(os.path.abspath(value)).lower()
         with mock.patch.object(
             module.os.path,
             "normcase",
             side_effect=lambda value: value.lower(),
         ):
-            self.assertEqual(module._path_key(Path("/TMP/Runtime.py")), "/tmp/runtime.py")
+            self.assertEqual(module._path_key(value), expected)
 
     def test_windows_bootstrap_restores_and_chains_existing_customization(self) -> None:
         with tempfile.TemporaryDirectory(prefix="click-bootstrap-") as raw:

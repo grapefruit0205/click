@@ -114,6 +114,13 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
         )
         environment.start()
         self.addCleanup(environment.stop)
+        startup_probe = mock.patch.object(
+            setup,
+            "_run_startup_probe",
+            return_value={"status": "passed", "duration_ms": 0.0, "reason": ""},
+        )
+        startup_probe.start()
+        self.addCleanup(startup_probe.stop)
         git(self.root, "init", "-q")
         git(self.root, "config", "user.email", "click-tests@example.invalid")
         git(self.root, "config", "user.name", "Click Tests")
@@ -464,6 +471,13 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         )
         cost_environment.start()
         self.addCleanup(cost_environment.stop)
+        startup_probe = mock.patch.object(
+            setup,
+            "_run_startup_probe",
+            return_value={"status": "passed", "duration_ms": 0.0, "reason": ""},
+        )
+        startup_probe.start()
+        self.addCleanup(startup_probe.stop)
         (self.workspace / "verification_fixture.py").unlink()
         git(self.workspace, "init", "-q")
         git(self.workspace, "config", "user.email", "click-tests@example.invalid")
@@ -823,9 +837,22 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         git(self.workspace, "add", *setup.POLICY_PATHS)
         git(self.workspace, "commit", "-qm", "accept Click sharding proposal")
 
-        observer = self.run_control(
-            "click-gate observer authoritative", "turn-4"
+        observer_payload = self.pre_tool(
+            "Bash", "click-gate observer authoritative", "turn-4"
         )
+        assert observer_payload is not None
+        observer_decision = observer_payload["hookSpecificOutput"]
+        if (
+            observer_decision["permissionDecision"] == "deny"
+            and "native CPython 3.12.3 authoritative profile"
+            in observer_decision.get("permissionDecisionReason", "")
+        ):
+            self.skipTest("prepared native authoritative profile required")
+        self.assertEqual(
+            observer_decision["permissionDecision"], "allow", observer_payload
+        )
+        observer = self.run_rewritten(observer_payload)
+        self.assertEqual(observer.returncode, 0, observer.stderr or observer.stdout)
         self.assertIn("authoritative", observer.stdout)
         bootstrap = self.run_control("click-gate sharding refresh", "turn-4")
         self.assertEqual(

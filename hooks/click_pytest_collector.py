@@ -23,7 +23,7 @@ DEFAULT_PATTERNS = ("test_*.py", "*_test.py")
 
 class RecordingPlugin:
     def __init__(self, root: Path) -> None:
-        self.root = root
+        self.root = root.resolve(strict=True)
         self.tests: list[dict[str, str]] = []
         self.modules: set[str] = set()
         self.module_files: set[tuple[str, str]] = set()

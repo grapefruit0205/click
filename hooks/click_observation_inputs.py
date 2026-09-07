@@ -232,6 +232,8 @@ class InputSnapshot:
             shallow = role.endswith("-root") or role in (
                 "binaries", "system-config", "libraries", "loader-libraries",
                 "project-parent", "executable-prefix", "base-prefix",
+                "system-libraries", "system-frameworks", "local-frameworks",
+                "usr-libraries", "system32",
             )
             pending = [root]
             while pending:
