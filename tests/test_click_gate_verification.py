@@ -44,7 +44,11 @@ class ClickGateVerificationTests(ClickGateTestCase):
             tool_use_id="status-after-first",
         )
         assert first_status is not None
-        first_report = json.loads(self.run_rewritten(first_status).stdout)
+        first_status_result = self.run_rewritten(first_status)
+        self.assertEqual(
+            first_status_result.returncode, 0, first_status_result.stderr
+        )
+        first_report = json.loads(first_status_result.stdout)
         self.assertEqual(first_report["task"]["runtime_mode"], "evidence")
         self.assertEqual(first_report["task"]["execution_authority"], "host")
         self.assertFalse(first_report["task"]["approval_bound"])
@@ -72,7 +76,11 @@ class ClickGateVerificationTests(ClickGateTestCase):
             tool_use_id="status-after-reuse",
         )
         assert reused_status is not None
-        reused_report = json.loads(self.run_rewritten(reused_status).stdout)
+        reused_status_result = self.run_rewritten(reused_status)
+        self.assertEqual(
+            reused_status_result.returncode, 0, reused_status_result.stderr
+        )
+        reused_report = json.loads(reused_status_result.stdout)
         self.assertEqual(reused_report["summary"]["actual_execution_count"], 0)
         self.assertEqual(reused_report["summary"]["reused_check_count"], 1)
         self.assertEqual(reused_report["checks"][0]["execution_status"], "reused")
@@ -111,7 +119,11 @@ class ClickGateVerificationTests(ClickGateTestCase):
             tool_use_id="status-after-mutation",
         )
         assert stale_status is not None
-        stale_report = json.loads(self.run_rewritten(stale_status).stdout)
+        stale_status_result = self.run_rewritten(stale_status)
+        self.assertEqual(
+            stale_status_result.returncode, 0, stale_status_result.stderr
+        )
+        stale_report = json.loads(stale_status_result.stdout)
         self.assertEqual(stale_report["summary"]["valid_check_count"], 0)
         self.assertEqual(stale_report["summary"]["invalidated_check_count"], 1)
         self.assertEqual(stale_report["summary"]["remaining_check_count"], 1)
@@ -147,7 +159,9 @@ class ClickGateVerificationTests(ClickGateTestCase):
             tool_use_id="status-after-failure",
         )
         assert status is not None
-        report = json.loads(self.run_rewritten(status).stdout)
+        status_result = self.run_rewritten(status)
+        self.assertEqual(status_result.returncode, 0, status_result.stderr)
+        report = json.loads(status_result.stdout)
         self.assertEqual(report["summary"]["remaining_check_count"], 2)
         self.assertEqual(report["summary"]["actual_execution_count"], 1)
         self.assertEqual(report["summary"]["not_run_check_count"], 1)

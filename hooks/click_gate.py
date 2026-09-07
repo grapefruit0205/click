@@ -451,7 +451,7 @@ def _json_report_command(report: dict[str, Any]) -> str:
             sys.executable,
             "-c",
             "import sys; sys.stdout.write(sys.argv[1] + '\\n')",
-            json.dumps(report, sort_keys=True, ensure_ascii=False),
+            json.dumps(report, sort_keys=True, ensure_ascii=True),
         ]
     )
     if inline != "exit 2":
@@ -1585,7 +1585,7 @@ def _run_json_report(arguments: list[str]) -> int:
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         sys.stderr.write("Click JSON report was unavailable.\n")
         return 2
-    sys.stdout.write(json.dumps(report, sort_keys=True, ensure_ascii=False) + "\n")
+    sys.stdout.write(json.dumps(report, sort_keys=True, ensure_ascii=True) + "\n")
     return 0
 
 
