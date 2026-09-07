@@ -628,7 +628,7 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
             nested = deeper / "not-indexed.dll"
             nested.write_bytes(b"nested")
             snapshot = object.__new__(module.InputSnapshot)
-            snapshot.roots = {"system32": system32}
+            snapshot.roots = {"windows-system": system32}
             snapshot.before = {}
             snapshot.enumerated = set()
             snapshot.project_content = {}

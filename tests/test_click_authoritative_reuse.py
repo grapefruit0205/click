@@ -160,10 +160,13 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
 
         def diagnosed_macos_parse(raw, *args, **kwargs):
             parsed = original_macos_parse(raw, *args, **kwargs)
-            if sys.platform != "darwin" or not parsed.unresolved_event_count:
+            if sys.platform != "darwin" or (
+                not parsed.unresolved_event_count and parsed.inputs
+            ):
                 return parsed
+            raw_lines = raw.decode("utf-8", errors="replace").splitlines()
             suspicious = []
-            for line in raw.decode("utf-8", errors="replace").splitlines()[:5000]:
+            for line in raw_lines[:5000]:
                 try:
                     single = original_macos_parse(
                         (line + "\n").encode(),
@@ -188,7 +191,10 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                         "process_scope_complete": kwargs.get(
                             "process_scope_complete"
                         ),
+                        "inputs": list(parsed.inputs)[:24],
+                        "absolute_inputs": list(parsed.absolute_inputs)[:24],
                         "suspicious": suspicious,
+                        "raw_lines": [line[:1000] for line in raw_lines[:120]],
                     }
                 ),
                 file=sys.stderr,
@@ -285,6 +291,9 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 )
             file_event_ids = {}
             missing_path = 0
+            actionable_missing = {}
+            actionable_samples = []
+            file_keys = {}
             for event in events:
                 provider, event_id, fields = (
                     authoritative.click_observer_windows._event_fields(event)
@@ -296,10 +305,28 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                     continue
                 key = str(event_id)
                 file_event_ids[key] = file_event_ids.get(key, 0) + 1
-                if not authoritative.click_observer_windows._first_text(
+                path = authoritative.click_observer_windows._first_text(
                     fields, authoritative.click_observer_windows._PATH_FIELDS
-                ):
+                )
+                file_key = authoritative.click_observer_windows._first_text(
+                    fields, authoritative.click_observer_windows._FILE_KEY_FIELDS
+                ).lower()
+                if event_id == 10 and path and file_key:
+                    file_keys[file_key] = path
+                if not path and file_key:
+                    path = file_keys.get(file_key, "")
+                if not path:
                     missing_path += 1
+                    if event_id in (
+                        authoritative.click_observer_windows._READ_EVENT_IDS
+                        | authoritative.click_observer_windows._DIRECTORY_EVENT_IDS
+                        | authoritative.click_observer_windows._METADATA_EVENT_IDS
+                    ):
+                        actionable_missing[key] = actionable_missing.get(key, 0) + 1
+                        if len(actionable_samples) < 16:
+                            actionable_samples.append(
+                                {"event_id": event_id, "fields": fields}
+                            )
             print(
                 "authoritative Windows parser diagnostic: "
                 + repr(
@@ -319,6 +346,8 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                         "processes": process_rows[:24],
                         "file_event_ids": file_event_ids,
                         "missing_path_events": missing_path,
+                        "actionable_missing": actionable_missing,
+                        "actionable_samples": actionable_samples,
                     }
                 ),
                 file=sys.stderr,

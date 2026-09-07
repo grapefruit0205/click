@@ -150,7 +150,7 @@ def _portable_runtime_roots(project: Path, artifact: Path) -> dict[str, Path]:
         )
         candidates.update({
             "windows-root": windows,
-            "system32": (windows / "System32").resolve(),
+            "windows-system": (windows / "System32").resolve(),
             "windows-appcompat": (windows / "AppPatch").resolve(),
             "runtime-dlls": (base_prefix / "DLLs").resolve(),
             "python-build-modules": (
@@ -256,13 +256,13 @@ class InputSnapshot:
                 "binaries", "system-config", "libraries", "loader-libraries",
                 "project-parent", "executable-prefix", "base-prefix",
                 "system-libraries", "system-frameworks", "local-frameworks",
-                "usr-libraries", "system32",
+                "usr-libraries", "windows-system",
             )
             depth_limit = {
                 # System32 language resources live one directory beneath the
                 # main runtime files. AppCompat databases use at most two
                 # levels on supported Windows hosts.
-                "system32": 1,
+                "windows-system": 1,
                 "windows-appcompat": 2,
             }.get(role, 0 if shallow else None)
             pending = [(root, 0)]
