@@ -237,7 +237,8 @@
         "Phase 5 setup integration passed 8 tests in 29.610 seconds. Gate, dependency-trace, and native-observer safety regressions passed 114 tests in 144.015 seconds. Dashboard, efficiency, distribution, repository-policy, and Antigravity regressions passed 99 tests with 1 environment-dependent skip in 26.419 seconds. Proposal discovery passed 11 tests in 21.173 seconds, and the added shared lockfile invalidation case passed directly in 11.372 seconds.",
         "A preliminary module-list invocation ran 37 tests without product failures but exited 1 because test_click_shard_proposal expects the discovery-added sibling import path. Its exact standard-discovery rerun passed all 11 tests; the final locked full suite uses standard discovery.",
         "Source and Antigravity setup controller/reference bytes match after the final distribution build. HEAD remains ea7ce2c0073da4031a6bf0dc9d2f37f7094d6e1a, the development Git index is empty, and no commit, push, install, deploy, or publish occurred.",
-        "The exact final E_TESTS group and manual E_AUDIT are deliberately executed after this last project mutation; only the resulting Click Hook evidence, not this checkpoint, establishes their validity."
+        "The exact final E_TESTS group and manual E_AUDIT are deliberately executed after this last project mutation; only the resulting Click Hook evidence, not this checkpoint, establishes their validity.",
+        "Release validation on CPython 3.12.3 native macOS and Windows hosts passed the authoritative contract and cross-contract reuse suite; the Phase 5 setting-free automatic-sharding E2E remains Linux-scoped."
       ],
       "changed_files": [
         "tests/test_click_sharding_setup.py",
@@ -281,8 +282,16 @@
         }
       ],
       "support": "Linux CPython 3.12.3 direct unittest discovery with exact strace 6.8 and the identity-bound native companion",
+      "release_validation": {
+        "scope": "Native authoritative contract and cross-contract reuse; separate from the Phase 5 setting-free automatic-sharding E2E",
+        "environments": [
+          "macOS CPython 3.12.3 with privileged fs_usage and the DYLD native audit companion",
+          "Windows CPython 3.12.3 with inbox ETW and the native audit extension"
+        ],
+        "result": "passed"
+      },
       "unverified": [
-        "macOS and Windows authoritative reuse",
+        "setting-free automatic-sharding E2E on macOS and Windows",
         "other Python versions and test frameworks",
         "parallel runners",
         "positive whole-request speedup"

@@ -18,8 +18,8 @@ Shadow record cannot enable or impersonate this authority.
 | Profile | Native backend | Implementation and validation |
 | --- | --- | --- |
 | `linux-cpython3123-strace68-v1` | exact strace 6.8 and a successful ptrace capability probe | Implemented and validated on a real Linux host |
-| `darwin-cpython3123-fsusage-v1` | privileged native `fs_usage` plus a DYLD native audit companion | Implemented; real macOS host validation is pending |
-| `windows-cpython3123-etw-v1` | inbox `logman.exe` and `tracerpt.exe` ETW sessions plus a native audit extension | Implemented; real Windows host validation is pending |
+| `darwin-cpython3123-fsusage-v1` | privileged native `fs_usage` plus a DYLD native audit companion | Implemented and validated on a native macOS host |
+| `windows-cpython3123-etw-v1` | inbox `logman.exe` and `tracerpt.exe` ETW sessions plus a native audit extension | Implemented and validated on a native Windows host |
 
 Every profile is limited to CPython 3.12.3, one direct
 `python -m unittest ...` command per evidence source, and a bound verification

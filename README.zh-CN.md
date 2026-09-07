@@ -177,8 +177,9 @@ Observer 默认关闭，并且与 Dashboard 独立。使用 `click-gate observer
 `click-gate observer status` 控制。`shadow` 只是受支持 Linux、macOS 与 Windows
 后端的非权威遥测，不能授权跳过检查。`authoritative` 只可在单独批准的 Guarded
 合约中使用，并且只适用于 CPython 3.12.3 的直接 `python -m unittest` 检查。
-Linux 的精确 strace 6.8 profile 已在真实主机验证。macOS `fs_usage` 与 Windows
-ETW 原生 profile 也已实现，但会单独标记为等待真实主机验证。每个 profile 都使用
+Linux 的精确 strace 6.8、macOS 的特权 `fs_usage` 与 Windows 内置 ETW profile
+都已在 CPython 3.12.3 原生主机上通过 authoritative 合约和跨合约复用验证。无配置
+自动分片的完整 E2E 范围仍为 Linux。每个 profile 都使用
 现有构建输入准备身份绑定的原生 companion，只执行一次原始检查，且只有完整、签名的
 输入 snapshot 才能授予复用权限。Click
 不安装工具，也不提升权限。详见 [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)。Dashboard 分开显示真实执行、获得权威授权的

@@ -15,9 +15,10 @@ contract. The build uses only the compiler and headers already present; it
 does not install a package or elevate privileges.
 
 Other Python versions, non-Linux authoritative backends, pytest, custom or
-dynamic loaders were not admitted by this E2E profile. The separately
-implemented macOS and Windows profiles still require their own real-host
-validation. Unavailable observer permissions, changed runtime identity, and
+dynamic loaders were not admitted by this E2E profile. Separately from this
+Linux-scoped setting-free E2E, the macOS and Windows native profiles passed the
+authoritative contract and cross-contract reuse suite on CPython 3.12.3 native
+hosts. Unavailable observer permissions, changed runtime identity, and
 incomplete observation do not gain reuse authority; Click runs the approved
 validation or reports a non-ready state according to the existing fallback
 boundary.
@@ -117,7 +118,7 @@ The final suite includes these fail-closed cases:
 | Forged receipt, binding, or runner token | `test_shadow_record_and_forged_envelope_are_not_v2_authority`, `test_verification_runner_rejects_tampered_environment_binding`, `test_tampered_verification_token_does_not_release_reservation` |
 
 The positive result is actual partial reuse with complete provenance. The
-negative result is the measured net comparison for short fixtures. macOS,
-Windows, other Python versions, other test frameworks, parallel runners, and a
-positive whole-request speedup are not validated by this profile and are not
-claimed.
+negative result is the measured net comparison for short fixtures. Setting-free
+automatic-sharding E2E on macOS and Windows, other Python versions, other test
+frameworks, parallel runners, and a positive whole-request speedup are not
+validated by this profile and are not claimed.

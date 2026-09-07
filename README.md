@@ -202,9 +202,10 @@ Observer collection is off by default and independent from the dashboard. Use
 macOS, and Windows backends; Shadow predictions never authorize a skipped
 check. Explicit `authoritative` mode is available only inside a separately
 approved Guarded contract for direct CPython 3.12.3 `python -m unittest`
-checks. The Linux strace 6.8 profile is validated on a real host. Native
-`fs_usage` and ETW profiles are implemented for macOS and Windows, but remain
-pending real-host validation and report that boundary separately. Each profile
+checks. The Linux strace 6.8, macOS privileged `fs_usage`, and Windows inbox
+ETW profiles have passed native-host authoritative contract and cross-contract
+reuse validation on CPython 3.12.3. The setting-free automatic-sharding E2E
+remains Linux-scoped. Each profile
 prepares an identity-bound native companion from already installed build
 inputs, runs the original check once, and authorizes reuse only for a complete
 signed input snapshot. Click installs nothing or elevates no privilege. See the
