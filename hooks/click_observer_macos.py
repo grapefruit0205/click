@@ -79,6 +79,9 @@ _DIRFD_RELATIVE_PATH = re.compile(
 _POSIX_DRIVE_PATH = re.compile(r"^[A-Za-z]:/")
 _OPEN_FLAGS = re.compile(r"\((?P<flags>[A-Z_]{2,32})\)")
 _MISSING_ERRNO = re.compile(r"\[\s*2\s*\]")
+_METADATA_PATH_PREFIX = re.compile(
+    r"^(?:\[\s*-?\d+\s*\]\s+)?(?:\([A-Z_]{2,32}\)\s+)?"
+)
 
 _READ_OPERATIONS = frozenset(
     {
@@ -506,14 +509,16 @@ def _candidate_path(details: str) -> str:
 
 
 def _bound_relative_candidate(operation_name: str, details: str) -> str:
-    """Return a cwd-relative open path only when its shape is unambiguous."""
+    """Return a cwd-relative pathname only when its shape is unambiguous."""
 
-    if operation_name == "openat":
+    if operation_name in {"fstatat", "fstatat64", "openat"}:
         match = _AT_FDCWD_RELATIVE_PATH.search(details)
         value = match.group("path").strip() if match is not None else ""
     elif operation_name == "open":
         flags = _OPEN_FLAGS.search(details)
         value = details[flags.end() :].strip() if flags is not None else ""
+    elif operation_name in (_METADATA_OPERATIONS - {"fstat"}):
+        value = _METADATA_PATH_PREFIX.sub("", details.strip()).strip()
     else:
         return ""
     if (
@@ -767,16 +772,7 @@ def parse_fs_usage(
         path_text = _candidate_path(details)
         projected_relative_path = False
         if not path_text and root_execution_bound:
-            path_text = _known_rootless_absolute_candidate(
-                details.strip(),
-                workspace=workspace,
-                absolute_roots=absolute_roots,
-            )
-            relative_path = (
-                ""
-                if path_text
-                else _bound_relative_candidate(operation_name, details)
-            )
+            relative_path = _bound_relative_candidate(operation_name, details)
             if relative_path:
                 path_text = _known_rootless_absolute_candidate(
                     relative_path,

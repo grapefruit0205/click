@@ -378,7 +378,9 @@ class ClickObserverMacOSTests(unittest.TestCase):
         parsed = click_observer_macos.parse_fs_usage(
             self.trace_text(
                 "12:00:00.000001 open F=3 (R_____) tests/input.py "
-                "0.000010 Python.20"
+                "0.000010 Python.20",
+                "12:00:00.000002 stat64 [  2] alpha.Alpha.test_value "
+                "0.000011 Python.20",
             ),
             workspace=self.workspace,
             root_execution_bound=True,
@@ -388,6 +390,11 @@ class ClickObserverMacOSTests(unittest.TestCase):
         self.assertEqual(
             parsed.inputs,
             (
+                {
+                    "path": "alpha.Alpha.test_value",
+                    "kind": "missing",
+                    "operations": ["metadata"],
+                },
                 {
                     "path": "tests/input.py",
                     "kind": "file",
@@ -411,6 +418,8 @@ class ClickObserverMacOSTests(unittest.TestCase):
                 "0.000010 Python.20",
                 f"12:00:00.000002 stat64 {rootless}/module.so "
                 "0.000011 Python.20",
+                f"12:00:00.000003 access (R___) {rootless}/module.so "
+                "0.000012 Python.20",
             ),
             workspace=self.workspace,
             root_execution_bound=True,
