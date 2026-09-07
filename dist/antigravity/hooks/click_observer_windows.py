@@ -322,6 +322,14 @@ def _first_text(fields: Mapping[str, str], names: Sequence[str]) -> str:
     return ""
 
 
+def _event_path(fields: Mapping[str, str]) -> str:
+    """Return a concrete ETW path, excluding directory search patterns."""
+
+    value = _first_text(fields, _PATH_FIELDS)
+    candidate = _DEVICE_PREFIX.sub("", value.replace("/", "\\"))
+    return "" if "*" in candidate or "?" in candidate else value
+
+
 def _event_pid(fields: Mapping[str, str]) -> int | None:
     return _first_integer(fields, (*_PID_FIELDS, "execution.processid", "pid"))
 
@@ -419,7 +427,7 @@ def parse_windows_etw(
             process_start_pids.add(pid)
         elif provider in _FILE_NAMES:
             pid = _event_pid(fields)
-            path = _first_text(fields, _PATH_FIELDS)
+            path = _event_path(fields)
             identifiers = tuple(
                 dict.fromkeys(
                     value.lower()
@@ -427,10 +435,7 @@ def parse_windows_etw(
                     if (value := fields.get(field, ""))
                 )
             )
-            if path:
-                for identifier in identifiers:
-                    file_keys[identifier] = path
-            else:
+            if not path:
                 path = next(
                     (
                         file_keys[identifier]
@@ -439,6 +444,9 @@ def parse_windows_etw(
                     ),
                     "",
                 )
+            if path:
+                for identifier in identifiers:
+                    file_keys[identifier] = path
             file_events.append((pid, event_id, fields, path))
 
     descendants = {root_pid}

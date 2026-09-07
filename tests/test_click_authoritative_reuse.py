@@ -124,6 +124,9 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         original_records = observation_inputs.InputSnapshot.records
         original_snapshot_records = authoritative._snapshot_records
         original_macos_parse = authoritative.click_observer_macos.parse_fs_usage
+        original_macos_bounded_add = (
+            authoritative.click_observer_macos._bounded_add
+        )
         original_windows_parse = (
             authoritative.click_observer_windows.parse_windows_etw
         )
@@ -165,7 +168,22 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 ) from error
 
         def diagnosed_macos_parse(raw, *args, **kwargs):
-            parsed = original_macos_parse(raw, *args, **kwargs)
+            unresolved_sources = {}
+
+            def traced_bounded_add(left, right):
+                frame = sys._getframe(1)
+                key = f"{frame.f_code.co_name}:{frame.f_lineno}"
+                unresolved_sources[key] = (
+                    unresolved_sources.get(key, 0) + int(right)
+                )
+                return original_macos_bounded_add(left, right)
+
+            with mock.patch.object(
+                authoritative.click_observer_macos,
+                "_bounded_add",
+                traced_bounded_add,
+            ):
+                parsed = original_macos_parse(raw, *args, **kwargs)
             if sys.platform != "darwin" or (
                 not parsed.unresolved_event_count and parsed.inputs
             ):
@@ -193,6 +211,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                     {
                         "raw_bytes": len(raw),
                         "unresolved": parsed.unresolved_event_count,
+                        "unresolved_sources": unresolved_sources,
                         "children": parsed.child_process_count,
                         "process_scope_complete": kwargs.get(
                             "process_scope_complete"

@@ -127,7 +127,15 @@ def _portable_runtime_roots(project: Path, artifact: Path) -> dict[str, Path]:
         # framework files are all available to the post-execution snapshot.
         candidates["environment-prefix"] = environment_prefix
     if sys.platform == "darwin":
+        base_prefix = Path(sys.base_prefix).resolve()
+        python_framework = (
+            base_prefix.parents[1]
+            if len(base_prefix.parents) > 1
+            else base_prefix.parent
+        )
         candidates.update({
+            "python-framework": python_framework,
+            "library-python-lib": Path("/Library/lib"),
             "host-root": Path("/"),
             "system-libraries": Path("/System/Library"),
             "system-frameworks": Path("/System/Library/Frameworks"),
@@ -135,7 +143,7 @@ def _portable_runtime_roots(project: Path, artifact: Path) -> dict[str, Path]:
             "usr-libraries": Path("/usr/lib"),
             "system-config": Path("/etc"),
             "private-config": Path("/private/etc"),
-            "timezone": Path("/usr/share/zoneinfo"),
+            "timezone": Path("/usr/share/zoneinfo").resolve(),
         })
     elif sys.platform == "win32":
         system_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR")
@@ -266,6 +274,11 @@ class InputSnapshot:
                 # locale data, and the stdlib beneath this prefix.  Traverse
                 # it once; previously visited stdlib/package roots are skipped
                 # by the shared ``seen`` set.
+                shallow = False
+            if (
+                role == "executable-prefix"
+                and self.roots.get("environment-prefix") == root
+            ):
                 shallow = False
             depth_limit = {
                 # System32 language resources live one directory beneath the

@@ -222,7 +222,11 @@ class ClickObserverWindowsTests(unittest.TestCase):
                 FILE_PROVIDER,
                 20,
                 execution_pid=100,
-                data={"FileObject": "0x456", "FileKey": "0x789"},
+                data={
+                    "FileObject": "0x456",
+                    "FileKey": "0x789",
+                    "FileName": "*",
+                },
             ),
         )
 

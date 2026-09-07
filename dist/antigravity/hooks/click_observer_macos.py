@@ -95,6 +95,8 @@ _METADATA_OPERATIONS = frozenset(
         "access",
         "access_extended",
         "fstat",
+        "fstatat",
+        "fstatat64",
         "getattrlist",
         "lstat",
         "lstat64",
@@ -533,7 +535,7 @@ def _known_rootless_absolute_candidate(
 def _dyld_internal_dirfd_lookup(operation_name: str, details: str) -> bool:
     """Recognize fixed dyld startup directory opens with an opaque dirfd."""
 
-    if operation_name != "openat":
+    if operation_name not in {"fstatat", "fstatat64", "openat"}:
         return False
     match = _DIRFD_RELATIVE_PATH.search(details)
     if match is None:
@@ -605,7 +607,10 @@ def parse_fs_usage(
         absolute_key = candidate.as_posix()
         absolute = absolute_inputs.get(absolute_key)
         if absolute is not None and absolute["kind"] != kind:
-            absolute_conflicts.add(absolute_key)
+            if {absolute["kind"], kind} <= {"file", "directory"}:
+                absolute["kind"] = "directory"
+            else:
+                absolute_conflicts.add(absolute_key)
         elif absolute is None:
             if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
                 unresolved = _bounded_add(unresolved, 1)
@@ -639,8 +644,7 @@ def parse_fs_usage(
             if not allow_workspace_root:
                 unresolved = _bounded_add(unresolved, 1)
             return
-        if kind == "directory" and not relative.endswith("/"):
-            relative += "/"
+        relative_key = relative.rstrip("/")
         try:
             encoded_relative = relative.encode("utf-8")
         except UnicodeEncodeError:
@@ -657,16 +661,24 @@ def parse_fs_usage(
         ):
             unresolved = _bounded_add(unresolved, 1)
             return
-        existing = inputs.get(relative)
+        existing = inputs.get(relative_key)
         if existing is not None and existing["kind"] != kind:
-            conflicts.add(relative)
-            return
+            if {existing["kind"], kind} <= {"file", "directory"}:
+                existing["kind"] = "directory"
+                existing["path"] = relative_key + "/"
+            else:
+                conflicts.add(relative_key)
+                return
         if existing is None:
             if len(inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
                 unresolved = _bounded_add(unresolved, 1)
                 return
-            existing = {"path": relative, "kind": kind, "operations": []}
-            inputs[relative] = existing
+            existing = {
+                "path": relative_key + "/" if kind == "directory" else relative_key,
+                "kind": kind,
+                "operations": [],
+            }
+            inputs[relative_key] = existing
         if operation not in existing["operations"]:
             existing["operations"].append(operation)
 
@@ -743,7 +755,8 @@ def parse_fs_usage(
                     projected_relative_path = True
         if (
             path_text
-            and _canonical_macos_path(path_text) in _DYLD_INTERNAL_PATHS
+            and _canonical_macos_path(path_text)
+            in (_DYLD_INTERNAL_PATHS | _DYLD_INTERNAL_DIRFD_PATHS)
         ) or (
             not path_text
             and _dyld_internal_dirfd_lookup(operation_name, details)

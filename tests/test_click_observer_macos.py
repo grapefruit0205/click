@@ -279,6 +279,8 @@ class ClickObserverMacOSTests(unittest.TestCase):
                 "/AppleInternal/XBS/.isChrooted 0.000013 Python.20",
                 "12:00:00.000005 open F=3 (R_____) /dev/dtracehelper "
                 "0.000014 Python.20",
+                "12:00:00.000006 fstatat64 [4]/System/Library/dyld "
+                "0.000015 Python.20",
             ),
             workspace=self.workspace,
             root_execution_bound=True,
