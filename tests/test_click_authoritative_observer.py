@@ -20,7 +20,7 @@ SUPPORTED = sys.platform == "linux" and sys.implementation.name == "cpython" and
 
 class _PortableSnapshot:
     def __init__(self, *_args, **_kwargs) -> None:
-        pass
+        self.roots = {}
 
     def records(self, inputs):
         self.inputs = inputs

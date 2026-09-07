@@ -501,6 +501,35 @@ def _bound_relative_candidate(operation_name: str, details: str) -> str:
     return value
 
 
+def _known_rootless_absolute_candidate(
+    value: str,
+    *,
+    workspace: Path,
+    absolute_roots: Sequence[Path | str],
+) -> str:
+    """Restore fs_usage's omitted leading slash only for indexed roots."""
+
+    if not value or value.startswith((".", "/", "\\")):
+        return ""
+    first_component = value.split("/", 1)[0]
+    try:
+        if (workspace / first_component).exists():
+            return ""
+        candidate = _canonical_macos_path("/" + value)
+    except (OSError, TypeError, ValueError):
+        return ""
+    for raw_root in absolute_roots:
+        try:
+            root = _canonical_macos_path(Path(raw_root).resolve().as_posix())
+        except (OSError, RuntimeError, TypeError, ValueError):
+            continue
+        if root != "/" and (
+            candidate == root or candidate.startswith(root.rstrip("/") + "/")
+        ):
+            return candidate
+    return ""
+
+
 def _dyld_internal_dirfd_lookup(operation_name: str, details: str) -> bool:
     """Recognize fixed dyld startup directory opens with an opaque dirfd."""
 
@@ -541,6 +570,8 @@ def parse_fs_usage(
     process_scope_complete: bool = True,
     allow_workspace_root: bool = False,
     root_thread_id: int | None = None,
+    relative_cwd_bound: bool = False,
+    absolute_roots: Sequence[Path | str] = (),
 ) -> ParsedTrace:
     """Parse bounded fs_usage text into content-free repository inputs."""
 
@@ -702,8 +733,14 @@ def parse_fs_usage(
         if not path_text and root_execution_bound:
             relative_path = _bound_relative_candidate(operation_name, details)
             if relative_path:
-                path_text = posixpath.join(root_text, relative_path)
-                projected_relative_path = True
+                path_text = _known_rootless_absolute_candidate(
+                    relative_path,
+                    workspace=workspace,
+                    absolute_roots=absolute_roots,
+                )
+                if not path_text:
+                    path_text = posixpath.join(root_text, relative_path)
+                    projected_relative_path = True
         if (
             path_text
             and _canonical_macos_path(path_text) in _DYLD_INTERNAL_PATHS
@@ -715,7 +752,7 @@ def parse_fs_usage(
             ignored_operation = True
         if observed_operation and path_text:
             add_path(path_text, kind=kind, operation=observed_operation)
-            if projected_relative_path:
+            if projected_relative_path and not relative_cwd_bound:
                 # fs_usage may report the first VFS lookup as relative.  The
                 # suspended launch binds the initial cwd, so retain the useful
                 # repository candidate, but keep the observation partial: the

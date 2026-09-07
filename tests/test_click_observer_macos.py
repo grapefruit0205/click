@@ -372,6 +372,61 @@ class ClickObserverMacOSTests(unittest.TestCase):
         self.assertEqual(parsed.unresolved_event_count, 3)
         self.assertFalse(parsed.process_tree_complete)
 
+    def test_authoritative_parser_accepts_cwd_bound_relative_paths(self) -> None:
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                "12:00:00.000001 open F=3 (R_____) tests/input.py "
+                "0.000010 Python.20"
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+            relative_cwd_bound=True,
+        )
+
+        self.assertEqual(
+            parsed.inputs,
+            (
+                {
+                    "path": "tests/input.py",
+                    "kind": "file",
+                    "operations": ["read"],
+                },
+            ),
+        )
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+
+    def test_authoritative_parser_restores_only_known_rootless_paths(self) -> None:
+        runtime_directory = tempfile.TemporaryDirectory(
+            prefix="click-native-observer-example-"
+        )
+        self.addCleanup(runtime_directory.cleanup)
+        runtime = Path(runtime_directory.name)
+        rootless = runtime.as_posix().lstrip("/")
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                f"12:00:00.000001 open F=3 (R_____) {rootless}/module.so "
+                "0.000010 Python.20"
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+            relative_cwd_bound=True,
+            absolute_roots=(runtime,),
+        )
+
+        self.assertEqual(parsed.inputs, ())
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertIn(
+            {
+                "path": click_observer_macos._canonical_macos_path(
+                    f"{runtime.as_posix()}/module.so"
+                ),
+                "kind": "file",
+                "operations": ["read"],
+            },
+            parsed.absolute_inputs,
+        )
+
     def test_parser_normalizes_macos_data_volume_and_private_aliases(self) -> None:
         logical_root = self.workspace.as_posix()
         physical_root = (

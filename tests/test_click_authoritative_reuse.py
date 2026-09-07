@@ -133,6 +133,9 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         original_windows_bounded_add = (
             authoritative.click_observer_windows._bounded_add
         )
+        original_windows_canonical_path = (
+            authoritative.click_observer_windows._canonical_windows_path
+        )
 
         def diagnosed_records(snapshot, inputs):
             try:
@@ -232,6 +235,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
 
         def diagnosed_windows_parse(raw, *args, **kwargs):
             unresolved_sources = {}
+            invalid_paths = []
 
             def traced_bounded_add(left, right):
                 frame = sys._getframe(1)
@@ -241,10 +245,25 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 )
                 return original_windows_bounded_add(left, right)
 
-            with mock.patch.object(
-                authoritative.click_observer_windows,
-                "_bounded_add",
-                traced_bounded_add,
+            def traced_canonical_path(value, **options):
+                try:
+                    return original_windows_canonical_path(value, **options)
+                except ValueError:
+                    if len(invalid_paths) < 20:
+                        invalid_paths.append(value)
+                    raise
+
+            with (
+                mock.patch.object(
+                    authoritative.click_observer_windows,
+                    "_bounded_add",
+                    traced_bounded_add,
+                ),
+                mock.patch.object(
+                    authoritative.click_observer_windows,
+                    "_canonical_windows_path",
+                    traced_canonical_path,
+                ),
             ):
                 parsed = original_windows_parse(raw, *args, **kwargs)
             if sys.platform != "win32" or (
@@ -358,6 +377,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                         "xml_unresolved": xml_unresolved,
                         "unresolved": parsed.unresolved_event_count,
                         "unresolved_sources": unresolved_sources,
+                        "invalid_paths": invalid_paths,
                         "children": parsed.child_process_count,
                         "process_scope_complete": kwargs.get(
                             "process_scope_complete"

@@ -311,6 +311,8 @@ static int audit_impl(const char *event, PyObject *args, void *data) {
     if (!strncmp(event, "subprocess.", 11) || !strncmp(event, "os.fork", 7) ||
         !strncmp(event, "os.exec", 7) || !strncmp(event, "os.spawn", 8))
         note(10, "child-process-unsupported\n");
+    if (!strcmp(event, "os.chdir"))
+        note(7, "external-or-native-input\n");
     if (!strncmp(event, "ctypes.", 7) || !strncmp(event, "socket.", 7) ||
         !strncmp(event, "sqlite3.", 8))
         note(7, "external-or-native-input\n");

@@ -258,6 +258,15 @@ class InputSnapshot:
                 "system-libraries", "system-frameworks", "local-frameworks",
                 "usr-libraries", "windows-system",
             )
+            if (
+                getattr(self, "profile", "") == DARWIN_PROFILE
+                and role == "base-prefix"
+            ):
+                # Framework builds keep launchers, Resources/Python.app,
+                # locale data, and the stdlib beneath this prefix.  Traverse
+                # it once; previously visited stdlib/package roots are skipped
+                # by the shared ``seen`` set.
+                shallow = False
             depth_limit = {
                 # System32 language resources live one directory beneath the
                 # main runtime files. AppCompat databases use at most two

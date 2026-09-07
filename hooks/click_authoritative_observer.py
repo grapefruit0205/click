@@ -443,6 +443,8 @@ def _darwin_command(
             process_scope_complete=collected.process_scope_complete,
             allow_workspace_root=True,
             root_thread_id=root_thread_id,
+            relative_cwd_bound=True,
+            absolute_roots=tuple(snapshot.roots.values()),
         )
         if collected.failed or collected.truncated:
             reasons.add("capture-failed")
