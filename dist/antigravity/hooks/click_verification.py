@@ -9,117 +9,106 @@ may depend on lower runtime domains but never imports the gate or host router.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, fields
 import hashlib
-import hmac
 import json
 import os
 from pathlib import Path
-import platform
 import re
 import secrets
 import shlex
-import shutil
 import subprocess
 import sys
 import time
 from typing import Any
 
 if __package__:
-    from . import (
-        click_capability,
-        click_change_policy,
-        click_claims,
-        click_contract_state,
-        click_dependency_cache,
-        click_dependency_trace,
-        click_diagnostics,
-        click_evidence,
-        click_evidence_shards,
-        click_host_coverage,
-        click_incremental,
-        click_inspection,
-        click_mutation,
-        click_observation,
-        click_authoritative_observer,
-        click_observer_control,
-        click_observer_runtime,
-        click_process,
-        click_runtime_state,
-        click_shadow_intelligence,
-        click_state,
-        click_verification_meter,
-        click_verification_policy,
-    )
-else:  # Executed directly from the bundled hooks directory.
-    import click_capability
-    import click_change_policy
-    import click_claims
-    import click_contract_state
-    import click_dependency_cache
-    import click_dependency_trace
-    import click_diagnostics
-    import click_evidence
-    import click_evidence_shards
-    import click_host_coverage
-    import click_incremental
-    import click_inspection
-    import click_mutation
-    import click_observation
-    import click_authoritative_observer
-    import click_observer_control
-    import click_observer_runtime
-    import click_process
-    import click_runtime_state
-    import click_shadow_intelligence
-    import click_state
-    import click_verification_meter
-    import click_verification_policy
+    from . import click_import_bootstrap
+else:  # Installed launchers execute hooks directly.
+    import click_import_bootstrap
+
+(
+    click_capability,
+    click_change_policy,
+    click_claims,
+    click_contract_state,
+    click_dependency_cache,
+    click_diagnostics,
+    click_evidence,
+    click_evidence_shards,
+    click_host_coverage,
+    click_incremental,
+    click_inspection,
+    click_mutation,
+    click_observation,
+    click_observer_control,
+    click_observer_runtime,
+    click_process,
+    click_runtime_state,
+    click_shadow_intelligence,
+    click_state,
+    click_verification_policy,
+    click_verification_bindings,
+    click_verification_plan,
+    click_verification_reuse,
+    click_observer_common,
+) = click_import_bootstrap.load_siblings(
+    __package__,
+    "click_capability",
+    "click_change_policy",
+    "click_claims",
+    "click_contract_state",
+    "click_dependency_cache",
+    "click_diagnostics",
+    "click_evidence",
+    "click_evidence_shards",
+    "click_host_coverage",
+    "click_incremental",
+    "click_inspection",
+    "click_mutation",
+    "click_observation",
+    "click_observer_control",
+    "click_observer_runtime",
+    "click_process",
+    "click_runtime_state",
+    "click_shadow_intelligence",
+    "click_state",
+    "click_verification_policy",
+    "click_verification_bindings",
+    "click_verification_plan",
+    "click_verification_reuse",
+    "click_observer_common",
+)
 
 
-PROTOCOL_VERSION = 2
 CONTRACT_STATE_SCHEMA_VERSION = 2
-BATCH_FIELDS = {
-    "version", "checks", "workdir", "reporting", "failure_collection"
-}
-CHECK_FIELDS = {"evidence_id", "argv", "class"}
-VERIFICATION_CLASSES = click_verification_meter.VERIFICATION_CLASSES
 RUNNING_TTL_SECONDS = 60 * 60
 VERIFY_RUNNING_TTL_SECONDS = RUNNING_TTL_SECONDS
-PYTHON_VERIFICATION_MODULES = {"coverage", "pytest", "unittest"}
-PYTHON_VERIFICATION_EXECUTABLES = {"python", "python3", "py", "pypy", "pypy3"}
-VERSIONED_PYTHON_EXECUTABLE = re.compile(r"^python3[.][0-9]+$")
-DEEP_VERIFICATION_EXECUTABLES = {
-    "bandit", "cargo-audit", "cypress", "k6", "locust", "nox", "playwright",
-    "semgrep", "snyk", "tox", "trivy",
-}
-DEEP_VERIFICATION_MARKERS = {
-    "audit", "bench", "coverage", "e2e", "end-to-end", "end_to_end",
-    "integration", "load-test", "load_test", "security",
-}
-VERIFICATION_EXECUTABLES = {
-    "bandit", "bats", "cargo-audit", "cypress", "jest", "k6", "locust",
-    "nox", "playwright", "phpunit", "pytest", "rspec", "semgrep", "snyk",
-    "tox", "trivy", "vitest",
-}
-VERIFICATION_NAME_MARKERS = (
-    "audit", "bench", "coverage", "e2e", "integration-test", "integration_test",
-    "security", "spec", "test", "validate", "verification", "verify",
-)
-TEST_TARGET_SUFFIXES = {
-    ".go", ".js", ".jsx", ".php", ".py", ".rb", ".rs", ".ts", ".tsx",
-}
-TEST_FILTER_OPTIONS = {
-    "-k", "-m", "-run", "-t", "--filter", "--test-name-pattern",
-    "--tests-regex",
-}
-TEST_OPTIONS_WITH_VALUES = TEST_FILTER_OPTIONS | {
-    "-p", "-r", "-s", "--basetemp", "--confcutdir", "--cov", "--cov-report",
-    "--deselect", "--ignore", "--junitxml", "--maxfail", "--package",
-    "--project", "--rootdir", "--test",
-}
-NEW_SOURCE_PATH_SEGMENTS = {
-    "app", "config", "configs", "lib", "migration", "migrations", "src",
-}
+PROTOCOL_VERSION = click_verification_plan.PROTOCOL_VERSION
+BATCH_FIELDS = click_verification_plan.BATCH_FIELDS
+CHECK_FIELDS = click_verification_plan.CHECK_FIELDS
+VERIFICATION_CLASSES = click_verification_plan.VERIFICATION_CLASSES
+PYTHON_VERIFICATION_MODULES = click_verification_plan.PYTHON_VERIFICATION_MODULES
+PYTHON_VERIFICATION_EXECUTABLES = click_verification_plan.PYTHON_VERIFICATION_EXECUTABLES
+VERSIONED_PYTHON_EXECUTABLE = click_verification_plan.VERSIONED_PYTHON_EXECUTABLE
+DEEP_VERIFICATION_EXECUTABLES = click_verification_plan.DEEP_VERIFICATION_EXECUTABLES
+DEEP_VERIFICATION_MARKERS = click_verification_plan.DEEP_VERIFICATION_MARKERS
+VERIFICATION_EXECUTABLES = click_verification_plan.VERIFICATION_EXECUTABLES
+VERIFICATION_NAME_MARKERS = click_verification_plan.VERIFICATION_NAME_MARKERS
+TEST_TARGET_SUFFIXES = click_verification_plan.TEST_TARGET_SUFFIXES
+TEST_FILTER_OPTIONS = click_verification_plan.TEST_FILTER_OPTIONS
+TEST_OPTIONS_WITH_VALUES = click_verification_plan.TEST_OPTIONS_WITH_VALUES
+NEW_SOURCE_PATH_SEGMENTS = click_verification_plan.NEW_SOURCE_PATH_SEGMENTS
+VERIFICATION_BATCH_FIELDS = click_verification_plan.VERIFICATION_BATCH_FIELDS
+VERIFICATION_CHECK_FIELDS = click_verification_plan.VERIFICATION_CHECK_FIELDS
+VERIFICATION_PROTOCOL_VERSION = click_verification_plan.VERIFICATION_PROTOCOL_VERSION
+EVIDENCE_ID_PATTERN = click_verification_plan.EVIDENCE_ID_PATTERN
+FAILURE_COLLECTION_VERSION = click_verification_plan.FAILURE_COLLECTION_VERSION
+FAILURE_COLLECTION_MAX_EXTRA_SOURCES = click_verification_plan.FAILURE_COLLECTION_MAX_EXTRA_SOURCES
+FAILURE_COLLECTION_MAX_EXTRA_FAILURES = click_verification_plan.FAILURE_COLLECTION_MAX_EXTRA_FAILURES
+FAILURE_COLLECTION_MAX_START_WINDOW_MS = click_verification_plan.FAILURE_COLLECTION_MAX_START_WINDOW_MS
+FAILURE_COLLECTION_STATE_FIELD = click_verification_plan.FAILURE_COLLECTION_STATE_FIELD
+FAILURE_COLLECTION_RESULT_STATUSES = click_verification_plan.FAILURE_COLLECTION_RESULT_STATUSES
 
 
 _fresh_mutation_boundary = click_mutation.fresh_boundary
@@ -136,133 +125,11 @@ _is_broad_exploration_tokens = click_inspection.is_broad_exploration_tokens
 _is_path_qualified_executable = click_inspection.is_path_qualified_executable
 _resolve_read_only_executable = click_inspection.resolve_read_only_executable
 _sanitized_git_environment = click_inspection.sanitized_git_environment
-VERIFICATION_BATCH_FIELDS = BATCH_FIELDS
-VERIFICATION_CHECK_FIELDS = CHECK_FIELDS
-VERIFICATION_PROTOCOL_VERSION = PROTOCOL_VERSION
-EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
-FAILURE_COLLECTION_VERSION = 1
-FAILURE_COLLECTION_MAX_EXTRA_SOURCES = 3
-FAILURE_COLLECTION_MAX_EXTRA_FAILURES = 3
-FAILURE_COLLECTION_MAX_START_WINDOW_MS = 30_000
-FAILURE_COLLECTION_STATE_FIELD = "bounded_failure_collection"
-FAILURE_COLLECTION_RESULT_STATUSES = frozenset(
-    {"not-triggered", "disabled", "collecting", "completed", "stopped"}
-)
 
 
-def _default_failure_collection() -> dict[str, Any]:
-    return {
-        "version": FAILURE_COLLECTION_VERSION,
-        "mode": "off",
-        "independent_sources": [],
-        "max_extra_sources": 0,
-        "max_extra_failures": 0,
-        "start_window_ms": 0,
-    }
-
-
-def _validate_failure_collection(
-    value: Any, checks: list[dict[str, Any]]
-) -> tuple[dict[str, Any] | None, str]:
-    if value is None:
-        return _default_failure_collection(), ""
-    fields = {
-        "version", "mode", "independent_sources", "max_extra_sources",
-        "max_extra_failures", "start_window_ms",
-    }
-    if not isinstance(value, dict) or set(value) != fields:
-        return None, (
-            "Verification `failure_collection` must contain only version, mode, "
-            "independent_sources, max_extra_sources, max_extra_failures, and "
-            "start_window_ms."
-        )
-    if value.get("version") != FAILURE_COLLECTION_VERSION:
-        return None, (
-            f"Verification `failure_collection.version` must be "
-            f"{FAILURE_COLLECTION_VERSION}."
-        )
-    mode = value.get("mode")
-    independent = value.get("independent_sources")
-    extra_sources = value.get("max_extra_sources")
-    extra_failures = value.get("max_extra_failures")
-    start_window_ms = value.get("start_window_ms")
-    if mode not in {"off", "bounded"}:
-        return None, "Verification `failure_collection.mode` must be off or bounded."
-    if (
-        not isinstance(independent, list)
-        or any(
-            not isinstance(item, str)
-            or EVIDENCE_ID_PATTERN.fullmatch(item) is None
-            for item in independent
-        )
-        or len(set(independent)) != len(independent)
-    ):
-        return None, (
-            "Verification `failure_collection.independent_sources` must contain "
-            "distinct evidence ids."
-        )
-    numeric = (extra_sources, extra_failures, start_window_ms)
-    if any(not isinstance(item, int) or isinstance(item, bool) for item in numeric):
-        return None, "Verification failure-collection budgets must be integers."
-    if mode == "off":
-        if independent or any(numeric):
-            return None, "Disabled failure collection must use empty, zero budgets."
-        return _default_failure_collection(), ""
-    submitted_ids = {
-        str(check.get("evidence_id", ""))
-        for check in checks
-        if isinstance(check, dict)
-    }
-    if len(independent) < 2 or not set(independent).issubset(submitted_ids):
-        return None, (
-            "Bounded failure collection requires at least two explicitly submitted "
-            "independent evidence ids."
-        )
-    if not 1 <= extra_sources <= FAILURE_COLLECTION_MAX_EXTRA_SOURCES:
-        return None, "Bounded failure collection allows 1..3 extra sources."
-    if not 1 <= extra_failures <= FAILURE_COLLECTION_MAX_EXTRA_FAILURES:
-        return None, "Bounded failure collection allows 1..3 extra failures."
-    if not 1 <= start_window_ms <= FAILURE_COLLECTION_MAX_START_WINDOW_MS:
-        return None, "Bounded failure collection start_window_ms must be 1..30000."
-    return json.loads(json.dumps(value)), ""
-
-
-def _failure_collection_result_is_valid(value: Any) -> bool:
-    fields = {
-        "version", "batch_ref", "requested_mode", "status", "first_failure_source_id",
-        "admitted_source_ids", "additional_sources_started",
-        "additional_failures", "boundary_checks", "boundary_check_ms",
-        "stop_reason",
-    }
-    return bool(
-        isinstance(value, dict)
-        and set(value) == fields
-        and value.get("version") == FAILURE_COLLECTION_VERSION
-        and isinstance(value.get("batch_ref"), str)
-        and re.fullmatch(r"[0-9a-f]{64}", value["batch_ref"])
-        and value.get("requested_mode") in {"off", "bounded"}
-        and value.get("status") in FAILURE_COLLECTION_RESULT_STATUSES
-        and isinstance(value.get("first_failure_source_id"), str)
-        and isinstance(value.get("admitted_source_ids"), list)
-        and all(
-            isinstance(item, str) and EVIDENCE_ID_PATTERN.fullmatch(item)
-            for item in value["admitted_source_ids"]
-        )
-        and all(
-            isinstance(value.get(field), int)
-            and not isinstance(value.get(field), bool)
-            and value[field] >= 0
-            for field in (
-                "additional_sources_started", "additional_failures",
-                "boundary_checks",
-            )
-        )
-        and isinstance(value.get("boundary_check_ms"), (int, float))
-        and not isinstance(value.get("boundary_check_ms"), bool)
-        and value["boundary_check_ms"] >= 0
-        and isinstance(value.get("stop_reason"), str)
-        and 0 < len(value["stop_reason"]) <= 64
-    )
+_default_failure_collection = click_verification_plan.default_failure_collection
+_validate_failure_collection = click_verification_plan.validate_failure_collection
+_failure_collection_result_is_valid = click_verification_plan.failure_collection_result_is_valid
 
 
 def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
@@ -299,8 +166,8 @@ def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
         click_observer_control.CONTROL_FIELD: (
             click_observer_control.fresh_state()
         ),
-        click_dependency_trace.SHADOW_STATE_FIELD: (
-            click_dependency_trace.fresh_state()
+        click_observer_common.SHADOW_STATE_FIELD: (
+            click_observer_common.fresh_state()
         ),
         click_shadow_intelligence.SHADOW_INTELLIGENCE_FIELD: (
             click_shadow_intelligence.fresh_state()
@@ -308,1496 +175,69 @@ def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _validate_verification_batch(
-    raw: str,
-    scale: str,
-    evidence_sources: dict[str, Any] | None = None,
-) -> tuple[dict[str, Any] | None, int, str]:
-    value, error = _decode_capability_request(
-        raw,
-        "Verification batch",
-        version=VERIFICATION_PROTOCOL_VERSION,
-    )
-    if error:
-        return None, 0, error
-    assert value is not None
-    if "commands" in value:
-        return (
-            None,
-            0,
-            "Click verification uses `checks` with argv arrays and a submitted "
-            "`class`; legacy shell-string `commands` are no longer accepted.",
-        )
-    unknown = sorted(set(value) - VERIFICATION_BATCH_FIELDS)
-    if unknown:
-        rendered = ", ".join(f"`{field}`" for field in unknown)
-        return None, 0, f"Verification batch contains unsupported field(s): {rendered}."
-    reporting, reporting_error = click_diagnostics.validate_reporting(
-        value.get("reporting")
-    )
-    if reporting_error:
-        return None, 0, reporting_error
-    assert reporting is not None
-    workdir = value.get("workdir")
-    if workdir is not None and (
-        not isinstance(workdir, str)
-        or not workdir
-        or "\x00" in workdir
-        or not Path(workdir).is_absolute()
-    ):
-        return (
-            None,
-            0,
-            "Verification batch `workdir` must be a non-empty absolute path when supplied.",
-        )
-    checks = value.get("checks")
-    if not isinstance(checks, list) or not checks:
-        return None, 0, "Verification batch `checks` must be a non-empty list."
-    normalized: list[dict[str, Any]] = []
-    units = 0
-    for index, check in enumerate(checks, start=1):
-        if not isinstance(check, dict):
-            return None, 0, f"Verification check {index} must be an object."
-        unknown_check = sorted(set(check) - VERIFICATION_CHECK_FIELDS)
-        if unknown_check:
-            rendered = ", ".join(f"`{field}`" for field in unknown_check)
-            return None, 0, f"Verification check {index} has unsupported field(s): {rendered}."
-        evidence_id = check.get("evidence_id")
-        if evidence_sources is not None:
-            if not isinstance(evidence_id, str) or not EVIDENCE_ID_PATTERN.fullmatch(
-                evidence_id
-            ):
-                return (
-                    None,
-                    0,
-                    f"Verification check {index} `evidence_id` must name one declared "
-                    "argv evidence source.",
-                )
-            source = evidence_sources.get(_evidence_key(evidence_id))
-            if not isinstance(source, dict):
-                return (
-                    None,
-                    0,
-                    f"Verification check {index} references unknown evidence id "
-                    f"`{evidence_id}`.",
-                )
-            if source.get("kind") != "argv":
-                return (
-                    None,
-                    0,
-                    f"Verification check {index} evidence `{evidence_id}` has kind "
-                    f"`{source.get('kind')}`, not `argv`.",
-                )
-        elif evidence_id is not None and (
-            not isinstance(evidence_id, str)
-            or not EVIDENCE_ID_PATTERN.fullmatch(evidence_id)
-        ):
-            return None, 0, f"Verification check {index} `evidence_id` is invalid."
-        argv, argv_error = _validate_argv(check.get("argv"), f"Verification check {index}")
-        if argv_error:
-            return None, 0, argv_error
-        assert argv is not None
-        read_only = _is_read_only_tokens(list(argv))
-        minimum_class = (
-            "broad" if read_only and _is_broad_exploration_tokens(argv) else "targeted"
-        ) if read_only else _minimum_verification_class(argv)
-        if minimum_class is None:
-            return (
-                None,
-                0,
-                f"Verification check {index} is neither read-only nor a recognized check.",
-            )
-        check_class = check.get("class")
-        if check_class not in VERIFICATION_CLASSES:
-            allowed = ", ".join(VERIFICATION_CLASSES)
-            return None, 0, f"Verification check {index} `class` must be one of: {allowed}."
-        effective_class = click_verification_meter.effective_class(
-            check_class, minimum_class
-        )
-        assert effective_class is not None
-        effective_units = click_verification_meter.class_units(effective_class)
-        assert effective_units is not None
-        units += effective_units
-        normalized_check: dict[str, Any] = {
-            "argv": argv,
-            "class": effective_class,
-        }
-        if isinstance(evidence_id, str):
-            normalized_check["evidence_id"] = evidence_id
-        normalized.append(normalized_check)
-    normalized_batch = {
-        "version": VERIFICATION_PROTOCOL_VERSION,
-        "checks": normalized,
-        "reporting": reporting,
-    }
-    failure_collection, collection_error = _validate_failure_collection(
-        value.get("failure_collection"), normalized
-    )
-    if collection_error:
-        return None, 0, collection_error
-    assert failure_collection is not None
-    normalized_batch["failure_collection"] = failure_collection
-    if isinstance(workdir, str):
-        normalized_batch["workdir"] = workdir
-    return normalized_batch, units, ""
-
-
-def _verification_groups(
-    batch: dict[str, Any],
-) -> tuple[dict[str, list[dict[str, Any]]], str]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    completed_groups: set[str] = set()
-    active_group = ""
-    for index, check in enumerate(batch["checks"], start=1):
-        evidence_id = check.get("evidence_id")
-        if not isinstance(evidence_id, str) or not EVIDENCE_ID_PATTERN.fullmatch(
-            evidence_id
-        ):
-            return {}, (
-                f"Verification check {index} `evidence_id` must name one declared "
-                "argv evidence source."
-            )
-        source_key = _evidence_key(evidence_id)
-        if source_key != active_group:
-            if source_key in completed_groups:
-                return {}, (
-                    "Checks for one argv evidence id must be adjacent in a verification "
-                    "batch so partial failure can be recorded deterministically."
-                )
-            if active_group:
-                completed_groups.add(active_group)
-            active_group = source_key
-        grouped.setdefault(source_key, []).append(check)
-    return grouped, ""
-
-
-def _verification_group_digest(checks: list[dict[str, Any]]) -> str:
-    # Receipt identity is the executable request, not Click's compatibility
-    # class or legacy unit heuristic.
-    payload = [{"argv": check["argv"]} for check in checks]
-    return _capability_digest({"checks": payload})
-
-
-def _verification_command_digest(check: dict[str, Any]) -> str:
-    return _capability_digest({"argv": check["argv"]})
-
-
-def _verification_command_plans(
-    batch: dict[str, Any],
-) -> dict[str, list[dict[str, Any]]]:
-    plans: dict[str, list[dict[str, Any]]] = {}
-    source_positions: dict[str, int] = {}
-    for position, check in enumerate(batch["checks"], start=1):
-        source_key = _evidence_key(str(check["evidence_id"]))
-        source_position = source_positions.get(source_key, 0) + 1
-        source_positions[source_key] = source_position
-        plans.setdefault(source_key, []).append(
-            {
-                "position": position,
-                "source_position": source_position,
-                "check_digest": _verification_command_digest(check),
-            }
-        )
-    return plans
-
-
-def _verification_group_units(checks: list[dict[str, Any]]) -> int:
-    units = click_verification_meter.total_units(check["class"] for check in checks)
-    assert units is not None
-    return units
-
-
-def _file_content_digest(path: Path) -> str:
-    hasher = hashlib.sha256()
-    try:
-        with path.open("rb") as handle:
-            while True:
-                chunk = handle.read(1024 * 1024)
-                if not chunk:
-                    break
-                hasher.update(chunk)
-    except OSError:
-        return ""
-    return hasher.hexdigest()
-
-
-def _verification_environment(*, cwd: Path) -> dict[str, str]:
-    # Shell launchers add bookkeeping variables that do not change check
-    # semantics and are not stable across the Hook process and its rewritten
-    # runner. Keep user/project variables fingerprinted, but canonicalize these
-    # launcher-owned values so an unchanged receipt remains portable.
-    volatile = {
-        "_",
-        "__CF_USER_TEXT_ENCODING",
-        "CMDCMDLINE",
-        "CLICK_CONFIG_HOME",
-        "COMMAND_MODE",
-        "LC_CTYPE",
-        "OLDPWD",
-        "PROMPT",
-        "PROMPT_COMMAND",
-        "PS1",
-        "PS2",
-        "PLUGIN_DATA",
-        "PLUGIN_ROOT",
-        "SHLVL",
-    }
-    environment = {
-        str(key): str(value)
-        for key, value in os.environ.items()
-        if str(key).upper() not in volatile and not str(key).startswith("=")
-    }
-    environment["PWD"] = str(cwd.resolve())
-    return environment
-
-
-def _observer_environment(
-    environment: dict[str, str], verification: Any
-) -> dict[str, str]:
-    """Bind the deterministic Python profile selected by authoritative mode."""
-    normalized = dict(environment)
-    if click_observer_control.mode(verification) == "authoritative":
-        normalized["PYTHONHASHSEED"] = "0"
-        normalized["PYTHONDONTWRITEBYTECODE"] = "1"
-    return normalized
-
-
-def _verification_environment_key(key: str) -> str:
-    return key.upper() if os.name == "nt" else key
-
-
-def _verification_environment_hmac(
-    runner_token: str, domain: str, value: str
-) -> str:
-    secret = hashlib.sha256(runner_token.encode()).digest()
-    message = f"click-verification-{domain}\0{value}".encode()
-    return hmac.new(secret, message, hashlib.sha256).hexdigest()
-
-
-def _verification_environment_binding(
-    environment: dict[str, str], runner_token: str
-) -> list[dict[str, str]]:
-    records = []
-    for key, value in environment.items():
-        normalized_key = _verification_environment_key(str(key))
-        records.append(
-            {
-                "key_digest": _verification_environment_hmac(
-                    runner_token, "key", normalized_key
-                ),
-                "value_digest": _verification_environment_hmac(
-                    runner_token, "value", f"{normalized_key}\0{value}"
-                ),
-            }
-        )
-    return sorted(records, key=lambda item: item["key_digest"])
-
-
-def _verification_environment_binding_digest(
-    binding: Any, runner_token: str
-) -> str:
-    try:
-        canonical = json.dumps(
-            binding, sort_keys=True, separators=(",", ":")
-        )
-    except (TypeError, ValueError):
-        return ""
-    return _verification_environment_hmac(runner_token, "binding", canonical)
-
-
-def _verification_environment_binding_is_authentic(
-    binding: Any, digest: Any, runner_token: str
-) -> bool:
-    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-        return False
-    expected = _verification_environment_binding_digest(binding, runner_token)
-    return bool(expected and secrets.compare_digest(digest, expected))
-
-
-def _verification_host_coverage_binding_digest(
-    coverage: Any, runner_token: str
-) -> str:
-    if not click_host_coverage.receipt_is_current(coverage):
-        return ""
-    canonical = json.dumps(coverage, sort_keys=True, separators=(",", ":"))
-    return _verification_environment_hmac(
-        runner_token, "host-coverage", canonical
-    )
-
-
-def _verification_host_coverage_binding_is_authentic(
-    coverage: Any, digest: Any, runner_token: str
-) -> bool:
-    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-        return False
-    expected = _verification_host_coverage_binding_digest(
-        coverage, runner_token
-    )
-    return bool(expected and secrets.compare_digest(digest, expected))
-
-
-def _verification_environment_from_binding(
-    binding: Any,
-    runner_token: str,
-    current_environment: dict[str, str],
-) -> tuple[dict[str, str] | None, bool, str]:
-    if not isinstance(binding, list) or not binding or len(binding) > 4096:
-        return None, False, "Click verification runner environment binding was malformed."
-    expected: dict[str, str] = {}
-    for record in binding:
-        if not isinstance(record, dict) or set(record) != {
-            "key_digest",
-            "value_digest",
-        }:
-            return None, False, "Click verification runner environment binding was malformed."
-        key_digest = record.get("key_digest")
-        value_digest = record.get("value_digest")
-        if (
-            not isinstance(key_digest, str)
-            or not re.fullmatch(r"[0-9a-f]{64}", key_digest)
-            or not isinstance(value_digest, str)
-            or not re.fullmatch(r"[0-9a-f]{64}", value_digest)
-            or key_digest in expected
-        ):
-            return None, False, "Click verification runner environment binding was malformed."
-        expected[key_digest] = value_digest
-
-    projected: dict[str, str] = {}
-    matched: set[str] = set()
-    drifted = False
-    for key, value in current_environment.items():
-        normalized_key = _verification_environment_key(str(key))
-        key_digest = _verification_environment_hmac(
-            runner_token, "key", normalized_key
-        )
-        expected_value = expected.get(key_digest)
-        if expected_value is None:
-            continue
-        current_value = _verification_environment_hmac(
-            runner_token, "value", f"{normalized_key}\0{value}"
-        )
-        if not secrets.compare_digest(expected_value, current_value):
-            drifted = True
-        projected[str(key)] = str(value)
-        matched.add(key_digest)
-    if matched != set(expected):
-        drifted = True
-    return projected, drifted, ""
-
-
-def _executable_search_path(environment: dict[str, str], *, cwd: Path) -> str:
-    """Resolve relative PATH entries as the verification child will from its cwd."""
-    entries: list[str] = []
-    for raw_entry in environment.get("PATH", os.defpath).split(os.pathsep):
-        entry = Path(raw_entry) if raw_entry else cwd
-        if not entry.is_absolute():
-            entry = cwd / entry
-        entries.append(str(entry.resolve()))
-    return os.pathsep.join(entries)
-
-
-def _verification_executable_records(
-    checks: list[dict[str, Any]],
-    *,
-    cwd: Path,
-    environment: dict[str, str] | None = None,
-    file_content_digest: Callable[[Path], str] | None = None,
-) -> list[dict[str, Any]] | None:
-    effective_environment = environment or _verification_environment(cwd=cwd)
-    digest_file = file_content_digest or _file_content_digest
-    search_path = _executable_search_path(effective_environment, cwd=cwd)
-    executables: list[dict[str, Any]] = []
-    for check in checks:
-        argv = check.get("argv")
-        executable = str(argv[0]) if isinstance(argv, list) and argv else ""
-        candidate = Path(executable)
-        if executable and (
-            candidate.is_absolute() or _is_path_qualified_executable(executable)
-        ):
-            selected = candidate if candidate.is_absolute() else cwd / candidate
-            resolved = shutil.which(str(selected))
-        else:
-            resolved = shutil.which(executable, path=search_path)
-        item: dict[str, Any] = {"name": Path(executable).name.lower()}
-        if resolved:
-            try:
-                resolved_candidate = Path(resolved)
-                if not resolved_candidate.is_absolute():
-                    resolved_candidate = cwd / resolved_candidate
-                execution_path = Path(os.path.abspath(resolved_candidate))
-                path = execution_path.resolve(strict=True)
-                metadata = path.stat()
-                item.update(
-                    {
-                        "selected_path": os.path.normcase(str(execution_path)),
-                        "path": os.path.normcase(str(path)),
-                        "size": int(metadata.st_size),
-                        "mtime_ns": int(metadata.st_mtime_ns),
-                        "content_digest": digest_file(path),
-                        "_execution_path": str(execution_path),
-                    }
-                )
-            except (OSError, RuntimeError):
-                item["path"] = "unresolved"
-        else:
-            item["path"] = "missing"
-        executables.append(item)
-    if any(
-        not isinstance(item.get("content_digest"), str)
-        or not item.get("content_digest")
-        for item in executables
-    ):
-        return None
-    return executables
-
-
-def _verification_executable_payload(
-    executables: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            key: value
-            for key, value in executable.items()
-            if key != "_execution_path"
-        }
-        for executable in executables
-    ]
-
-
-def _verification_environment_digest_from_records(
-    executables: list[dict[str, Any]],
-    *,
-    cwd: Path,
-    environment: dict[str, str],
-) -> str:
-    environment_payload = json.dumps(
-        sorted(
-            (
-                _verification_environment_key(str(key)),
-                str(value),
-            )
-            for key, value in environment.items()
-        ),
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode()
-    payload = {
-        "cwd": os.path.normcase(str(cwd.resolve())),
-        "os_name": os.name,
-        "platform": sys.platform,
-        "machine": platform.machine(),
-        "python": list(sys.version_info[:3]),
-        "executables": _verification_executable_payload(executables),
-        "environment_digest": hashlib.sha256(environment_payload).hexdigest(),
-    }
-    return _capability_digest(payload)
-
-
-def _verification_environment_digest(
-    checks: list[dict[str, Any]], *, cwd: Path, environment: dict[str, str] | None = None
-) -> str:
-    effective_environment = environment or _verification_environment(cwd=cwd)
-    executables = _verification_executable_records(
-        checks, cwd=cwd, environment=effective_environment
-    )
-    if executables is None:
-        return ""
-    return _verification_environment_digest_from_records(
-        executables, cwd=cwd, environment=effective_environment
-    )
-
-
-def _verification_receipt_matches(
-    source: dict[str, Any],
-    *,
-    contract_digest: str,
-    revision: int,
-    group_digest: str,
-    git_root: str,
-    tree_digest: str,
-    environment_digest: str,
-    executable_digest: str,
-    host_coverage: dict[str, Any],
-) -> bool:
-    if not all(
-        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
-        for value in (
-            contract_digest,
-            group_digest,
-            tree_digest,
-            environment_digest,
-            executable_digest,
-        )
-    ):
-        return False
-    verified_at = source.get("verified_at", 0)
-    if (
-        not isinstance(verified_at, int)
-        or isinstance(verified_at, bool)
-        or verified_at <= 0
-    ):
-        return False
-    return bool(
-        source.get("status") == "passed"
-        and int(source.get("verified_revision", -1)) == revision
-        and source.get("verified_contract_digest") == contract_digest
-        and source.get("verified_check_digest") == group_digest
-        and source.get("verified_root") == git_root
-        and source.get("verified_tree_digest") == tree_digest
-        and source.get("verified_environment_digest") == environment_digest
-        and source.get("verified_executable_digest") == executable_digest
-        and click_host_coverage.receipt_is_current(host_coverage)
-        and source.get("verified_host_coverage") == host_coverage
-    )
-
-
-def _dependency_declarations(
-    sources: dict[str, Any], source_keys: set[str]
-) -> dict[str, list[str]]:
-    declarations: dict[str, list[str]] = {}
-    for source_key in source_keys:
-        source = sources.get(source_key)
-        patterns = source.get("dependency_patterns", []) if isinstance(source, dict) else []
-        if isinstance(patterns, list) and patterns:
-            declarations[source_key] = list(patterns)
-    return declarations
-
-
-def _dependency_observations(
-    sources: dict[str, Any], source_keys: set[str]
-) -> dict[str, dict[str, Any]]:
-    observations: dict[str, dict[str, Any]] = {}
-    for source_key in source_keys:
-        source = sources.get(source_key)
-        observation = (
-            source.get("verified_dependency_observation")
-            if isinstance(source, dict)
-            else None
-        )
-        if click_dependency_cache.dependency_observation_is_valid(observation):
-            observations[source_key] = {
-                **observation,
-                "paths": list(observation["paths"]),
-            }
-    return observations
-
-
-def _binding_path_digest(path: Path) -> str:
-    return _capability_digest({"path": os.path.normcase(str(path.resolve()))})
-
-
-def _authoritative_shard_digest(source: dict[str, Any]) -> str:
-    metadata = source.get("shard")
-    return _capability_digest({
-        "shard": metadata if click_evidence_shards.source_metadata_is_valid(metadata) else None
-    })
-
-
-def _authoritative_current_bindings(
-    *,
-    sources: dict[str, Any],
-    source_keys: set[str],
-    group_digests: dict[str, str],
-    cwd: Path,
-    workspace_root: Path,
-    environment_digests: dict[str, str],
-    executable_digests: dict[str, str],
-    host_coverage_digest: str,
-    policy_digests: dict[str, str],
-) -> dict[str, dict[str, Any]]:
-    bindings: dict[str, dict[str, Any]] = {}
-    for source_key in source_keys:
-        source = sources.get(source_key)
-        policy_digest = policy_digests.get(source_key)
-        if (
-            not isinstance(source, dict)
-            or not isinstance(policy_digest, str)
-            or re.fullmatch(r"[0-9a-f]{64}", policy_digest) is None
-        ):
-            continue
-        bindings[source_key] = {
-            "evidence_key": source_key,
-            "check_digest": group_digests[source_key],
-            "cwd_digest": _binding_path_digest(cwd),
-            "workspace_root_digest": _binding_path_digest(workspace_root),
-            "environment_digest": environment_digests[source_key],
-            "executable_digest": executable_digests[source_key],
-            "host_coverage_digest": host_coverage_digest,
-            "policy_digest": policy_digest,
-            "shard_digest": _authoritative_shard_digest(source),
-        }
-    return bindings
-
-
-def _dependency_receipt_is_valid(receipt: Any) -> bool:
-    if not isinstance(receipt, dict):
-        return False
-    provider = receipt.get("provider")
-    manifest_digest = receipt.get("manifest_digest")
-    entry_digest = receipt.get("entry_digest")
-    dependency_digest = receipt.get("dependency_digest")
-    observation_digest = receipt.get("observation_digest")
-    observation = receipt.get("observation")
-    manifest_is_valid = bool(
-        isinstance(manifest_digest, str)
-        and (
-            provider == click_dependency_cache.CONTRACT_PROVIDER_NAME
-            and not manifest_digest
-            or provider
-            in {
-                click_dependency_cache.MANIFEST_PROVIDER_NAME,
-                click_dependency_cache.COMBINED_PROVIDER_NAME,
-            }
-            and re.fullmatch(r"[0-9a-f]{64}", manifest_digest)
-        )
-    )
-    return bool(
-        provider in click_dependency_cache.PROVIDER_NAMES
-        and manifest_is_valid
-        and isinstance(entry_digest, str)
-        and re.fullmatch(r"[0-9a-f]{64}", entry_digest)
-        and isinstance(dependency_digest, str)
-        and re.fullmatch(r"[0-9a-f]{64}", dependency_digest)
-        and isinstance(observation_digest, str)
-        and re.fullmatch(r"[0-9a-f]{64}", observation_digest)
-        and click_dependency_cache.dependency_observation_is_valid(observation)
-        and observation_digest
-        == click_dependency_cache.dependency_observation_digest(observation)
-        and click_dependency_cache.receipt_paths_are_valid(
-            receipt.get("resolved_paths")
-        )
-    )
-
-
-def _dependency_receipt_matches(
-    source: dict[str, Any],
-    receipt: Any,
-    *,
-    contract_digest: str,
-    revision: int,
-    group_digest: str,
-    git_root: str,
-    environment_digest: str,
-    executable_digest: str,
-    host_coverage: dict[str, Any],
-) -> bool:
-    if not _dependency_receipt_is_valid(receipt):
-        return False
-    if not click_dependency_cache.dependency_observation_is_complete(
-        receipt["observation"]
-    ):
-        return False
-    if not all(
-        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
-        for value in (
-            contract_digest,
-            group_digest,
-            environment_digest,
-            executable_digest,
-        )
-    ):
-        return False
-    verified_revision = source.get("verified_revision", -1)
-    verified_at = source.get("verified_at", 0)
-    if (
-        not isinstance(verified_revision, int)
-        or isinstance(verified_revision, bool)
-        or verified_revision < 0
-        or verified_revision >= revision
-        or not isinstance(verified_at, int)
-        or isinstance(verified_at, bool)
-        or verified_at <= 0
-        or not isinstance(source.get("verified_tree_digest"), str)
-        or re.fullmatch(
-            r"[0-9a-f]{64}", str(source.get("verified_tree_digest", ""))
-        )
-        is None
-    ):
-        return False
-    return bool(
-        source.get("status") == "stale"
-        and source.get("verified_contract_digest") == contract_digest
-        and source.get("verified_check_digest") == group_digest
-        and source.get("verified_root") == git_root
-        and source.get("verified_environment_digest") == environment_digest
-        and source.get("verified_executable_digest") == executable_digest
-        and click_host_coverage.receipt_is_current(host_coverage)
-        and source.get("verified_host_coverage") == host_coverage
-        and source.get("verified_dependency_provider") == receipt["provider"]
-        # The full manifest digest is audit metadata. The normalized relevant
-        # entry is the authority boundary, so unrelated settings may change.
-        and source.get("verified_dependency_entry_digest")
-        == receipt["entry_digest"]
-        and source.get("verified_dependency_digest")
-        == receipt["dependency_digest"]
-        and source.get("verified_dependency_paths")
-        == receipt["resolved_paths"]
-        and source.get("verified_dependency_observation_digest")
-        == receipt["observation_digest"]
-        and source.get("verified_dependency_observation")
-        == receipt["observation"]
-    )
-
-
-def _clear_dependency_receipt(source: dict[str, Any]) -> None:
-    source["verified_dependency_provider"] = ""
-    source["verified_dependency_manifest_digest"] = ""
-    source["verified_dependency_entry_digest"] = ""
-    source["verified_dependency_digest"] = ""
-    source["verified_dependency_paths"] = []
-    source["verified_dependency_observation_digest"] = ""
-    source["verified_dependency_observation"] = {}
-    source["dependency_reuse_count"] = 0
-    source["last_dependency_reused_at"] = 0
-    source["last_dependency_reused_from_revision"] = -1
-
-
-def _store_dependency_receipt(
-    source: dict[str, Any], receipt: Any
-) -> None:
-    _clear_dependency_receipt(source)
-    if not _dependency_receipt_is_valid(receipt):
-        return
-    source["verified_dependency_provider"] = receipt["provider"]
-    source["verified_dependency_manifest_digest"] = receipt["manifest_digest"]
-    source["verified_dependency_entry_digest"] = receipt["entry_digest"]
-    source["verified_dependency_digest"] = receipt["dependency_digest"]
-    source["verified_dependency_paths"] = list(receipt["resolved_paths"])
-    source["verified_dependency_observation_digest"] = receipt[
-        "observation_digest"
-    ]
-    source["verified_dependency_observation"] = {
-        **receipt["observation"],
-        "paths": list(receipt["observation"]["paths"]),
-    }
-
-
-def _promote_dependency_receipt(
-    source: dict[str, Any],
-    receipt: dict[str, Any],
-    *,
-    revision: int,
-    tree_digest: str,
-) -> None:
-    prior_revision = int(source.get("verified_revision", -1))
-    source["status"] = "passed"
-    source["verified_revision"] = revision
-    source["verified_tree_digest"] = tree_digest
-    source["verified_dependency_manifest_digest"] = receipt["manifest_digest"]
-    source["verified_dependency_entry_digest"] = receipt["entry_digest"]
-    source["verified_dependency_digest"] = receipt["dependency_digest"]
-    source["verified_dependency_paths"] = list(receipt["resolved_paths"])
-    source["verified_dependency_observation_digest"] = receipt[
-        "observation_digest"
-    ]
-    source["verified_dependency_observation"] = {
-        **receipt["observation"],
-        "paths": list(receipt["observation"]["paths"]),
-    }
-    source["last_exit_code"] = 0
-    source["unchanged_failure_retries"] = 0
-    source["dependency_reuse_count"] = int(
-        source.get("dependency_reuse_count", 0)
-    ) + 1
-    source["last_dependency_reused_at"] = int(time.time()) or 1
-    source["last_dependency_reused_from_revision"] = prior_revision
-
-
-def _clear_safe_change_receipt(source: dict[str, Any]) -> None:
-    source["verified_safe_change_receipt"] = {}
-    source["safe_change_reuse_count"] = 0
-    source["last_safe_change_reused_at"] = 0
-    source["last_safe_change_reused_from_revision"] = -1
-    source["last_safe_change_paths"] = []
-    source["last_safe_change_path_count"] = 0
-    source["last_safe_change_decision_digest"] = ""
-
-
-def _store_safe_change_receipt(source: dict[str, Any], receipt: Any) -> None:
-    _clear_safe_change_receipt(source)
-    if not click_change_policy.receipt_is_valid(receipt):
-        return
-    source["verified_safe_change_receipt"] = receipt
-
-
-def _safe_change_receipt_matches(
-    source: dict[str, Any],
-    decision: Any,
-    *,
-    contract_digest: str,
-    revision: int,
-    group_digest: str,
-    git_root: str,
-    environment_digest: str,
-    executable_digest: str,
-    host_coverage: dict[str, Any],
-) -> bool:
-    if not isinstance(decision, dict) or decision.get("status") != "reuse":
-        return False
-    receipt = decision.get("receipt")
-    decision_digest = decision.get("decision_digest")
-    changed_paths = decision.get("changed_paths")
-    if (
-        not click_change_policy.receipt_is_valid(receipt)
-        or not click_change_policy.changed_paths_are_valid(changed_paths)
-        or not isinstance(decision_digest, str)
-        or re.fullmatch(r"[0-9a-f]{64}", decision_digest) is None
-    ):
-        return False
-    verified_revision = source.get("verified_revision", -1)
-    verified_at = source.get("verified_at", 0)
-    return bool(
-        source.get("status") == "stale"
-        and isinstance(verified_revision, int)
-        and not isinstance(verified_revision, bool)
-        and 0 <= verified_revision < revision
-        and isinstance(verified_at, int)
-        and not isinstance(verified_at, bool)
-        and verified_at > 0
-        and source.get("verified_contract_digest") == contract_digest
-        and source.get("verified_check_digest") == group_digest
-        and source.get("verified_root") == git_root
-        and source.get("verified_environment_digest") == environment_digest
-        and source.get("verified_executable_digest") == executable_digest
-        and click_host_coverage.receipt_is_current(host_coverage)
-        and source.get("verified_host_coverage") == host_coverage
-        and source.get("verified_safe_change_receipt", {})
-        != {}
-        and click_change_policy.receipt_is_valid(
-            source.get("verified_safe_change_receipt")
-        )
-    )
-
-
-def _promote_safe_change_receipt(
-    source: dict[str, Any],
-    decision: dict[str, Any],
-    *,
-    revision: int,
-    tree_digest: str,
-) -> None:
-    prior_revision = int(source.get("verified_revision", -1))
-    changed_paths = list(decision["changed_paths"])
-    source["status"] = "passed"
-    source["verified_revision"] = revision
-    source["verified_tree_digest"] = tree_digest
-    source["verified_safe_change_receipt"] = decision["receipt"]
-    source["last_exit_code"] = 0
-    source["unchanged_failure_retries"] = 0
-    source["safe_change_reuse_count"] = int(
-        source.get("safe_change_reuse_count", 0)
-    ) + 1
-    source["last_safe_change_reused_at"] = int(time.time()) or 1
-    source["last_safe_change_reused_from_revision"] = prior_revision
-    source["last_safe_change_paths"] = changed_paths[:128]
-    source["last_safe_change_path_count"] = len(changed_paths)
-    source["last_safe_change_decision_digest"] = decision["decision_digest"]
-
-
-def _reuse_binding_reason(
-    source: dict[str, Any],
-    *,
-    contract_digest: str,
-    group_digest: str,
-    git_root: str,
-    tree_digest: str,
-    environment_digest: str,
-    executable_digest: str,
-    host_coverage: dict[str, Any],
-    cross_revision: bool = False,
-) -> str:
-    """Explain a failed reuse binding without changing its authority decision."""
-    if source.get("verified_contract_digest") != contract_digest:
-        return "contract-binding-changed"
-    if source.get("verified_check_digest") != group_digest:
-        return "check-binding-changed"
-    if (
-        source.get("verified_root") != git_root
-        or not cross_revision
-        and source.get("verified_tree_digest") != tree_digest
-    ):
-        return "workspace-ambiguous"
-    if source.get("verified_executable_digest") != executable_digest:
-        return "executable-binding-changed"
-    if source.get("verified_environment_digest") != environment_digest:
-        return "environment-binding-changed"
-    if (
-        not click_host_coverage.receipt_is_current(host_coverage)
-        or source.get("verified_host_coverage") != host_coverage
-    ):
-        return "host-coverage-binding-changed"
-    return "receipt-invalid"
-
-
-def _successor_binding_reason(
-    previous: dict[str, Any],
-    current: dict[str, Any],
-    *,
-    group_digest: str,
-    git_root: str,
-    environment_digest: str,
-    executable_digest: str,
-    host_coverage: dict[str, Any],
-) -> str:
-    """Validate prior facts against the current lifecycle's bindings."""
-    if (
-        previous.get("dependency_patterns", []) != current.get("dependency_patterns", [])
-        or previous.get("dependency_declaration_digest", "")
-        != current.get("dependency_declaration_digest", "")
-    ):
-        return "contract-binding-changed"
-    if previous.get("verified_check_digest") != group_digest:
-        return "check-binding-changed"
-    if previous.get("verified_root") != git_root:
-        return "workspace-ambiguous"
-    if previous.get("verified_executable_digest") != executable_digest:
-        return "executable-binding-changed"
-    if previous.get("verified_environment_digest") != environment_digest:
-        return "environment-binding-changed"
-    if (
-        not click_host_coverage.receipt_is_current(host_coverage)
-        or previous.get("verified_host_coverage") != host_coverage
-    ):
-        return "host-coverage-binding-changed"
-    if previous.get("shard") != current.get("shard"):
-        return "check-binding-changed"
-    verified_at = previous.get("verified_at")
-    if (
-        previous.get("status") != "passed"
-        or previous.get("last_exit_code") != 0
-        or not isinstance(verified_at, int)
-        or isinstance(verified_at, bool)
-        or verified_at <= 0
-        or not isinstance(previous.get("verified_tree_digest"), str)
-        or re.fullmatch(r"[0-9a-f]{64}", previous["verified_tree_digest"])
-        is None
-    ):
-        return "successor-evidence-integrity-invalid"
-    return ""
-
-
-def _requalify_successor_baseline(
-    current: dict[str, Any],
-    previous: dict[str, Any],
-    *,
-    contract_digest: str,
-    revision: int,
-    group_digest: str,
-    units: int,
-    tree_digest: str,
-    environment_digest: str,
-    executable_digest: str,
-    host_coverage: dict[str, Any],
-    exact_tree: bool,
-) -> None:
-    """Create a new-lifecycle baseline only after explicit binding checks."""
-    current_shard = current.get("shard")
-    current_patterns = list(current.get("dependency_patterns", []))
-    current_declaration = current.get("dependency_declaration_digest", "")
-    preserved = json.loads(json.dumps(previous))
-    current.clear()
-    current.update(preserved)
-    if current_shard is None:
-        current.pop("shard", None)
-    else:
-        current["shard"] = current_shard
-    current.update(
-        dependency_patterns=current_patterns,
-        dependency_declaration_digest=current_declaration,
-        status="passed" if exact_tree else "stale",
-        verified_revision=revision if exact_tree else max(0, revision - 1),
-        attempts=0,
-        unchanged_failure_retries=0,
-        last_exit_code=0,
-        last_check_digest=group_digest,
-        locked_check_digest=group_digest,
-        reserved_units=units,
-        reserved_check_digest=group_digest,
-        verified_contract_digest=contract_digest,
-        verified_check_digest=group_digest,
-        verified_units=units,
-        verified_tree_digest=tree_digest if exact_tree else previous["verified_tree_digest"],
-        verified_environment_digest=environment_digest,
-        verified_executable_digest=executable_digest,
-        verified_host_coverage=dict(host_coverage),
-        dependency_reuse_count=0,
-        last_dependency_reused_at=0,
-        last_dependency_reused_from_revision=-1,
-        safe_change_reuse_count=0,
-        last_safe_change_reused_at=0,
-        last_safe_change_reused_from_revision=-1,
-        last_safe_change_paths=[],
-        last_safe_change_path_count=0,
-        last_safe_change_decision_digest="",
-        successor_reuse_count=0,
-        last_successor_reused_at=0,
-        last_successor_origin_batch_id="",
-        last_successor_origin_evidence_session_id="",
-        last_successor_origin_contract_id="",
-        last_successor_candidate_digest="",
-        last_successor_origin_revision=-1,
-        last_successor_mode="",
-    )
-
-
-def _mark_successor_reuse(
-    source: dict[str, Any], metadata: dict[str, Any], *, mode: str
-) -> None:
-    source["successor_reuse_count"] = int(
-        source.get("successor_reuse_count", 0)
-    ) + 1
-    source["last_successor_reused_at"] = int(time.time()) or 1
-    source["last_successor_origin_batch_id"] = metadata["batch_id"]
-    source["last_successor_origin_evidence_session_id"] = metadata.get("evidence_session_id", "")
-    source["last_successor_origin_contract_id"] = metadata.get("contract_id", "")
-    source["last_successor_candidate_digest"] = metadata["candidate_digest"]
-    source["last_successor_origin_revision"] = metadata["origin_revision"]
-    source["last_successor_mode"] = mode
-    source["verified_at"] = int(time.time()) or 1
-
-
-def _observation_nonreuse_reason(observation: Any) -> str:
-    if not click_dependency_cache.dependency_observation_is_valid(observation):
-        return "observer-incomplete"
-    if observation.get("provider") != (
-        click_dependency_cache.AUTHORITATIVE_OBSERVATION_PROVIDER_NAME
-    ):
-        return "observer-incomplete"
-    if observation.get("external_access") is True:
-        return "external-input-unmodeled"
-    if not click_dependency_cache.dependency_observation_is_complete(observation):
-        return "observer-incomplete"
-    return "observed-input-changed"
-
-
-def _default_incremental_reason(source: dict[str, Any]) -> tuple[str, bool]:
-    """Return a conservative initial run reason and evaluability marker."""
-    if source.get("status") == "failed":
-        return "previous-verification-failed", False
-    if source.get("status") != "stale":
-        return "no-passing-evidence", False
-    observation = source.get("verified_dependency_observation")
-    if observation:
-        reason = _observation_nonreuse_reason(observation)
-        return reason, reason in {"observer-incomplete", "external-input-unmodeled"}
-    if click_change_policy.receipt_is_valid(
-        source.get("verified_safe_change_receipt")
-    ):
-        return "safe-change-policy-not-covered", False
-    return "policy-unavailable", False
-
-
-def _canonical_incremental_plan(
-    sources: dict[str, Any],
-    *,
-    requested_keys: set[str],
-    group_digests: dict[str, str],
-    environment_digests: dict[str, str],
-    executable_digests: dict[str, str],
-    host_coverage_digest: str,
-    observer_mode: str,
-    revision: int,
-    previous_revisions: dict[str, int],
-    reused_keys: set[str],
-    dependency_reused_keys: set[str],
-    safe_change_reused_keys: set[str],
-    not_evaluable_keys: set[str],
-    reason_codes: dict[str, str],
-) -> dict[str, Any]:
-    decisions: list[dict[str, Any]] = []
-    for source_key in sorted(requested_keys):
-        source = sources[source_key]
-        if source_key in dependency_reused_keys:
-            selected = "reuse-dependency"
-            authority = "runtime-dependency-observation"
-        elif source_key in safe_change_reused_keys:
-            selected = "reuse-safe-change"
-            authority = "repository-safe-change-policy"
-        elif source_key in reused_keys:
-            selected = "reuse-exact"
-            authority = "exact-receipt"
-        elif source_key in not_evaluable_keys:
-            selected = "not-evaluable"
-            authority = "none"
-        else:
-            selected = "run"
-            authority = "runner"
-        timing_binding = click_incremental.timing_binding_digest(
-            source_key=source_key,
-            check_digest=group_digests[source_key],
-            environment_digest=environment_digests[source_key],
-            executable_digest=executable_digests[source_key],
-            host_coverage_digest=host_coverage_digest,
-            observer_mode=observer_mode,
-        )
-        baseline = source.get("last_success_duration_baseline")
-        if not click_incremental.baseline_is_suitable(
-            baseline,
-            source_key=source_key,
-            check_digest=group_digests[source_key],
-            observer_mode=observer_mode,
-            timing_binding_digest=timing_binding,
-        ):
-            baseline = None
-        avoided = baseline["duration_ms"] if baseline is not None else None
-        decisions.append(
-            click_incremental.decision(
-                source_key=source_key,
-                decision=selected,
-                reason_code=reason_codes[source_key],
-                current_revision=revision,
-                previous_revision=previous_revisions[source_key],
-                check_digest=group_digests[source_key],
-                authority_source=authority,
-                estimated_avoided_ms=avoided if source_key in reused_keys else 0,
-                duration_baseline=baseline,
-            )
-        )
-    return click_incremental.build_plan(decisions, current_revision=revision)
-
-
-def _contains_deep_verification_marker(values: list[str]) -> bool:
-    joined = " ".join(values)
-    return any(marker in joined for marker in DEEP_VERIFICATION_MARKERS)
-
-
-def _arguments_have_filter(arguments: list[str]) -> bool:
-    return any(
-        argument in TEST_FILTER_OPTIONS
-        or any(argument.startswith(f"{option}=") for option in TEST_FILTER_OPTIONS)
-        for argument in arguments
-    )
-
-
-def _verification_targets(
-    arguments: list[str], *, skip_words: set[str] | None = None
-) -> list[str]:
-    skip_words = skip_words or set()
-    targets: list[str] = []
-    index = 0
-    while index < len(arguments):
-        argument = arguments[index]
-        if argument == "--":
-            targets.extend(
-                item for item in arguments[index + 1 :] if item not in skip_words
-            )
-            break
-        if argument in TEST_OPTIONS_WITH_VALUES:
-            index += 2
-            continue
-        if argument.startswith("-") or argument in skip_words:
-            index += 1
-            continue
-        targets.append(argument)
-        index += 1
-    return targets
-
-
-def _scope_with_kind_floor(scope: str, values: list[str]) -> str:
-    if not _contains_deep_verification_marker(values):
-        return scope
-    return "broad" if scope == "targeted" else "deep"
-
-
-def _minimum_test_runner_class(runner: str, arguments: list[str]) -> str:
-    if runner == "unittest" and "discover" in arguments:
-        return _scope_with_kind_floor("broad", [runner, *arguments])
-    if _arguments_have_filter(arguments):
-        return _scope_with_kind_floor("broad", [runner, *arguments])
-    broad_targets = {".", "./", "...", "./...", "all", "test", "tests", "spec"}
-    targets = _verification_targets(arguments, skip_words={"run", "exec", "x"})
-    scope = "broad"
-    if len(targets) == 1:
-        target = targets[0]
-        normalized = target.rstrip("/\\")
-        if normalized not in broad_targets and (
-            "::" in target
-            or Path(normalized).suffix.lower() in TEST_TARGET_SUFFIXES
-            or (runner == "unittest" and "." in normalized)
-        ):
-            scope = "targeted"
-    return _scope_with_kind_floor(scope, [runner, *arguments])
-
-
-def _minimum_verification_class(
-    tokens: list[str], *, wrapper_depth: int = 0
-) -> str | None:
-    executable, arguments = _command_parts(tokens)
-    if not executable:
-        return None
-    if executable in DEEP_VERIFICATION_EXECUTABLES:
-        return "deep"
-    if (
-        executable in PYTHON_VERIFICATION_EXECUTABLES
-        or VERSIONED_PYTHON_EXECUTABLE.fullmatch(executable)
-    ):
-        if executable == "py" and arguments and re.fullmatch(
-            r"-\d+(?:\.\d+)?(?:-\d+)?", arguments[0]
-        ):
-            arguments = arguments[1:]
-        if len(arguments) < 2 or arguments[0] != "-m":
-            return None
-        module = arguments[1]
-        if module not in PYTHON_VERIFICATION_MODULES:
-            return None
-        if module == "coverage":
-            return "deep"
-        return _minimum_test_runner_class(module, arguments[2:])
-    if executable == "uv":
-        if wrapper_depth >= 2 or not arguments or arguments[0] != "run":
-            return None
-        nested = arguments[1:]
-        while nested and nested[0].startswith("-"):
-            nested = nested[1:]
-        return _minimum_verification_class(nested, wrapper_depth=wrapper_depth + 1)
-    if executable in VERIFICATION_EXECUTABLES:
-        if executable in {"bats", "jest", "phpunit", "pytest", "rspec", "vitest"}:
-            return _minimum_test_runner_class(executable, arguments)
-        return "broad"
-    if executable == "node":
-        if any(
-            argument in {"-e", "--eval", "-p", "--print"}
-            or argument.startswith(("--eval=", "--print="))
-            for argument in arguments
-        ):
-            return None
-        if arguments[:1] == ["--check"]:
-            targets = [argument for argument in arguments[1:] if not argument.startswith("-")]
-            return (
-                "targeted"
-                if len(targets) == 1
-                and Path(targets[0]).suffix.lower() in {".cjs", ".js", ".mjs"}
-                else None
-            )
-        if "--test" in arguments:
-            test_arguments = [argument for argument in arguments if argument != "--test"]
-            return _minimum_test_runner_class("node", test_arguments)
-        return None
-    if executable in {"npm", "pnpm", "yarn", "bun"}:
-        meaningful = [item for item in arguments if item not in {"run", "exec", "x"}]
-        target = meaningful[0] if meaningful else ""
-        if not (
-            any(marker in target for marker in VERIFICATION_NAME_MARKERS)
-            or target in {"build", "check", "lint", "typecheck", "type-check"}
-        ):
-            return None
-        return "deep" if _contains_deep_verification_marker(meaningful) else "broad"
-    if executable in {"npx", "pnpx", "bunx"}:
-        target_index = next(
-            (index for index, argument in enumerate(arguments) if not argument.startswith("-")),
-            -1,
-        )
-        if target_index < 0:
-            return None
-        target = arguments[target_index]
-        nested_arguments = arguments[target_index + 1 :]
-        if target in DEEP_VERIFICATION_EXECUTABLES:
-            return "deep"
-        if target in {"jest", "pytest", "vitest"}:
-            return _minimum_test_runner_class(target, nested_arguments)
-        if target in VERIFICATION_EXECUTABLES:
-            return "broad"
-        if any(marker in target for marker in VERIFICATION_NAME_MARKERS):
-            return "deep"
-        return None
-    if executable == "cargo":
-        if not arguments or arguments[0] not in {
-            "audit",
-            "bench",
-            "check",
-            "clippy",
-            "nextest",
-            "test",
-        }:
-            return None
-        if arguments[0] in {"audit", "bench"}:
-            return "deep"
-        if arguments[0] in {"check", "clippy", "nextest"}:
-            return "broad"
-        test_targets = [
-            argument
-            for argument in arguments[1:]
-            if not argument.startswith("-") and argument not in {"all", "workspace"}
-        ]
-        return "targeted" if len(test_targets) == 1 else "broad"
-    if executable == "go":
-        if not arguments or arguments[0] not in {"test", "vet"}:
-            return None
-        if arguments[0] == "vet":
-            return "broad"
-        if _arguments_have_filter(arguments[1:]):
-            return "broad"
-        targets = [argument for argument in arguments[1:] if not argument.startswith("-")]
-        recursive = any(target == "./..." or target.endswith("/...") for target in targets)
-        return "targeted" if len(targets) == 1 and not recursive else "broad"
-    if executable == "ruff":
-        if not arguments or arguments[0] != "check":
-            return None
-        targets = _verification_targets(arguments[1:])
-        return (
-            "targeted"
-            if len(targets) == 1
-            and Path(targets[0].rstrip("/\\")).suffix.lower() in TEST_TARGET_SUFFIXES
-            else "broad"
-        )
-    if executable == "mypy":
-        targets = _verification_targets(arguments)
-        return (
-            "targeted"
-            if len(targets) == 1 and Path(targets[0]).suffix.lower() == ".py"
-            else "broad"
-        )
-    if executable == "tsc":
-        return "broad" if "--noemit" in arguments else None
-    if executable in {"dotnet", "gradle", "gradlew", "gradlew.bat", "mvn", "mvnw", "mvnw.cmd"}:
-        if not any(
-            any(marker in argument for marker in VERIFICATION_NAME_MARKERS)
-            for argument in arguments
-        ):
-            return None
-        if _contains_deep_verification_marker(arguments):
-            return "deep"
-        return "targeted" if any("filter" in item for item in arguments) else "broad"
-    if executable in {"make", "gmake", "cmake", "ctest", "pre-commit"}:
-        recognized = executable in {"ctest", "pre-commit"} or any(
-            any(marker in argument for marker in VERIFICATION_NAME_MARKERS)
-            for argument in arguments
-        )
-        if not recognized:
-            return None
-        if _contains_deep_verification_marker(arguments):
-            return "deep"
-        if executable == "ctest" and any(item in {"-r", "--tests-regex"} for item in arguments):
-            return _scope_with_kind_floor("broad", arguments)
-        if executable == "pre-commit" and "--files" in arguments:
-            file_index = arguments.index("--files") + 1
-            files = [item for item in arguments[file_index:] if not item.startswith("-")]
-            return "targeted" if len(files) == 1 else "broad"
-        return "broad"
-    stem = Path(executable).stem.lower()
-    if any(marker in stem for marker in VERIFICATION_NAME_MARKERS):
-        return "deep"
-    return None
-
-
-def _is_recognized_verification_tokens(tokens: list[str]) -> bool:
-    return _minimum_verification_class(tokens) is not None
-
-
-def _is_recognized_verification_command(command: str) -> bool:
-    segments = _shell_segments(command)
-    if segments:
-        return any(_is_recognized_verification_tokens(segment) for segment in segments)
-    try:
-        fallback = shlex.split(command, posix=True)
-    except ValueError:
-        return False
-    return _is_recognized_verification_tokens(fallback)
-
-
-def _git_capture(cwd: Path, arguments: list[str]) -> bytes | None:
-    executable, error = _resolve_read_only_executable("git", workspace=cwd)
-    if error or executable is None:
-        return None
-    try:
-        result = click_process.run_argv(
-            [
-                executable,
-                "--no-pager",
-                "--no-optional-locks",
-                "-c",
-                "core.fsmonitor=false",
-                *arguments,
-            ],
-            cwd=cwd,
-            env=_sanitized_git_environment(workspace=cwd),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError:
-        return None
-    return result.stdout if result.returncode == 0 else None
-
-
-def _hash_workspace_path(hasher: Any, root: Path, relative: str) -> None:
-    encoded_path = os.fsencode(relative)
-    hasher.update(len(encoded_path).to_bytes(8, "big"))
-    hasher.update(encoded_path)
-    target = root / relative
-    try:
-        metadata = target.lstat()
-    except OSError:
-        hasher.update(b"missing")
-        return
-    hasher.update(str(metadata.st_mode).encode())
-    if target.is_symlink():
-        try:
-            hasher.update(os.fsencode(os.readlink(target)))
-        except OSError:
-            hasher.update(b"unreadable-link")
-        return
-    if not target.is_file():
-        hasher.update(b"non-file")
-        return
-    try:
-        with target.open("rb") as handle:
-            while True:
-                chunk = handle.read(128 * 1024)
-                if not chunk:
-                    break
-                hasher.update(chunk)
-    except OSError:
-        hasher.update(b"unreadable-file")
-
-
-def _git_workspace_snapshot(
-    cwd: Path, protected_untracked: list[str] | None = None
-) -> dict[str, Any] | None:
-    root_output = _git_capture(cwd, ["rev-parse", "--show-toplevel"])
-    if root_output is None:
-        return None
-    root = Path(os.fsdecode(root_output.strip()))
-    has_head = _git_capture(root, ["rev-parse", "--verify", "HEAD"]) is not None
-    diff_commands = (
-        [["diff", "--binary", "--no-ext-diff", "--no-textconv", "HEAD", "--"]]
-        if has_head
-        else [
-            ["diff", "--binary", "--no-ext-diff", "--no-textconv", "--cached", "--"],
-            ["diff", "--binary", "--no-ext-diff", "--no-textconv", "--"],
-        ]
-    )
-    hasher = hashlib.sha256()
-    if has_head:
-        head_tree = _git_capture(root, ["rev-parse", "HEAD^{tree}"])
-        if head_tree is None:
-            return None
-        hasher.update(len(head_tree).to_bytes(8, "big"))
-        hasher.update(head_tree)
-    for arguments in diff_commands:
-        diff = _git_capture(root, arguments)
-        if diff is None:
-            return None
-        hasher.update(len(diff).to_bytes(8, "big"))
-        hasher.update(diff)
-
-    untracked_output = _git_capture(
-        root, ["ls-files", "--others", "--exclude-standard", "-z"]
-    )
-    if untracked_output is None:
-        return None
-    current_untracked = [
-        os.fsdecode(item) for item in untracked_output.split(b"\0") if item
-    ]
-    if protected_untracked is None:
-        protected_untracked = [*current_untracked]
-    for relative in sorted(protected_untracked):
-        _hash_workspace_path(hasher, root, relative)
-    return {
-        "root": str(root),
-        "digest": hasher.hexdigest(),
-        "protected_untracked": protected_untracked,
-        "current_untracked": current_untracked,
-    }
+_validate_verification_batch = click_verification_plan.validate_verification_batch
+_verification_groups = click_verification_plan.verification_groups
+_verification_group_digest = click_verification_plan.verification_group_digest
+_verification_command_digest = click_verification_plan.verification_command_digest
+_verification_command_plans = click_verification_plan.verification_command_plans
+_verification_group_units = click_verification_plan.verification_group_units
+
+
+_file_content_digest = click_verification_bindings.hash_file_content
+_verification_environment = click_verification_bindings.verification_environment
+_observer_environment = click_verification_bindings.observer_environment
+_verification_environment_key = click_verification_bindings.verification_environment_key
+_verification_environment_hmac = click_verification_bindings.verification_environment_hmac
+_verification_environment_binding = click_verification_bindings.verification_environment_binding
+_verification_environment_binding_digest = click_verification_bindings.verification_environment_binding_digest
+_verification_environment_binding_is_authentic = click_verification_bindings.verification_environment_binding_is_authentic
+_verification_host_coverage_binding_digest = click_verification_bindings.verification_host_coverage_binding_digest
+_verification_host_coverage_binding_is_authentic = click_verification_bindings.verification_host_coverage_binding_is_authentic
+_verification_environment_from_binding = click_verification_bindings.verification_environment_from_binding
+_executable_search_path = click_verification_bindings.executable_search_path
+_verification_executable_records = click_verification_bindings.verification_executable_records
+_verification_executable_payload = click_verification_bindings.verification_executable_payload
+_verification_environment_digest_from_records = click_verification_bindings.verification_environment_digest_from_records
+_verification_environment_digest = click_verification_bindings.verification_environment_digest
+
+
+_verification_receipt_matches = click_verification_reuse.verification_receipt_matches
+_dependency_declarations = click_verification_reuse.dependency_declarations
+_dependency_observations = click_verification_reuse.dependency_observations
+_binding_path_digest = click_verification_reuse.binding_path_digest
+_authoritative_shard_digest = click_verification_reuse.authoritative_shard_digest
+_authoritative_current_bindings = click_verification_reuse.authoritative_current_bindings
+_dependency_receipt_is_valid = click_verification_reuse.dependency_receipt_is_valid
+_dependency_receipt_matches = click_verification_reuse.dependency_receipt_matches
+_clear_dependency_receipt = click_verification_reuse.clear_dependency_receipt
+_store_dependency_receipt = click_verification_reuse.store_dependency_receipt
+_promote_dependency_receipt = click_verification_reuse.promote_dependency_receipt
+_clear_safe_change_receipt = click_verification_reuse.clear_safe_change_receipt
+_store_safe_change_receipt = click_verification_reuse.store_safe_change_receipt
+_safe_change_receipt_matches = click_verification_reuse.safe_change_receipt_matches
+_promote_safe_change_receipt = click_verification_reuse.promote_safe_change_receipt
+_reuse_binding_reason = click_verification_reuse.reuse_binding_reason
+_successor_binding_reason = click_verification_reuse.successor_binding_reason
+_requalify_successor_baseline = click_verification_reuse.requalify_successor_baseline
+_mark_successor_reuse = click_verification_reuse.mark_successor_reuse
+_observation_nonreuse_reason = click_verification_reuse.observation_nonreuse_reason
+_default_incremental_reason = click_verification_reuse.default_incremental_reason
+_canonical_incremental_plan = click_verification_reuse.canonical_incremental_plan
+
+
+_contains_deep_verification_marker = click_verification_plan.contains_deep_verification_marker
+_arguments_have_filter = click_verification_plan.arguments_have_filter
+_verification_targets = click_verification_plan.verification_targets
+_scope_with_kind_floor = click_verification_plan.scope_with_kind_floor
+_minimum_test_runner_class = click_verification_plan.minimum_test_runner_class
+_minimum_verification_class = click_verification_plan.minimum_verification_class
+_is_recognized_verification_tokens = click_verification_plan.is_recognized_verification_tokens
+_is_recognized_verification_command = click_verification_plan.is_recognized_verification_command
+
+
+_git_capture = click_verification_bindings.git_capture
+_hash_workspace_path = click_verification_bindings.hash_workspace_path
+_git_workspace_snapshot = click_verification_bindings.git_workspace_snapshot
 
 
 def _new_untracked_is_suspicious(relative: str) -> bool:
@@ -2475,31 +915,17 @@ def _prepare_verification_impl(
     prepared_environment = _observer_environment(
         _verification_environment(cwd=workspace), verification
     )
-    current_environment_digests: dict[str, str] = {}
-    current_executable_digests: dict[str, str] = {}
-    for source_key in requested_keys:
-        executable_records = _verification_executable_records(
-            grouped_checks[source_key],
-            cwd=workspace,
-            environment=prepared_environment,
+    current_bindings = click_verification_bindings.collect_group_bindings(
+        grouped_checks, requested_keys, cwd=workspace, environment=prepared_environment,
+    )
+    if current_bindings is None:
+        return (
+            "",
+            "Click could not resolve and fingerprint every verification "
+            "executable before planning the runner batch.",
+            "",
         )
-        if executable_records is None:
-            return (
-                "",
-                "Click could not resolve and fingerprint every verification "
-                "executable before planning the runner batch.",
-                "",
-            )
-        current_environment_digests[source_key] = (
-            _verification_environment_digest_from_records(
-                executable_records,
-                cwd=workspace,
-                environment=prepared_environment,
-            )
-        )
-        current_executable_digests[source_key] = _capability_digest(
-            {"executables": _verification_executable_payload(executable_records)}
-        )
+    current_environment_digests, current_executable_digests = current_bindings
 
     current_requested = {
         source_key
@@ -3085,35 +1511,17 @@ def _prepare_verification_impl(
             running_environment_binding, runner_token
         )
     )
-    running_environment_digests: dict[str, str] = {}
-    running_executable_digests: dict[str, str] = {}
-    for source_key in requested_keys:
-        executable_records = _verification_executable_records(
-            grouped_checks[source_key],
-            cwd=workspace,
-            environment=prepared_environment,
+    running_bindings = click_verification_bindings.collect_group_bindings(
+        grouped_checks, requested_keys, cwd=workspace, environment=prepared_environment,
+    )
+    if running_bindings is None:
+        return (
+            "",
+            "Click could not resolve and fingerprint every verification "
+            "executable before issuing the runner.",
+            "",
         )
-        if executable_records is None:
-            return (
-                "",
-                "Click could not resolve and fingerprint every verification "
-                "executable before issuing the runner.",
-                "",
-            )
-        running_environment_digests[source_key] = (
-            _verification_environment_digest_from_records(
-                executable_records,
-                cwd=workspace,
-                environment=prepared_environment,
-            )
-        )
-        running_executable_digests[source_key] = _capability_digest(
-            {
-                "executables": _verification_executable_payload(
-                    executable_records
-                )
-            }
-        )
+    running_environment_digests, running_executable_digests = running_bindings
     shadow_contexts = {
         source_key: {
             "check_digest": group_digests[source_key],
@@ -3125,12 +1533,9 @@ def _prepare_verification_impl(
     }
     shadow_workspace = workspace
     try:
-        shadow_snapshot = git_workspace_snapshot(workspace)
-        shadow_root = (
-            shadow_snapshot.get("root")
-            if isinstance(shadow_snapshot, dict)
-            else None
-        )
+        # Prediction needs only the root, never another full authority snapshot.
+        root_output = git_capture(workspace, ["rev-parse", "--show-toplevel"])
+        shadow_root = os.fsdecode(root_output.strip()) if root_output else None
         if isinstance(shadow_root, str) and shadow_root:
             shadow_workspace = Path(shadow_root).resolve(strict=True)
     except (OSError, RuntimeError, TypeError, ValueError):
@@ -3203,6 +1608,50 @@ def _prepare_verification_impl(
         ),
         "",
         "\n".join(verification_advisories),
+    )
+
+
+@dataclass(frozen=True)
+class VerificationRunResult:
+    """One runner's observed result; bindings are still checked when recorded."""
+
+    exit_code: int
+    succeeded_count: int
+    workspace_changed: bool = False
+    workspace_root: str = ""
+    workspace_digest: str = ""
+    environment_digests: dict[str, str] | None = None
+    source_durations_ms: dict[str, int | float] | None = None
+    dependency_observations: dict[str, dict[str, Any]] | None = None
+    authoritative_observations: dict[str, dict[str, Any]] | None = None
+    shadow_observer_records: dict[str, dict[str, Any]] | None = None
+    shadow_intelligence_baselines: dict[str, dict[str, Any]] | None = None
+    shadow_source_exit_codes: dict[str, int] | None = None
+    shadow_execution_contexts: dict[str, dict[str, Any]] | None = None
+    observer_mode: str | None = None
+    diagnostic_records: list[dict[str, Any]] | None = None
+    reporting: dict[str, Any] | None = None
+    collection_result: dict[str, Any] | None = None
+    source_results: dict[str, dict[str, Any]] | None = None
+    runner_started_ns: int | None = None
+
+
+def record_outcome(
+    path: Path,
+    batch: dict[str, Any],
+    batch_digest: str,
+    runner_token: str,
+    result: VerificationRunResult,
+    *,
+    git_capture: Callable[[Path, list[str]], bytes | None] = _git_capture,
+) -> bool:
+    """Typed handoff that retains the established receipt validation boundary."""
+    # Keep large diagnostic and observation mappings by reference. dataclasses'
+    # asdict would recursively copy them on every result handoff.
+    return _record_verification_result(
+        path, batch, batch_digest, runner_token,
+        **{field.name: getattr(result, field.name) for field in fields(result)},
+        git_capture=git_capture,
     )
 
 
@@ -3438,6 +1887,9 @@ def _record_verification_result(
         and workspace_digest
         and re.fullmatch(r"[0-9a-f]{64}", workspace_digest)
     ):
+        (click_authoritative_observer,) = click_import_bootstrap.load_siblings(
+            __package__, "click_authoritative_observer"
+        )
         for source_key, current_binding in current_bindings.items():
             envelope = authoritative_observations.get(source_key)
             if envelope is None:
@@ -3690,7 +2142,7 @@ def _record_verification_result(
             )
     if shadow_observer_records:
         try:
-            click_dependency_trace.store_records(
+            click_observer_common.store_records(
                 verification, shadow_observer_records
             )
         except Exception:
@@ -3910,6 +2362,7 @@ def _claim_verification_run(
         git_capture=git_capture,
     )
     shadow_bindings: dict[str, str] = {}
+    claim_file_digests = click_verification_bindings.FileDigestStage(file_content_digest)
     for source_key, checks in grouped_checks.items():
         source = sources.get(source_key)
         if not isinstance(source, dict):
@@ -3922,7 +2375,7 @@ def _claim_verification_run(
             checks,
             cwd=Path.cwd(),
             environment=verification_environment,
-            file_content_digest=file_content_digest,
+            file_content_digest=claim_file_digests,
         )
         if executable_records is None:
             return None, "Click verification executable changed before execution."
@@ -4331,10 +2784,9 @@ def _run_verification(
     git_metadata_present: Callable[[Path | None], bool] = _git_metadata_present,
     execute_commands: Callable[..., int] = _execute_argv_commands,
     git_capture: Callable[[Path, list[str]], bytes | None] = _git_capture,
-    shadow_execute: Callable[..., click_dependency_trace.ShadowExecution]
+    shadow_execute: Callable[..., click_observer_common.ShadowExecution]
     | None = None,
-    authoritative_execute: Callable[..., click_authoritative_observer.AuthoritativeExecution]
-    | None = None,
+    authoritative_execute: Callable[..., Any] | None = None,
 ) -> int:
     if len(arguments) != 4:
         sys.stderr.write(
@@ -4411,10 +2863,18 @@ def _run_verification(
     observer_mode = batch.pop("_click_observer_mode", "off")
     shadow_enabled = observer_mode == "shadow"
     authoritative_enabled = observer_mode == "authoritative"
-    active_shadow_execute = shadow_execute or click_dependency_trace.run_command
-    active_authoritative_execute = (
-        authoritative_execute or click_authoritative_observer.run_command
-    )
+    active_shadow_execute = shadow_execute
+    if shadow_enabled and active_shadow_execute is None:
+        (click_dependency_trace,) = click_import_bootstrap.load_siblings(
+            __package__, "click_dependency_trace"
+        )
+        active_shadow_execute = click_dependency_trace.run_command
+    active_authoritative_execute = authoritative_execute
+    if authoritative_enabled and active_authoritative_execute is None:
+        (click_authoritative_observer,) = click_import_bootstrap.load_siblings(
+            __package__, "click_authoritative_observer"
+        )
+        active_authoritative_execute = click_authoritative_observer.run_command
     if environment_rebound:
         print(
             "[Click] Verification runner environment changed after preparation; "
@@ -4689,7 +3149,7 @@ def _run_verification(
                                 digest_file=file_content_digest,
                             )
                         else:
-                            shadow_result = click_dependency_trace.run_unobserved(
+                            shadow_result = click_observer_common.run_unobserved(
                                 execute_unobserved,
                                 evidence_key=source_key,
                                 check_digest=check_digest,
@@ -4702,7 +3162,7 @@ def _run_verification(
                                 source_key, []
                             ).append(shadow_result.record)
                         print(
-                            click_dependency_trace.advisory(shadow_result.record),
+                            click_observer_common.advisory(shadow_result.record),
                             flush=True,
                         )
                         return shadow_result.exit_code
@@ -5032,7 +3492,7 @@ def _run_verification(
         for source_key, records in per_source_shadow_records.items():
             checks_for_source = grouped_checks.get(source_key, [])
             try:
-                combined = click_dependency_trace.combine_records(
+                combined = click_observer_common.combine_records(
                     records,
                     evidence_key=source_key,
                     check_digest=str(shadow_bindings.get(source_key, "")),
@@ -5082,30 +3542,32 @@ def _run_verification(
             shadow_source_exit_codes[source_key] = int(precise["exit_code"])
 
     with _state_lock():
-        recorded = _record_verification_result(
+        recorded = record_outcome(
             state_path,
             batch,
             batch_digest,
             runner_token,
-            exit_code,
-            succeeded_count,
-            workspace_changed=workspace_changed,
-            workspace_root=workspace_root if not workspace_changed else "",
-            workspace_digest=workspace_digest if not workspace_changed else "",
-            source_durations_ms=source_durations_ms,
-            source_results=source_results,
-            runner_started_ns=runner_started_ns,
-            shadow_observer_records=combined_shadow_records,
-            authoritative_observations=authoritative_envelopes,
-            shadow_intelligence_baselines=shadow_intelligence_baselines,
-            shadow_source_exit_codes=shadow_source_exit_codes,
-            shadow_execution_contexts=(
-                shadow_contexts if isinstance(shadow_contexts, dict) else {}
+            VerificationRunResult(
+                exit_code,
+                succeeded_count,
+                workspace_changed=workspace_changed,
+                workspace_root=workspace_root if not workspace_changed else "",
+                workspace_digest=workspace_digest if not workspace_changed else "",
+                source_durations_ms=source_durations_ms,
+                source_results=source_results,
+                runner_started_ns=runner_started_ns,
+                shadow_observer_records=combined_shadow_records,
+                authoritative_observations=authoritative_envelopes,
+                shadow_intelligence_baselines=shadow_intelligence_baselines,
+                shadow_source_exit_codes=shadow_source_exit_codes,
+                shadow_execution_contexts=(
+                    shadow_contexts if isinstance(shadow_contexts, dict) else {}
+                ),
+                observer_mode=observer_mode,
+                diagnostic_records=diagnostic_records,
+                reporting=reporting,
+                collection_result=collection_result,
             ),
-            observer_mode=observer_mode,
-            diagnostic_records=diagnostic_records,
-            reporting=reporting,
-            collection_result=collection_result,
             git_capture=git_capture,
         )
     if not recorded:

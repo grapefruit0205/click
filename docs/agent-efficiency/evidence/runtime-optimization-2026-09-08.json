@@ -1,0 +1,189 @@
+{
+  "kind": "local-runtime-component-comparison",
+  "samples": 7,
+  "python": "3.12.3",
+  "system": "linux",
+  "baseline_commit": "b06b8ec879b0a17d9acfb5754da757e76482755b",
+  "limitations": [
+    "Linux component measurements only; not Windows measurements or whole-task savings.",
+    "Fresh processes, warm filesystem; import trials alternate old/new code with matched bytecode-cache policy."
+  ],
+  "imports": {
+    "warm-bytecode": {
+      "before": {
+        "samples_ms": [
+          130.548,
+          130.576,
+          118.688,
+          120.992,
+          115.43,
+          136.733,
+          131.631
+        ],
+        "median_ms": 130.548,
+        "max_ms": 136.733
+      },
+      "after": {
+        "samples_ms": [
+          91.594,
+          101.997,
+          92.133,
+          90.237,
+          104.44,
+          103.112,
+          95.448
+        ],
+        "median_ms": 95.448,
+        "max_ms": 104.44
+      }
+    },
+    "without-bytecode": {
+      "before": {
+        "samples_ms": [
+          577.324,
+          570.941,
+          575.495,
+          583.106,
+          581.599,
+          552.996,
+          559.944
+        ],
+        "median_ms": 575.495,
+        "max_ms": 583.106
+      },
+      "after": {
+        "samples_ms": [
+          409.905,
+          420.401,
+          418.302,
+          415.628,
+          414.363,
+          418.455,
+          408.996
+        ],
+        "median_ms": 415.628,
+        "max_ms": 420.401
+      }
+    }
+  },
+  "executable_records": {
+    "before": {
+      "1": {
+        "samples_ms": [
+          4.546,
+          4.073,
+          4.138,
+          3.967,
+          3.944,
+          4.368,
+          4.561
+        ],
+        "median_ms": 4.138
+      },
+      "8": {
+        "samples_ms": [
+          30.023,
+          30.672,
+          31.157,
+          32.317,
+          30.978,
+          30.702,
+          30.512
+        ],
+        "median_ms": 30.702
+      },
+      "64": {
+        "samples_ms": [
+          243.151,
+          240.134,
+          309.724,
+          261.048,
+          242.745,
+          247.888,
+          244.158
+        ],
+        "median_ms": 244.158
+      }
+    },
+    "after": {
+      "1": {
+        "samples_ms": [
+          13.976,
+          5.976,
+          5.369,
+          5.553,
+          5.609,
+          5.086,
+          5.518
+        ],
+        "median_ms": 5.553
+      },
+      "8": {
+        "samples_ms": [
+          5.8,
+          5.386,
+          5.303,
+          5.469,
+          5.214,
+          5.739,
+          5.956
+        ],
+        "median_ms": 5.469
+      },
+      "64": {
+        "samples_ms": [
+          7.407,
+          7.472,
+          7.655,
+          7.442,
+          7.357,
+          7.429,
+          7.497
+        ],
+        "median_ms": 7.442
+      }
+    }
+  },
+  "measured_at": "2026-09-07T22:39:46.854241+00:00",
+  "engine": {
+    "version": "0.91.0",
+    "hook_files_digest": "e99dbcf6b7f0308210c464b97866b60f24d1a115eac3bc0b37126226f0628c74",
+    "assurance": "unsigned-files-at-snapshot"
+  },
+  "verification": {
+    "partitions": [
+      {
+        "part": 1,
+        "tests": 97,
+        "skipped": 0,
+        "seconds": 116.683,
+        "status": "passed"
+      },
+      {
+        "part": 2,
+        "tests": 231,
+        "skipped": 1,
+        "seconds": 114.705,
+        "status": "passed"
+      },
+      {
+        "part": 3,
+        "tests": 262,
+        "skipped": 3,
+        "seconds": 87.648,
+        "status": "passed"
+      },
+      {
+        "part": 4,
+        "tests": 296,
+        "skipped": 3,
+        "seconds": 86.72,
+        "status": "passed"
+      }
+    ],
+    "total": 886,
+    "skipped": 7,
+    "successful": 879,
+    "inventory_unique_ids": 886
+  }
+}

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -30,6 +32,52 @@ BACKEND = "a" * 64
 
 
 class ClickDashboardProjectionTests(unittest.TestCase):
+    def test_engine_identity_preserves_python_file_byte_provenance(self) -> None:
+        hooks = self.workspace / "hooks"
+        hooks.mkdir()
+        sources = {"a.py": b"a\r\n", "z.py": b"z\n"}
+        for name, content in sources.items():
+            (hooks / name).write_bytes(content)
+        expected = hashlib.sha256()
+        for name, content in sorted(sources.items()):
+            expected.update(name.encode() + b"\0" + hashlib.sha256(content).digest())
+        with mock.patch.object(click_dashboard_projection, "__file__", str(hooks / "a.py")):
+            identity = click_dashboard_projection.engine_identity()
+            self.assertEqual(identity["hook_files_digest"], expected.hexdigest())
+            self.assertEqual(identity["assurance"], "unsigned-files-at-snapshot")
+            (hooks / "a.py").write_bytes(b"a\n")
+            self.assertNotEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], identity["hook_files_digest"])
+
+    def test_engine_identity_binds_frontend_bytes_and_relative_asset_paths(self) -> None:
+        hooks = self.workspace / "hooks"
+        hooks.mkdir()
+        (hooks / "runtime.py").write_bytes(b"runtime\n")
+        assets = [
+            "dashboard/index.html", "dashboard/styles.css", "dashboard/app.js",
+            "dashboard/locales/ko.json", "dashboard/locales/en.json", "dashboard/locales/zh-CN.json",
+        ]
+        for name in reversed(assets):
+            path = hooks / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"first")
+        with mock.patch.object(click_dashboard_projection, "__file__", str(hooks / "runtime.py")):
+            baseline = click_dashboard_projection.engine_identity()["hook_files_digest"]
+            self.assertIsNotNone(baseline)
+            self.assertEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], baseline)
+            for name in assets:
+                with self.subTest(asset=name):
+                    path = hooks / name
+                    original_stat = path.stat()
+                    path.write_bytes(b"other")
+                    os.utime(path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+                    self.assertNotEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], baseline)
+                    path.write_bytes(b"first")
+                    self.assertEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], baseline)
+            locale = hooks / "dashboard/locales/en.json"
+            renamed = hooks / "dashboard/en.json"
+            locale.rename(renamed)
+            self.assertNotEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], baseline)
+
     def test_projection_v6_and_v7_remain_readable_and_new_fields_are_validated(self) -> None:
         value = click_dashboard_projection.dashboard_projection({})
         self.assertTrue(click_dashboard_projection.projection_is_valid(value))

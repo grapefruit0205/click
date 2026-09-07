@@ -12,14 +12,18 @@ from typing import Any
 try:
     from build_antigravity_distribution import (
         CLICK_REFERENCE_FILES,
+        DASHBOARD_ASSETS,
         HOOK_FILES,
+        dashboard_manifest_errors,
         hook_manifest_errors,
         rendered_skill,
     )
 except ModuleNotFoundError:
     from scripts.build_antigravity_distribution import (
         CLICK_REFERENCE_FILES,
+        DASHBOARD_ASSETS,
         HOOK_FILES,
+        dashboard_manifest_errors,
         hook_manifest_errors,
         rendered_skill,
     )
@@ -149,6 +153,7 @@ def _same_file(
 
 def _validate_antigravity(root: Path, errors: list[str]) -> None:
     errors.extend(hook_manifest_errors(root))
+    errors.extend(dashboard_manifest_errors(root))
     platform = root / "platforms" / "antigravity"
     distribution = root / "dist" / "antigravity"
     manifest = _json(platform / "plugin.json", errors, root)
@@ -186,6 +191,13 @@ def _validate_antigravity(root: Path, errors: list[str]) -> None:
             root / "hooks" / name,
             distribution / "hooks" / name,
             f"hooks/{name}",
+            errors,
+        )
+    for name in DASHBOARD_ASSETS:
+        _same_file(
+            root / "hooks/dashboard" / name,
+            distribution / "hooks/dashboard" / name,
+            f"hooks/dashboard/{name}",
             errors,
         )
     for skill_name in ("click", "fix"):

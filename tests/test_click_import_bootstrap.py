@@ -22,6 +22,18 @@ ENTRYPOINTS = (
 
 
 class ClickImportBootstrapTests(unittest.TestCase):
+    def test_gate_startup_does_not_load_optional_viewer_or_native_collectors(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-B", "-c",
+             "import sys; import hooks.click_gate; "
+             "names=('click_dashboard_server','click_dashboard_projection',"
+             "'click_sharding_setup','click_observer_linux','click_observer_macos',"
+             "'click_observer_windows','click_receipt_runtime'); "
+             "assert not [n for n in names if 'hooks.'+n in sys.modules]"],
+            cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_load_siblings_uses_the_active_package_context(self) -> None:
         (state_module,) = click_import_bootstrap.load_siblings(
             "hooks", "click_state"

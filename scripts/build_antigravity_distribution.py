@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import argparse
 import shutil
 
 
@@ -36,6 +37,7 @@ HOOK_FILES = (
     "click_contract.py",
     "click_contract_state.py",
     "click_dashboard_projection.py",
+    "click_dashboard_server.py",
     "click_change_policy.py",
     "click_dependency_cache.py",
     "click_dependency_trace.py",
@@ -69,12 +71,19 @@ HOOK_FILES = (
     "click_shadow_intelligence.py",
     "click_state.py",
     "click_verification.py",
+    "click_verification_bindings.py",
+    "click_verification_plan.py",
+    "click_verification_reuse.py",
     "click_gate.py",
     "platform_protocol.py",
     "antigravity_gate.py",
 )
 ANTIGRAVITY_HOOK_EXCLUDES = frozenset({"click_hook.py", "click_windows.py"})
 ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c"})
+DASHBOARD_ASSETS = (
+    "index.html", "styles.css", "app.js",
+    "locales/ko.json", "locales/en.json", "locales/zh-CN.json",
+)
 CLICK_REFERENCE_FILES = (
     "modes.md",
     "translation-guide.md",
@@ -122,6 +131,18 @@ def hook_manifest_errors(root: Path = ROOT) -> list[str]:
         )
     return errors
 
+
+def dashboard_manifest_errors(root: Path = ROOT) -> list[str]:
+    assets = root / "hooks" / "dashboard"
+    actual = {path.relative_to(assets).as_posix() for path in assets.rglob("*") if path.is_file()}
+    expected = set(DASHBOARD_ASSETS)
+    errors = []
+    if actual - expected:
+        errors.append("Antigravity dashboard manifest omits: " + ", ".join(sorted(actual - expected)))
+    if expected - actual:
+        errors.append("Antigravity dashboard assets missing: " + ", ".join(sorted(expected - actual)))
+    return errors
+
 RUNTIME_NOTE = """
 ## Google Antigravity runtime
 
@@ -156,40 +177,53 @@ def rendered_skill(skill_name: str) -> str:
     return _insert_after_frontmatter(source, note)
 
 
-def build(destination: Path = DESTINATION) -> Path:
-    manifest_errors = hook_manifest_errors(ROOT)
+def build(destination: Path = DESTINATION, *, clean: bool = False) -> Path:
+    manifest_errors = hook_manifest_errors(ROOT) + dashboard_manifest_errors(ROOT)
     if manifest_errors:
         raise ValueError("; ".join(manifest_errors))
     destination = destination.resolve()
     expected_parent = (ROOT / "dist").resolve()
     if destination.parent != expected_parent or destination.name != "antigravity":
         raise ValueError("Antigravity distribution target must be dist/antigravity")
-    if destination.exists():
+    if destination.is_symlink():
+        raise ValueError("Antigravity distribution target must not be a symlink")
+    if clean and destination.exists():
         shutil.rmtree(destination)
-    (destination / "hooks").mkdir(parents=True)
-    (destination / "skills" / "click" / "references").mkdir(parents=True)
-    (destination / "skills" / "fix").mkdir(parents=True)
-
+    expected: dict[Path, bytes] = {}
     for name in ("plugin.json", "hooks.json", "README.md"):
-        shutil.copy2(PLATFORM / name, destination / name)
+        expected[Path(name)] = (PLATFORM / name).read_bytes()
     for name in HOOK_FILES:
-        shutil.copy2(ROOT / "hooks" / name, destination / "hooks" / name)
-    (destination / "skills" / "click" / "SKILL.md").write_text(
-        rendered_skill("click"), encoding="utf-8"
-    )
-    (destination / "skills" / "fix" / "SKILL.md").write_text(
-        rendered_skill("fix"), encoding="utf-8"
-    )
+        expected[Path("hooks") / name] = (ROOT / "hooks" / name).read_bytes()
+    for name in DASHBOARD_ASSETS:
+        expected[Path("hooks/dashboard") / name] = (ROOT / "hooks/dashboard" / name).read_bytes()
+    for name in ("click", "fix"):
+        expected[Path("skills") / name / "SKILL.md"] = rendered_skill(name).encode("utf-8")
     for name in CLICK_REFERENCE_FILES:
-        shutil.copy2(
-            ROOT / "skills" / "click" / "references" / name,
-            destination / "skills" / "click" / "references" / name,
-        )
+        relative = Path("skills/click/references") / name
+        expected[relative] = (ROOT / relative).read_bytes()
+    # Generated output has no independent sources. Remove stale files first,
+    # then only write changed bytes so repeated local builds do no extra I/O.
+    if destination.exists():
+        for path in sorted(destination.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+            if path.is_symlink():
+                path.unlink()
+            elif path.is_file() and path.relative_to(destination) not in expected:
+                path.unlink()
+            elif path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
+    for relative, contents in expected.items():
+        path = destination / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists() or path.read_bytes() != contents:
+            path.write_bytes(contents)
     return destination
 
 
 def main() -> int:
-    path = build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--clean", action="store_true", help="regenerate every file for release validation")
+    args = parser.parse_args()
+    path = build(clean=args.clean)
     print(f"Built Antigravity plugin at {path}")
     return 0
 

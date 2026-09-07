@@ -11,7 +11,7 @@ from unittest import mock
 from hooks import click_incremental as metrics, click_shadow_dashboard
 
 
-UI_ASSERTIONS = r"""
+UI_HARNESS = r"""
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const input = JSON.parse(require('node:fs').readFileSync(0,'utf8'));
@@ -39,11 +39,22 @@ class Document {
 const doc=new Document();
 const context={document:doc,location:{hash:'',pathname:'/'},history:{replaceState(){}},URLSearchParams,
   setTimeout(){},setInterval(){},fetch(){throw Error('Unexpected network or verification');}};
-const marker='  refresh();\n  setInterval(refresh, 1500);';
-assert(input.script.includes(marker));
-const expose='  globalThis.api={readComparison,readTaskEfficiency,comparisonRows,summaryCopy,render,renderBatch,renderSources,renderMap,renderComparison,renderTaskEfficiency,taskEfficiencyPresentation,publicTaskEfficiency,outcomePresentation,renderOutcome,explain,standaloneReport,shareReport,setState(data,batch,summary,savings,measured,taskMeasured){snapshot=data;activeBatch=batch;activeSummary=summary;activeSavings=savings;comparison=measured;if(taskMeasured!==undefined){taskEfficiency=taskMeasured;taskEfficiencyImported=Boolean(taskMeasured);selectedTaskComparison=taskMeasured?.presentations?.length===1?taskMeasured.presentations[0].comparison_ref:String();}}};';
-vm.runInNewContext(input.script.replace(marker,expose),context);
-const api=context.api;
+const saved={value:null};
+const storage={getItem:()=>saved.value,setItem:(key,value)=>{assert.equal(key,'click.dashboard.language');saved.value=value;}};
+context.localStorage=storage;
+const staticNodes=(input.static_labels??[]).map(attributes=>{const node=new Node('span');Object.entries(attributes).forEach(([key,value])=>node.setAttribute(key,value));return node;});
+doc.querySelectorAll=selector=>selector.startsWith('[data-i18n')?staticNodes.filter(node=>selector.slice(1,-1) in node.attributes):[];
+function loadDashboard(target){
+  target.module={exports:{}};
+  vm.runInNewContext(input.script,target);
+  target.api=target.module.exports;
+  return target.api;
+}
+const api=loadDashboard(context);
+"""
+
+
+UI_ASSERTIONS = UI_HARNESS + r"""
 const b={wall_ms:10,status:'passed',executed_source_count:2,reused_source_count:0,not_run_source_count:0};
 const i={wall_ms:15,status:'passed',executed_source_count:0,reused_source_count:2,not_run_source_count:0};
 const benchmark={version:2,kind:'click-paired-verification-benchmark',engine:{version:'<script>bad</script>',commit:'private-secret'},
@@ -957,22 +968,32 @@ class DashboardLanguageTests(unittest.TestCase):
         data["batch_summaries"][previous["batch_id"]] = copy.deepcopy(data["batch_summaries"][batch["batch_id"]])
         data["history"]["retained_batch_count"] = 2
 
-        script = UI_ASSERTIONS.split("const b={wall_ms", 1)[0]
-        script = script.replace("readComparison,readTaskEfficiency,comparisonRows,", "readComparison,readTaskEfficiency,comparisonRows,setLanguage,applyStaticLanguage,msg,MESSAGES,getLocale:()=>locale,")
-        script = script.replace("vm.runInNewContext(input.script.replace(marker,expose),context);", r'''
-const saved={value:null};
-const storage={getItem:()=>saved.value,setItem:(key,value)=>{assert.equal(key,'click.dashboard.language');saved.value=value;}};
-context.localStorage=storage;
-const staticNodes=input.static_labels.map(attributes=>{const node=new Node('span');Object.entries(attributes).forEach(([key,value])=>node.setAttribute(key,value));return node;});
-doc.querySelectorAll=selector=>selector.startsWith('[data-i18n')?staticNodes.filter(node=>selector.slice(1,-1) in node.attributes):[];
-vm.runInNewContext(input.script.replace(marker,expose),context);
-''')
         result = subprocess.run(
-            [shutil.which("node"), "-e", script + assertions],
+            [shutil.which("node"), "-e", UI_HARNESS + assertions],
             input=json.dumps({"script": click_shadow_dashboard.JS, "projection": data, "static_labels": labels.labels}),
             text=True, capture_output=True, check=False, cwd=Path(__file__).parents[1],
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_unchanged_snapshot_ignores_only_projection_timestamps(self):
+        self.run_language_script(r'''
+const original=JSON.stringify(input.projection);
+assert.equal(api.acceptSnapshot(input.projection),true);
+const renderedRows=doc.getElementById('sources').children;
+const later=JSON.parse(original);
+later.generated_at+=2;later.task_efficiency.generated_at+=2;
+assert.equal(api.acceptSnapshot(later),false);
+assert.equal(doc.getElementById('sources').children,renderedRows);
+assert.equal(JSON.stringify(input.projection),original);
+later.task.name='A changed task';
+assert.equal(api.acceptSnapshot(later),true);
+assert(doc.getElementById('contractName').textContent.includes('A changed task'));
+const measured=JSON.parse(original);
+measured.task_efficiency.presentations=[{measured_at:100}];
+const updated=JSON.parse(JSON.stringify(measured));
+updated.task_efficiency.presentations[0].measured_at=101;
+assert.notEqual(api.snapshotSignature(measured),api.snapshotSignature(updated));
+''')
 
     def test_language_switch_preserves_selection_metrics_and_export_locale(self):
         self.run_language_script(r'''
@@ -1038,7 +1059,7 @@ assert.equal(doc.getElementById('verifiedChecks').textContent,'2/2');
         self.run_language_script(r'''
 function reload(localStorage) {
   const next={...context,document:new Document(),localStorage};
-  vm.runInNewContext(input.script.replace(marker,expose),next);return next;
+  loadDashboard(next);return next;
 }
 api.setLanguage('en');assert.equal(saved.value,'en');
 let next=reload(storage);assert.equal(next.api.getLocale(),'en');assert.equal(next.document.documentElement.attributes.lang,'en');
@@ -1165,7 +1186,7 @@ class DashboardImpactRuntimeTests(unittest.TestCase):
             savings = summary["revalidation_savings"]
             self.assertEqual(savings["coverage"]["actual_reused_source_count"], 1)
             self.assertEqual(savings["full_sequential_test_execution_estimate_ms"], savings["executed_test_execution_ms"] + savings["omitted_test_execution_ms"])
-            script = UI_ASSERTIONS.split("const b={wall_ms", 1)[0] + r'''
+            script = UI_HARNESS + r'''
 api.setState(input.projection,input.batch,input.summary,input.savings,null);
 const report=api.shareReport();
 assert.equal(report.summary.executed_source_count,1);assert.equal(report.summary.authoritative_reuse_count,1);

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import errno
+
 from click_gate_test_support import (
     CLICK_CAPABILITY,
     CLICK_GATE,
@@ -24,6 +26,63 @@ from click_gate_test_support import (
 
 
 CLICK_RUNNER_TRANSPORT = CLICK_GATE.click_runner_transport
+
+
+class ClickEvidenceStorageFailureTests(ClickGateTestCase):
+    hook_in_process = True
+
+    def read_event(self, command="cat notes.txt"):
+        return {
+            **self.base_event, "turn_id": "turn-1", "tool_use_id": "storage-read",
+            "tool_name": "Bash", "tool_input": {"command": command},
+        }
+
+    def test_unwritable_evidence_lock_keeps_validated_read_without_a_receipt(self):
+        self.prompt_submit("inspect the project", "turn-1")
+        (self.workspace / "notes.txt").write_text("available\n", encoding="utf-8")
+        with mock.patch.object(CLICK_GATE.click_state, "state_lock", side_effect=OSError(errno.EROFS, "read-only")):
+            result, payload = self.run_hook("pre-tool", self.read_event())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("without recording or reusing a receipt", json.dumps(payload))
+        self.assertIn(
+            "run-inspection-once",
+            split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]),
+        )
+        executed = self.run_rewritten(payload)
+        self.assertEqual(executed.returncode, 0, executed.stderr)
+        self.assertEqual(executed.stdout, "available\n")
+
+    def test_unwritable_observation_prepare_uses_the_same_explicit_degradation(self):
+        self.prompt_submit("inspect the project", "turn-1")
+        with mock.patch.object(CLICK_GATE, "_prepare_observation", side_effect=OSError(errno.ENOSPC, "full")):
+            result, payload = self.run_hook("pre-tool", self.read_event())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "run-inspection-once",
+            split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]),
+        )
+
+    def test_storage_failure_never_relaxes_unknown_guarded_explicit_or_active_claims(self):
+        self.prompt_submit("inspect the project", "turn-1")
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        original = json.loads(state_path.read_text(encoding="utf-8"))
+        cases = [
+            ({}, "cat notes.txt"),
+            ({**original, "runtime_mode": "guarded"}, "cat notes.txt"),
+            ({**original, "evidence_state": {}}, "cat notes.txt"),
+            ({**original, "intent_digest": "broken"}, "cat notes.txt"),
+            ({**original, "mutation": {"status": "running", "runner_claimed_at": int(time.time())}}, "cat notes.txt"),
+            (original, 'click-gate inspect \'{"version":1,"commands":[["cat","notes.txt"]]}\''),
+            (original, "touch notes.txt"),
+            ({**original, "observations": {"entries": {"x": {"status": "running", "runner_claimed_at": int(time.time())}}}}, "cat notes.txt"),
+        ]
+        for state, command in cases:
+            with self.subTest(state=state.get("runtime_mode"), command=command):
+                state_path.write_text(json.dumps(state), encoding="utf-8")
+                with mock.patch.object(CLICK_GATE.click_state, "state_lock", side_effect=OSError(errno.EROFS, "read-only")):
+                    result, payload = self.run_hook("pre-tool", self.read_event(command))
+                self.assertEqual(result.returncode, 1)
+                self.assertIsNone(payload)
 
 
 def spawned_child(
