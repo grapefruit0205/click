@@ -507,6 +507,16 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
                     "platform",
                     "darwin",
                 ),
+                mock.patch.object(
+                    authoritative.click_observation_inputs.sysconfig,
+                    "get_path",
+                    return_value=str(directory / "runtime"),
+                ),
+                mock.patch.object(
+                    authoritative.click_observation_inputs.site,
+                    "getusersitepackages",
+                    return_value=str(directory / "user-packages"),
+                ),
             ):
                 roots = authoritative.click_observation_inputs._portable_runtime_roots(
                     project, artifact
