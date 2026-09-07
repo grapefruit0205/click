@@ -273,10 +273,10 @@ def _snapshot_records(
             raise click_observation_inputs.InputError("observed-missing-input-now-exists")
         if kind == "directory" and not observed_path.is_dir():
             raise click_observation_inputs.InputError("observed-directory-kind-changed")
-        if kind == "file" and observed_path.exists() and not (
-            observed_path.is_file() or observed_path.is_symlink()
-        ):
-            raise click_observation_inputs.InputError("observed-file-kind-changed")
+        # fs_usage and Kernel-File ETW call ordinary open/read/metadata events
+        # "file" events even when the referenced object is a directory.  The
+        # pre-execution InputSnapshot already binds the object's actual type
+        # and metadata, so let it classify these generic existing inputs.
         inputs.setdefault(str(observed_path), set()).update(operations)
     return snapshot.records(inputs)
 

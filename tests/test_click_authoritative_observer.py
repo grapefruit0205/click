@@ -110,6 +110,25 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
             ),
         )
 
+    def test_native_file_event_uses_the_snapshotted_object_kind(self) -> None:
+        directory = self.project / "package"
+        directory.mkdir()
+        snapshot = _PortableSnapshot()
+
+        authoritative._snapshot_records(
+            snapshot,
+            [
+                {
+                    "path": str(directory),
+                    "kind": "file",
+                    "operations": ["metadata"],
+                }
+            ],
+            observation_root=self.project,
+        )
+
+        self.assertEqual(snapshot.inputs, {str(directory): {"metadata"}})
+
     def run_windows(self, *, native_events=None, collector_effect=None):
         fallback = mock.Mock(return_value=91)
         collected = authoritative.click_observer_windows.CollectedExecution(

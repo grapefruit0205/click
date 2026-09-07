@@ -123,6 +123,13 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         )
         original_records = observation_inputs.InputSnapshot.records
         original_snapshot_records = authoritative._snapshot_records
+        original_macos_parse = authoritative.click_observer_macos.parse_fs_usage
+        original_windows_parse = (
+            authoritative.click_observer_windows.parse_windows_etw
+        )
+        original_windows_collect = (
+            authoritative.click_observer_windows.collect_command
+        )
 
         def diagnosed_records(snapshot, inputs):
             try:
@@ -151,6 +158,173 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                     f"inputs: {list(absolute_inputs)[:24]}"
                 ) from error
 
+        def diagnosed_macos_parse(raw, *args, **kwargs):
+            parsed = original_macos_parse(raw, *args, **kwargs)
+            if sys.platform != "darwin" or not parsed.unresolved_event_count:
+                return parsed
+            suspicious = []
+            for line in raw.decode("utf-8", errors="replace").splitlines()[:5000]:
+                try:
+                    single = original_macos_parse(
+                        (line + "\n").encode(),
+                        workspace=kwargs["workspace"],
+                        root_execution_bound=True,
+                        process_scope_complete=True,
+                    )
+                except Exception as error:  # pragma: no cover - failure aid
+                    suspicious.append(f"parser-error={error!r}: {line[:400]}")
+                else:
+                    if single.unresolved_event_count:
+                        suspicious.append(line[:400])
+                if len(suspicious) == 12:
+                    break
+            print(
+                "authoritative macOS parser diagnostic: "
+                + repr(
+                    {
+                        "raw_bytes": len(raw),
+                        "unresolved": parsed.unresolved_event_count,
+                        "children": parsed.child_process_count,
+                        "process_scope_complete": kwargs.get(
+                            "process_scope_complete"
+                        ),
+                        "suspicious": suspicious,
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return parsed
+
+        def diagnosed_windows_collect(*args, **kwargs):
+            collected = original_windows_collect(*args, **kwargs)
+            if sys.platform == "win32" and (
+                collected.failed or collected.truncated
+            ):
+                print(
+                    "authoritative Windows collector diagnostic: "
+                    + repr(
+                        {
+                            "failed": collected.failed,
+                            "truncated": collected.truncated,
+                            "target_started": collected.target_started,
+                            "root_pid": collected.root_pid,
+                            "process_scope_complete": (
+                                collected.process_scope_complete
+                            ),
+                            "raw_bytes": [
+                                len(document) for document in collected.raw
+                            ],
+                            "capture_limit": kwargs.get("capture_limit"),
+                        }
+                    ),
+                    file=sys.stderr,
+                )
+            return collected
+
+        def diagnosed_windows_parse(raw, *args, **kwargs):
+            parsed = original_windows_parse(raw, *args, **kwargs)
+            if sys.platform != "win32" or (
+                not parsed.unresolved_event_count
+                and not parsed.child_process_count
+            ):
+                return parsed
+            events, xml_unresolved = (
+                authoritative.click_observer_windows._iter_events(
+                    (raw,) if isinstance(raw, bytes) else tuple(raw)
+                )
+            )
+            process_rows = []
+            parent_by_pid = {}
+            fields_by_pid = {}
+            for event in events:
+                provider, event_id, fields = (
+                    authoritative.click_observer_windows._event_fields(event)
+                )
+                if (
+                    provider
+                    not in authoritative.click_observer_windows._PROCESS_NAMES
+                    or event_id != 1
+                ):
+                    continue
+                pid = authoritative.click_observer_windows._first_integer(
+                    fields, authoritative.click_observer_windows._PID_FIELDS
+                )
+                parent = authoritative.click_observer_windows._first_integer(
+                    fields,
+                    authoritative.click_observer_windows._PARENT_PID_FIELDS,
+                )
+                if pid is not None and parent is not None:
+                    parent_by_pid[pid] = parent
+                    fields_by_pid[pid] = fields
+            root_pid = int(kwargs.get("root_pid", -1))
+            descendants = {root_pid}
+            changed = True
+            while changed:
+                changed = False
+                for pid, parent in parent_by_pid.items():
+                    if parent in descendants and pid not in descendants:
+                        descendants.add(pid)
+                        changed = True
+            for pid in sorted(descendants):
+                fields = fields_by_pid.get(pid, {})
+                process_rows.append(
+                    {
+                        "pid": pid,
+                        "parent": parent_by_pid.get(pid),
+                        "image": authoritative.click_observer_windows._first_text(
+                            fields,
+                            (
+                                "imagefilename",
+                                "imagepath",
+                                "imagename",
+                                "processname",
+                                "commandline",
+                            ),
+                        )[:260],
+                    }
+                )
+            file_event_ids = {}
+            missing_path = 0
+            for event in events:
+                provider, event_id, fields = (
+                    authoritative.click_observer_windows._event_fields(event)
+                )
+                if provider not in authoritative.click_observer_windows._FILE_NAMES:
+                    continue
+                pid = authoritative.click_observer_windows._event_pid(fields)
+                if pid not in descendants:
+                    continue
+                key = str(event_id)
+                file_event_ids[key] = file_event_ids.get(key, 0) + 1
+                if not authoritative.click_observer_windows._first_text(
+                    fields, authoritative.click_observer_windows._PATH_FIELDS
+                ):
+                    missing_path += 1
+            print(
+                "authoritative Windows parser diagnostic: "
+                + repr(
+                    {
+                        "raw_bytes": [
+                            len(document)
+                            for document in (
+                                (raw,) if isinstance(raw, bytes) else tuple(raw)
+                            )
+                        ],
+                        "xml_unresolved": xml_unresolved,
+                        "unresolved": parsed.unresolved_event_count,
+                        "children": parsed.child_process_count,
+                        "process_scope_complete": kwargs.get(
+                            "process_scope_complete"
+                        ),
+                        "processes": process_rows[:24],
+                        "file_event_ids": file_event_ids,
+                        "missing_path_events": missing_path,
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return parsed
+
         with (
             mock.patch.object(
                 observation_inputs.InputSnapshot,
@@ -161,6 +335,21 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 authoritative,
                 "_snapshot_records",
                 diagnosed_snapshot_records,
+            ),
+            mock.patch.object(
+                authoritative.click_observer_macos,
+                "parse_fs_usage",
+                diagnosed_macos_parse,
+            ),
+            mock.patch.object(
+                authoritative.click_observer_windows,
+                "collect_command",
+                diagnosed_windows_collect,
+            ),
+            mock.patch.object(
+                authoritative.click_observer_windows,
+                "parse_windows_etw",
+                diagnosed_windows_parse,
             ),
         ):
             result = authoritative.run_command(
