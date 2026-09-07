@@ -14,6 +14,7 @@
 - Dashboard lifecycle, HTTP serving, static assets, and Korean/English/Simplified
   Chinese locales now have separate owners. Timestamp-only poll changes avoid
   repeated rendering, while actual task/measurement changes still update.
+  Numeric loopback binding avoids reverse DNS during startup.
   Projection and response work runs outside the global state lock; authentication,
   Host checks, CSP, report exports, and the visible language selector are retained.
 - Ordinary read preparation can recover from unavailable Evidence storage only

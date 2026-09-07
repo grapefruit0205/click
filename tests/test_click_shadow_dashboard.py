@@ -51,6 +51,15 @@ class ClickShadowDashboardTests(ClickGateTestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_server_binds_numeric_loopback_without_name_resolution(self) -> None:
+        server_module = CLICK_SHADOW_DASHBOARD._server_module()
+        with mock.patch("socket.getfqdn", side_effect=AssertionError("DNS must not run")):
+            with server_module._DashboardServer(Path("unused.json"), "instance", secrets.token_urlsafe(24)) as server:
+                self.assertEqual(server.server_name, "127.0.0.1")
+                self.assertEqual(server.server_address[0], "127.0.0.1")
+                self.assertGreater(server.server_port, 0)
+                self.assertEqual(server.server_port, server.socket.getsockname()[1])
+
     def test_snapshot_projection_and_socket_write_release_state_lock(self) -> None:
         server_module = CLICK_SHADOW_DASHBOARD._server_module()
         handler = object.__new__(server_module._DashboardHandler)
@@ -350,6 +359,12 @@ class ClickShadowDashboardTests(ClickGateTestCase):
         ).resolve()
         instance_id = "dashboard-instance-12345"
         access_token = hashlib.sha256(instance_id.encode()).hexdigest()
+        environment = mock.patch.dict(os.environ, {
+            "PLUGIN_DATA": str(self.plugin_data),
+            "CLICK_CONFIG_HOME": str(self.plugin_data),
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
         with CLICK_STATE.state_lock():
             CLICK_STATE.write_json(
                 CLICK_SHADOW_DASHBOARD._dashboard_path(state_path),
@@ -371,26 +386,34 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             )
 
         results: list[int] = []
-        environment = {
-            "PLUGIN_DATA": str(self.plugin_data),
-            "CLICK_CONFIG_HOME": str(self.plugin_data),
-        }
-        environment_ready = threading.Event()
+        server_errors: list[str] = []
 
         def serve() -> None:
-            with mock.patch.dict(os.environ, environment):
-                environment_ready.set()
-                results.append(
-                    CLICK_SHADOW_DASHBOARD.run_server(
-                        [str(state_path), instance_id, access_token]
-                    )
-                )
+            try:
+                results.append(CLICK_SHADOW_DASHBOARD.run_server(
+                    [str(state_path), instance_id, access_token]
+                ))
+            except BaseException as exc:
+                server_errors.append(repr(exc))
 
         thread = threading.Thread(target=serve, daemon=True)
         thread.start()
-        self.assertTrue(environment_ready.wait(timeout=2))
+
+        def stop_server() -> None:
+            if thread.is_alive():
+                with CLICK_STATE.state_lock():
+                    dashboard_path = CLICK_SHADOW_DASHBOARD._dashboard_path(state_path)
+                    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+                    dashboard.update(status="stopping", stop_requested=True)
+                    CLICK_STATE.write_json(dashboard_path, dashboard)
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive(), "dashboard server did not stop")
+
+        self.addCleanup(stop_server)
         port = 0
-        for _ in range(500):
+        deadline = time.monotonic() + 10
+        dashboard = {}
+        while time.monotonic() < deadline:
             with CLICK_STATE.state_lock():
                 dashboard = json.loads(
                     CLICK_SHADOW_DASHBOARD._dashboard_path(state_path).read_text(
@@ -400,8 +423,13 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             if dashboard["status"] == "running":
                 port = int(dashboard["port"])
                 break
+            if results or server_errors or not thread.is_alive():
+                break
             time.sleep(0.02)
-        self.assertGreater(port, 0)
+        self.assertGreater(port, 0, {
+            "results": results, "errors": server_errors,
+            "status": dashboard.get("status"), "last_error": dashboard.get("last_error"),
+        })
         base = f"http://127.0.0.1:{port}"
 
         with urllib.request.urlopen(base + "/", timeout=2) as response:
@@ -463,14 +491,8 @@ class ClickShadowDashboardTests(ClickGateTestCase):
             urllib.request.urlopen(post, timeout=2)
         self.assertEqual(method.exception.code, 405)
 
-        with CLICK_STATE.state_lock():
-            dashboard_path = CLICK_SHADOW_DASHBOARD._dashboard_path(state_path)
-            dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
-            dashboard["status"] = "stopping"
-            dashboard["stop_requested"] = True
-            CLICK_STATE.write_json(dashboard_path, dashboard)
-        thread.join(timeout=3)
-        self.assertFalse(thread.is_alive())
+        stop_server()
+        self.assertEqual(server_errors, [])
         self.assertEqual(results, [0])
 
     def test_viewer_survives_next_evidence_task_and_cancel_as_history_only(self) -> None:

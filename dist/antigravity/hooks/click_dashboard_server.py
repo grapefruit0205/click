@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+from socketserver import TCPServer
 import time
 from urllib.parse import urlsplit
 
@@ -31,6 +32,12 @@ class _DashboardServer(ThreadingHTTPServer):
         self.instance_id = instance_id
         self.access_token = access_token
         super().__init__(("127.0.0.1", 0), _DashboardHandler)
+
+    def server_bind(self) -> None:
+        # HTTPServer resolves the bound address with getfqdn(). This local-only
+        # viewer uses its numeric address, so DNS must not delay startup.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class _DashboardHandler(BaseHTTPRequestHandler):

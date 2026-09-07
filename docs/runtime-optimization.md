@@ -16,7 +16,7 @@ Click v0.92.0 follows v0.91.0 with the runtime and CI changes described here. Th
 
 Only the two transport-generated snapshot timestamps are excluded from change detection. Actual task data and measurement timestamps still trigger updates. Idle/start/stop checks read the sidecar rather than full contract history. Projection generation, validation and socket writes run outside the global state lock after acquiring an independent JSON snapshot.
 
-The current authentication, loopback/Host validation, CSP, language selection and report exports are preserved. The public engine file digest includes the moved assets and their relative paths. Projection responses are not cached by mutation revision: completion, history, clock and installed-file inputs can change independently of that revision.
+The current authentication, loopback/Host validation, CSP, language selection and report exports are preserved. The loopback server binds its numeric address without a reverse DNS lookup; server-start regression tests report early exits and always stop their server thread. The public engine file digest includes the moved assets and their relative paths. Projection responses are not cached by mutation revision: completion, history, clock and installed-file inputs can change independently of that revision.
 
 ## Evidence storage failure
 
@@ -41,7 +41,7 @@ Distribution generation now writes changed bytes and removes stale generated fil
 
 ## Validation and measurement
 
-The final complete partitioned run discovered **886 unique tests: 879 passed and 7 platform skips**, with every partition exiting successfully. Partition times were 116.683s, 114.705s, 87.648s and 86.720s on this Linux host. This is not a before/after CI speed claim. Distribution parity, compilation and whitespace checks passed. The new Windows same-size executable-change test preserves fresh content checking, and the orphan-child test was confirmed failing against the unsafe PID-release implementation before that implementation was removed.
+The complete local partitioned run before the release follow-ups discovered **886 unique tests: 879 passed and 7 platform skips**, with every partition exiting successfully. Partition times were 116.683s, 114.705s, 87.648s and 86.720s on this Linux host. This is not a before/after CI speed claim. Distribution parity, compilation and whitespace checks passed. The new Windows same-size executable-change test preserves fresh content checking, and the orphan-child test was confirmed failing against the unsafe PID-release implementation before that implementation was removed.
 
 Matched seven-sample local trials alternated baseline commit `b06b8ec879b0a17d9acfb5754da757e76482755b` and the modified code. With warmed bytecode, new-process Hook import median changed **130.548 → 95.448ms (26.9% lower)**. With bytecode reads disabled via an empty cache prefix, it changed **575.495 → 415.628ms**.
 
@@ -49,4 +49,4 @@ Repeated executable-record construction medians for 1 / 8 / 64 checks changed **
 
 The required acceptance criterion remains automatic sharding `init/status/refresh` and shard reuse without regression. The repository shard inventory adds only the new binding test module to its existing owner. The reuse policy is unchanged; edited/uncommitted shard policy still falls back conservatively.
 
-The available host is Linux. Portable Windows parsing/transport and metadata regressions run locally; a new native Windows/macOS result requires the updated CI jobs to run on those operating systems.
+The measurement host is Linux. Portable Windows parsing/transport and metadata regressions run locally. Release validation on Windows and macOS, including native backends, is reported by the OS-specific CI checks on [PR #95](https://github.com/grapefruit0205/click/pull/95).
