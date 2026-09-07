@@ -213,7 +213,8 @@ def sanitized_read_only_environment(*, workspace: Path | None = None) -> dict[st
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key.upper() != "PATH" and not unsafe_inherited_environment_key(key)
+        if key.upper() not in {"PATH", "RIPGREP_CONFIG_PATH"}
+        and not unsafe_inherited_environment_key(key)
     }
     environment["PATH"] = sanitized_executable_path(workspace=workspace)
     return environment
@@ -242,7 +243,10 @@ def sanitized_git_environment(
 def execution_argv(argv: list[str]) -> list[str]:
     parts = structured_ssh_parts(argv)
     if parts is None:
-        return argv
+        # Runtime hardening replaces argv[0] with a trusted absolute path.
+        # Keep the validated request immutable so receipts and cache bindings
+        # continue to describe the command the caller actually requested.
+        return list(argv)
     target, remote_argv = parts
     safe_git_argv, error = build_read_only_git_argv(remote_argv)
     if error or safe_git_argv is None:

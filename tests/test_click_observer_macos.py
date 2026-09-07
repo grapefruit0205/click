@@ -118,6 +118,16 @@ class ClickObserverMacOSTests(unittest.TestCase):
         rendered = json.dumps(parsed.inputs)
         self.assertNotIn("/usr/bin", rendered)
         self.assertNotIn(root, rendered)
+        self.assertEqual(
+            {item["path"] for item in parsed.absolute_inputs},
+            {
+                "/usr/bin/git",
+                "/usr/bin/python3",
+                click_observer_macos._canonical_macos_path(f"{root}/missing.cfg"),
+                click_observer_macos._canonical_macos_path(f"{root}/pkg"),
+                click_observer_macos._canonical_macos_path(f"{root}/src/input.py"),
+            },
+        )
 
     def test_parser_marks_truncation_and_missing_exec_incomplete(self) -> None:
         parsed = click_observer_macos.parse_fs_usage(
@@ -156,6 +166,62 @@ class ClickObserverMacOSTests(unittest.TestCase):
             process_scope_complete=False,
         )
         self.assertFalse(name_filtered.process_tree_complete)
+
+    def test_authoritative_parser_binds_the_workspace_root(self) -> None:
+        raw = self.trace_text(
+            "12:00:00.000001 execve /usr/bin/python3 0.000010 Python.20",
+            f"12:00:00.000002 getdirentries64 {self.workspace.as_posix()} "
+            "0.000011 Python.20",
+        )
+
+        shadow = click_observer_macos.parse_fs_usage(
+            raw, workspace=self.workspace
+        )
+        authoritative = click_observer_macos.parse_fs_usage(
+            raw, workspace=self.workspace, allow_workspace_root=True
+        )
+
+        self.assertEqual(shadow.unresolved_event_count, 1)
+        self.assertFalse(shadow.process_tree_complete)
+        self.assertEqual(authoritative.unresolved_event_count, 0)
+        self.assertTrue(authoritative.process_tree_complete)
+        self.assertIn(
+            {
+                "path": click_observer_macos._canonical_macos_path(
+                    self.workspace.as_posix()
+                ),
+                "kind": "directory",
+                "operations": ["enumerate"],
+            },
+            authoritative.absolute_inputs,
+        )
+
+    def test_authoritative_parser_keeps_only_the_bound_main_thread(self) -> None:
+        root = self.workspace.as_posix()
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                f"12:00:00.000001 open F=3 (R_____) {root}/wanted.txt "
+                "0.000010 Python.20",
+                f"12:00:00.000002 open F=4 (R_____) {root}/other.txt "
+                "0.000011 Python.21",
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+            root_thread_id=20,
+        )
+
+        self.assertEqual(
+            parsed.inputs,
+            (
+                {
+                    "path": "wanted.txt",
+                    "kind": "file",
+                    "operations": ["read"],
+                },
+            ),
+        )
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
 
     def test_native_suspended_spawn_rejects_invalid_inputs_before_launch(self) -> None:
         with self.assertRaises(ValueError):
@@ -199,6 +265,32 @@ class ClickObserverMacOSTests(unittest.TestCase):
         self.assertEqual(parsed.unresolved_event_count, 1)
         self.assertFalse(parsed.process_tree_complete)
 
+    def test_parser_ignores_fixed_dyld_startup_housekeeping(self) -> None:
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                "12:00:00.000001 fsgetpath /usr/lib/dyld "
+                "0.000010 Python.20",
+                "12:00:00.000002 openat F=4 (R______________) "
+                "[3]/../../System/Volumes/Preboot/Cryptexes/OS "
+                "0.000011 Python.20",
+                "12:00:00.000003 openat F=6 (R______________) "
+                "[4]/System/Library/dyld 0.000012 Python.20",
+                "12:00:00.000004 stat64 Err#2 "
+                "/AppleInternal/XBS/.isChrooted 0.000013 Python.20",
+                "12:00:00.000005 open F=3 (R_____) /dev/dtracehelper "
+                "0.000014 Python.20",
+                "12:00:00.000006 fstatat64 [4]/System/Library/dyld "
+                "0.000015 Python.20",
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+        )
+
+        self.assertEqual(parsed.inputs, ())
+        self.assertEqual(parsed.absolute_inputs, ())
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+
     def test_parser_accepts_absolute_openat_path_after_dirfd_prefix(self) -> None:
         root = self.workspace.as_posix()
         parsed = click_observer_macos.parse_fs_usage(
@@ -223,6 +315,10 @@ class ClickObserverMacOSTests(unittest.TestCase):
         )
         self.assertEqual(parsed.unresolved_event_count, 0)
         self.assertTrue(parsed.process_tree_complete)
+        self.assertIn(
+            click_observer_macos._canonical_macos_path(f"{root}/input.txt"),
+            {item["path"] for item in parsed.absolute_inputs},
+        )
         self.assertEqual(
             click_observer_macos._candidate_path(
                 "F=3 (R_____) [ -2]/D:/workspace/input.txt"
@@ -277,6 +373,72 @@ class ClickObserverMacOSTests(unittest.TestCase):
         )
         self.assertEqual(parsed.unresolved_event_count, 3)
         self.assertFalse(parsed.process_tree_complete)
+
+    def test_authoritative_parser_accepts_cwd_bound_relative_paths(self) -> None:
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                "12:00:00.000001 open F=3 (R_____) tests/input.py "
+                "0.000010 Python.20",
+                "12:00:00.000002 stat64 [  2] alpha.Alpha.test_value "
+                "0.000011 Python.20",
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+            relative_cwd_bound=True,
+        )
+
+        self.assertEqual(
+            parsed.inputs,
+            (
+                {
+                    "path": "alpha.Alpha.test_value",
+                    "kind": "missing",
+                    "operations": ["metadata"],
+                },
+                {
+                    "path": "tests/input.py",
+                    "kind": "file",
+                    "operations": ["read"],
+                },
+            ),
+        )
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+
+    def test_authoritative_parser_restores_only_known_rootless_paths(self) -> None:
+        runtime_directory = tempfile.TemporaryDirectory(
+            prefix="click-native-observer-example-"
+        )
+        self.addCleanup(runtime_directory.cleanup)
+        runtime = Path(runtime_directory.name)
+        rootless = runtime.as_posix().lstrip("/")
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                f"12:00:00.000001 open F=3 (R_____) {rootless}/module.so "
+                "0.000010 Python.20",
+                f"12:00:00.000002 stat64 {rootless}/module.so "
+                "0.000011 Python.20",
+                f"12:00:00.000003 access (R___) {rootless}/module.so "
+                "0.000012 Python.20",
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+            relative_cwd_bound=True,
+            absolute_roots=(runtime,),
+        )
+
+        self.assertEqual(parsed.inputs, ())
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertIn(
+            {
+                "path": click_observer_macos._canonical_macos_path(
+                    f"{runtime.as_posix()}/module.so"
+                ),
+                "kind": "file",
+                "operations": ["metadata", "read"],
+            },
+            parsed.absolute_inputs,
+        )
 
     def test_parser_normalizes_macos_data_volume_and_private_aliases(self) -> None:
         logical_root = self.workspace.as_posix()
@@ -488,7 +650,9 @@ class ClickObserverMacOSTests(unittest.TestCase):
 
     def test_collector_suspends_actual_target_before_pid_filter(self) -> None:
         collector_launches: list[list[str]] = []
+        collector_environments: list[dict[str, str]] = []
         target_spawns: list[list[str]] = []
+        target_environments: list[dict[str, str]] = []
         target = _FakeProcess(
             pid=4321, returncode=4, running=True, command_name="Python"
         )
@@ -499,16 +663,19 @@ class ClickObserverMacOSTests(unittest.TestCase):
             stdout=b"trace-output",
         )
 
-        def spawn_suspended(argv: list[str], **_kwargs: object) -> _FakeProcess:
+        def spawn_suspended(argv: list[str], **kwargs: object) -> _FakeProcess:
             target_spawns.append(list(argv))
+            target_environments.append(dict(kwargs["env"]))  # type: ignore[arg-type]
             return target
 
-        def spawn_collector(argv: list[str], **_kwargs: object) -> _FakeProcess:
+        def spawn_collector(argv: list[str], **kwargs: object) -> _FakeProcess:
             collector_launches.append(list(argv))
+            collector_environments.append(dict(kwargs["env"]))  # type: ignore[arg-type]
             return collector
 
         terminated: list[int] = []
         resumed: list[int] = []
+        drained: list[float] = []
 
         def terminate(child: _FakeProcess) -> int:
             terminated.append(child.pid)
@@ -517,13 +684,22 @@ class ClickObserverMacOSTests(unittest.TestCase):
         result = click_observer_macos.collect_command(
             ["tool", "--flag"],
             workspace=self.workspace,
-            environment={"PATH": os.environ.get("PATH", os.defpath)},
+            environment={
+                "PATH": os.environ.get("PATH", os.defpath),
+                "CLICK_NATIVE_OBSERVER_BOOTSTRAP": "/tmp/observer",
+                "CLICK_NATIVE_OBSERVER_CHANNEL": "/tmp/native.pipe",
+                "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH": "/tmp/original",
+                "CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT": "1",
+                "CLICK_NATIVE_OBSERVER_ROOT": "/tmp/project",
+                "PYTHONPATH": "/tmp/observer:/tmp/original",
+            },
             executable="/usr/bin/fs_usage",
             spawn_argv=spawn_collector,
             spawn_suspended=spawn_suspended,
             resume_target=lambda child: resumed.append(child.pid) or True,
             discard_suspended=terminate,
             terminate_group=terminate,
+            drain_wait=drained.append,
         )
 
         self.assertTrue(result.target_started)
@@ -537,8 +713,50 @@ class ClickObserverMacOSTests(unittest.TestCase):
             ["-w", "-f", "pathname", "-f", "exec"],
         )
         self.assertNotIn("sudo", collector_launches[0])
+        self.assertIn("CLICK_NATIVE_OBSERVER_BOOTSTRAP", target_environments[0])
+        self.assertEqual(
+            collector_environments,
+            [
+                {
+                    "PATH": os.environ.get("PATH", os.defpath),
+                    "PYTHONPATH": "/tmp/original",
+                }
+            ],
+        )
         self.assertEqual(terminated, [4322])
+        self.assertEqual(drained, [click_observer_macos.COLLECTOR_DRAIN_SECONDS])
         self.assertFalse(result.process_scope_complete)
+
+    def test_authoritative_collector_uses_only_the_suspended_target_pid(self) -> None:
+        launches: list[list[str]] = []
+        target = _FakeProcess(
+            pid=4421, returncode=0, running=True, command_name="Python"
+        )
+        collector = _FakeProcess(
+            pid=4422, returncode=0, running=True, stdout=b"trace-output"
+        )
+        drained: list[float] = []
+
+        result = click_observer_macos.collect_command(
+            ["tool"],
+            workspace=self.workspace,
+            environment={},
+            executable="/usr/bin/fs_usage",
+            spawn_argv=lambda argv, **_kwargs: (
+                launches.append(list(argv)) or collector
+            ),
+            spawn_suspended=lambda *_args, **_kwargs: target,
+            resume_target=lambda _target: True,
+            discard_suspended=lambda child: child.terminate_for_test(),
+            terminate_group=lambda child: child.terminate_for_test(),
+            drain_wait=drained.append,
+            strict_pid_scope=True,
+        )
+
+        self.assertTrue(result.target_started)
+        self.assertTrue(result.process_scope_complete)
+        self.assertEqual(launches[0][-2:], ["4421", "Python"])
+        self.assertEqual(drained, [click_observer_macos.COLLECTOR_DRAIN_SECONDS])
 
     def test_collector_interrupt_stops_both_retained_groups(self) -> None:
         target = _FakeProcess(pid=5321, returncode=0, running=True, interrupt=True)

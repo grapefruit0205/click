@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import platform
 from typing import Any, Protocol
 
 if __package__:
@@ -99,3 +100,44 @@ def select_backend(
         status="unavailable",
         reason="unsupported-operating-system",
     )
+
+
+def support_report(
+    system_name: str | None = None, *, macos_privileged: bool | None = None
+) -> dict[str, Any]:
+    """Report implementation tiers without promoting Shadow data to authority."""
+    try:
+        system = platform.system() if system_name is None else system_name
+    except Exception:
+        system = ""
+    capability = select_backend(system, macos_privileged=macos_privileged)
+    common = "implemented" if system in {"Linux", "Darwin", "Windows"} else "unsupported"
+    if system in {"Linux", "Darwin", "Windows"}:
+        authoritative = {
+            "status": "profile-implemented",
+            "reason": (
+                "separate-runtime-and-backend-probe-required"
+                if system == "Linux"
+                else "native-runtime-backend-and-real-host-validation-required"
+            ),
+        }
+    else:
+        authoritative = {
+            "status": "unsupported",
+            "reason": "unsupported-operating-system",
+        }
+    return {
+        "version": 1,
+        "system": system[:64],
+        "base_reuse": {"status": common, "reason": "common-state-engine"},
+        "static_configuration": {
+            "status": common,
+            "reason": "repository-policy-engine",
+        },
+        "shadow_observer": {
+            "status": capability.status,
+            "backend": capability.backend_name,
+            "reason": capability.reason,
+        },
+        "authoritative_observer": authoritative,
+    }

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import io
+import json
+import os
 from pathlib import Path
 import shlex
+import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -75,6 +80,68 @@ class ClickRunnerTransportTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.assertFalse(hasattr(click_gate, name))
+
+    def test_oversized_json_report_uses_a_bounded_one_shot_file(self) -> None:
+        calls: list[list[str]] = []
+
+        def renderer(arguments: list[str]) -> str:
+            calls.append(arguments)
+            return "exit 2" if arguments[1] == "-c" else "bounded-report"
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with (
+                mock.patch.dict(os.environ, {"PLUGIN_DATA": temporary}),
+                mock.patch.object(
+                    click_gate.click_runner_transport,
+                    "render_runner_shell_command",
+                    side_effect=renderer,
+                ),
+            ):
+                command = click_gate._json_report_command(
+                    {"payload": "large-status-report-검증-상태"}
+                )
+            self.assertEqual(command, "bounded-report")
+            self.assertEqual(calls[1][-2], "run-json-report")
+            report_path = Path(calls[1][-1])
+            self.assertTrue(report_path.is_file())
+
+            stdout_bytes = io.BytesIO()
+            stdout = io.TextIOWrapper(stdout_bytes, encoding="cp1252")
+            stderr = io.StringIO()
+            runner_argv = [calls[1][1], *calls[1][2:]]
+            with (
+                mock.patch.object(sys, "argv", runner_argv),
+                mock.patch.object(sys, "stdout", stdout),
+                mock.patch.object(sys, "stderr", stderr),
+            ):
+                returncode = click_gate.main()
+
+            stdout.flush()
+            self.assertEqual(returncode, 0, stderr.getvalue())
+            self.assertEqual(
+                json.loads(stdout_bytes.getvalue().decode("cp1252")),
+                {"payload": "large-status-report-검증-상태"},
+            )
+            self.assertFalse(report_path.exists())
+
+    def test_inline_json_report_is_ascii_safe_for_windows_consoles(self) -> None:
+        calls: list[list[str]] = []
+
+        def renderer(arguments: list[str]) -> str:
+            calls.append(arguments)
+            return "inline-report"
+
+        with mock.patch.object(
+            click_gate.click_runner_transport,
+            "render_runner_shell_command",
+            side_effect=renderer,
+        ):
+            command = click_gate._json_report_command({"payload": "검증 상태"})
+
+        self.assertEqual(command, "inline-report")
+        encoded_report = calls[0][-1]
+        self.assertTrue(encoded_report.isascii())
+        self.assertEqual(json.loads(encoded_report), {"payload": "검증 상태"})
 
 
 if __name__ == "__main__":

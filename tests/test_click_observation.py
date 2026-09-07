@@ -43,6 +43,7 @@ class ClickObservationTests(unittest.TestCase):
             "click_claims",
             "click_contract_state",
             "click_inspection",
+            "click_observation_cache",
             "click_process",
             "click_state",
         ):

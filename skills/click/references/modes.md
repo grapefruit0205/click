@@ -20,7 +20,7 @@ click-gate default off
 
 Evidence mode does not stage or approve a Click contract. The host remains the execution authority. Click creates an intent session from the user prompt, records mutation revisions and exact verification receipts, prevents stale evidence from claiming completion, and exports an honest receipt with `approval_bound: false` and `execution_authority: host`.
 
-The model chooses evidence ids and concrete argv during execution. Same-revision reuse requires the exact check, protected tree, environment, executable, and host-coverage bindings. Cross-revision reuse requires a committed `.click/evidence-dependencies.json` mapping plus a complete baseline runtime dependency observation. An agent's runtime dependency guess is not authority in Evidence mode.
+The model chooses evidence ids and concrete argv during execution. Same-revision reuse requires the exact check, protected tree, environment, executable, and host-coverage bindings. A committed `.click/evidence-dependencies.json` mapping can describe candidate inputs, but authoritative observation is unavailable in Evidence mode and an agent's observation JSON is never authority. Cross-revision reuse in Evidence therefore requires an unchanged repository-owner `.click/evidence-reuse.json` policy and all of its ordinary receipt bindings.
 
 An in-scope or narrowing follow-up continues the same session and appends its prompt digest to the receipt lineage. When current evidence completes the session, the next software request starts a fresh Evidence session. Questions and explanations remain lightweight.
 
@@ -28,7 +28,8 @@ Each lifecycle starts with native Observer collection off. The explicit
 `click-gate observer shadow` command enables only non-authoritative telemetry,
 while `observer off` disables it and `observer status` reports it. These
 controls neither change the current mutation revision nor grant evidence
-reuse. The dashboard remains an independent read-only viewer.
+reuse. `observer authoritative` is rejected without a separately approved
+Guarded contract. The dashboard remains an independent read-only viewer.
 
 For a read-only code review, use `click-gate review`, remain read-only, and collect only relevant inspection evidence. A request that also asks for fixes follows Evidence mode and does not introduce Click approval.
 
@@ -41,6 +42,21 @@ Show the exact Hook-generated easy contract once as the default approval body, w
 After every declared evidence source is current for the final mutation revision and no managed service remains active, a later change may stage a fresh contract. A contract with no argv source needs no ceremonial local batch. Missing, running, failed, or stale evidence—and an active managed service—still block replacement.
 
 That completed contract may retain successful verification candidates for the next Guarded contract, never approval, execution claims, tokens or completion. The successor must be separately approved and request its own declared checks before current-binding requalification. Changing a dependency declaration does not inherit its predecessor's authority. See the capability protocol for v5 lineage and conservative rerun rules.
+
+After approval, `click-gate observer authoritative` may explicitly prepare the
+one supported [Authoritative Observer v2](authoritative-observer-v2.md) profile.
+The switch itself grants no reuse. The original check must finish once under
+the verified runner and produce a complete signed observation; every current
+binding and observed input is checked again in the separately approved
+successor contract. Unsupported or incomplete observation simply reruns the
+check.
+
+Automatic shard setup is also Guarded-only once it would collect project tests,
+write proposed policy, or run its bootstrap. The public
+`click-gate sharding init|status|refresh` controls preserve the proposal,
+application, user-owned commit, baseline, and observation boundaries described
+in [automatic sharding setup](automatic-sharding-setup.md). A setup proposal is
+never approval or active repository policy.
 
 ## Off
 

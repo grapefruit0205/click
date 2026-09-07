@@ -37,10 +37,15 @@ else:  # Executed directly from the bundled hooks directory.
 
 
 MAX_RAW_TRACE_BYTES = 4 * 1024 * 1024
+MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
 # fs_usage publishes no readiness signal. Its startup performs disk-name cache
 # discovery and ktrace callback registration before ktrace_start(), so keep the
 # suspended target stopped long enough for that bounded initialization.
 COLLECTOR_STARTUP_SECONDS = 1.0
+# fs_usage processes kernel events asynchronously.  A very short Python check
+# can exit before its final pathname events reach the output stream, so let the
+# already-running collector drain after the target has been reaped.
+COLLECTOR_DRAIN_SECONDS = 0.25
 NATIVE_FS_USAGE_PATHS = frozenset({"/usr/bin/fs_usage", "/usr/sbin/fs_usage"})
 MACOS_DATA_VOLUME_PREFIX = "/System/Volumes/Data"
 MACOS_PRIVATE_ALIASES = ("/etc", "/tmp", "/var")
@@ -54,7 +59,8 @@ _PROCESS_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]{0,63}$")
 _EVENT = re.compile(
     r"^\s*\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+"
     r"(?P<operation>\S+)\s+(?P<details>.*?)\s+"
-    r"\d+\.\d+(?:\s+[A-Z]+)?\s+\S+\s*$"
+    r"\d+\.\d+(?:\s+[A-Z]+)?\s+"
+    r"(?P<process>\S+)\.(?P<thread_id>\d+)\s*$"
 )
 _ABSOLUTE_PATH = re.compile(
     r"(?<!\S)((?:/|[A-Za-z]:/)(?:[^\x00\r\n])*?)\s*$"
@@ -66,9 +72,15 @@ _DIRFD_ABSOLUTE_PATH = re.compile(
 _AT_FDCWD_RELATIVE_PATH = re.compile(
     r"(?:^|\s)\[\s*-2\s*\]/(?P<path>[^/\x00\r\n][^\x00\r\n]*?)\s*$"
 )
+_DIRFD_RELATIVE_PATH = re.compile(
+    r"(?:^|\s)\[\s*[0-9]+\s*\]/(?P<path>[^/\x00\r\n][^\x00\r\n]*?)\s*$"
+)
 _POSIX_DRIVE_PATH = re.compile(r"^[A-Za-z]:/")
 _OPEN_FLAGS = re.compile(r"\((?P<flags>[A-Z_]{2,32})\)")
 _MISSING_ERRNO = re.compile(r"\[\s*2\s*\]")
+_METADATA_PATH_PREFIX = re.compile(
+    r"^(?:\[\s*-?\d+\s*\]\s+)?(?:\([A-Z_]{2,32}\)\s+)?"
+)
 
 _READ_OPERATIONS = frozenset(
     {
@@ -86,6 +98,8 @@ _METADATA_OPERATIONS = frozenset(
         "access",
         "access_extended",
         "fstat",
+        "fstatat",
+        "fstatat64",
         "getattrlist",
         "lstat",
         "lstat64",
@@ -100,6 +114,24 @@ _DIRECTORY_OPERATIONS = frozenset(
 _EXEC_OPERATIONS = frozenset({"exec", "execve"})
 _CHILD_OPERATIONS = frozenset({"fork", "posix_spawn", "posix_spawnp", "vfork"})
 _MISSING_MARKERS = ("ENOENT", "Err#2", "No such file")
+_IGNORED_OPERATIONS = frozenset(
+    {"close", "fsgetpath", "fsync", "pwrite", "write", "write_nocancel"}
+)
+_DYLD_INTERNAL_PATHS = frozenset(
+    {
+        "/AppleInternal/XBS/.isChrooted",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Volumes/Preboot/Cryptexes/OS/usr/lib/libSystem.B.dylib",
+        "/dev/dtracehelper",
+    }
+)
+_DYLD_INTERNAL_DIRFD_PATHS = frozenset(
+    {
+        "/System/Library/dyld",
+        "/System/Volumes/Preboot/Cryptexes/OS",
+    }
+)
 
 FallbackExecutor = click_observer_common.FallbackExecutor
 BackendResolver = Callable[..., tuple[str | None, str]]
@@ -120,6 +152,9 @@ class ParsedTrace:
     child_process_count: int
     process_tree_complete: bool
     root_exec_observed: bool
+    # Kept only in memory for the authoritative adapter. Shadow records still
+    # persist repository-relative paths and an external count, never host paths.
+    absolute_inputs: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,11 +270,14 @@ def _file_digest(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _native_fs_usage(executable: str) -> bool:
+def native_fs_usage(executable: str) -> bool:
     try:
         return str(Path(executable).resolve(strict=True)) in NATIVE_FS_USAGE_PATHS
     except (OSError, RuntimeError, TypeError, ValueError):
         return False
+
+
+_native_fs_usage = native_fs_usage
 
 
 def _bounded_add(left: int, right: int) -> int:
@@ -447,14 +485,16 @@ def _candidate_path(details: str) -> str:
 
 
 def _bound_relative_candidate(operation_name: str, details: str) -> str:
-    """Return a cwd-relative open path only when its shape is unambiguous."""
+    """Return a cwd-relative pathname only when its shape is unambiguous."""
 
-    if operation_name == "openat":
+    if operation_name in {"fstatat", "fstatat64", "openat"}:
         match = _AT_FDCWD_RELATIVE_PATH.search(details)
         value = match.group("path").strip() if match is not None else ""
     elif operation_name == "open":
         flags = _OPEN_FLAGS.search(details)
         value = details[flags.end() :].strip() if flags is not None else ""
+    elif operation_name in (_METADATA_OPERATIONS - {"fstat"}):
+        value = _METADATA_PATH_PREFIX.sub("", details.strip()).strip()
     else:
         return ""
     if (
@@ -466,6 +506,51 @@ def _bound_relative_candidate(operation_name: str, details: str) -> str:
     ):
         return ""
     return value
+
+
+def _known_rootless_absolute_candidate(
+    value: str,
+    *,
+    workspace: Path,
+    absolute_roots: Sequence[Path | str],
+) -> str:
+    """Restore fs_usage's omitted leading slash only for indexed roots."""
+
+    if not value or value.startswith((".", "/", "\\")):
+        return ""
+    first_component = value.split("/", 1)[0]
+    try:
+        if (workspace / first_component).exists():
+            return ""
+        candidate = _canonical_macos_path("/" + value)
+    except (OSError, TypeError, ValueError):
+        return ""
+    for raw_root in absolute_roots:
+        try:
+            root = _canonical_macos_path(Path(raw_root).resolve().as_posix())
+        except (OSError, RuntimeError, TypeError, ValueError):
+            continue
+        if root != "/" and (
+            candidate == root or candidate.startswith(root.rstrip("/") + "/")
+        ):
+            return candidate
+    return ""
+
+
+def _dyld_internal_dirfd_lookup(operation_name: str, details: str) -> bool:
+    """Recognize fixed dyld startup directory opens with an opaque dirfd."""
+
+    if operation_name not in {"fstatat", "fstatat64", "openat"}:
+        return False
+    match = _DIRFD_RELATIVE_PATH.search(details)
+    if match is None:
+        return False
+    value = match.group("path").strip()
+    try:
+        normalized = posixpath.normpath("/" + value)
+    except (TypeError, ValueError):
+        return False
+    return normalized in _DYLD_INTERNAL_DIRFD_PATHS
 
 
 def _canonical_macos_path(path_text: str) -> str:
@@ -490,6 +575,10 @@ def parse_fs_usage(
     truncated: bool = False,
     root_execution_bound: bool = False,
     process_scope_complete: bool = True,
+    allow_workspace_root: bool = False,
+    root_thread_id: int | None = None,
+    relative_cwd_bound: bool = False,
+    absolute_roots: Sequence[Path | str] = (),
 ) -> ParsedTrace:
     """Parse bounded fs_usage text into content-free repository inputs."""
 
@@ -500,7 +589,9 @@ def parse_fs_usage(
     root_text = _canonical_macos_path(root_text)
     root = PurePosixPath(root_text)
     inputs: dict[str, dict[str, Any]] = {}
+    absolute_inputs: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()
+    absolute_conflicts: set[str] = set()
     external_digests: set[str] = set()
     unresolved = 1 if truncated else 0
     child_processes = 0
@@ -518,6 +609,25 @@ def parse_fs_usage(
         except (OSError, TypeError, ValueError):
             unresolved = _bounded_add(unresolved, 1)
             return
+        absolute_key = candidate.as_posix()
+        absolute = absolute_inputs.get(absolute_key)
+        if absolute is not None and absolute["kind"] != kind:
+            if {absolute["kind"], kind} <= {"file", "directory"}:
+                absolute["kind"] = "directory"
+            else:
+                absolute_conflicts.add(absolute_key)
+        elif absolute is None:
+            if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
+                unresolved = _bounded_add(unresolved, 1)
+            else:
+                absolute = {
+                    "path": absolute_key,
+                    "kind": kind,
+                    "operations": [],
+                }
+                absolute_inputs[absolute_key] = absolute
+        if absolute is not None and operation not in absolute["operations"]:
+            absolute["operations"].append(operation)
         try:
             relative = candidate.relative_to(root).as_posix()
         except ValueError:
@@ -536,10 +646,10 @@ def parse_fs_usage(
                     external_digests.add(digest)
             return
         if not relative or relative == ".":
-            unresolved = _bounded_add(unresolved, 1)
+            if not allow_workspace_root:
+                unresolved = _bounded_add(unresolved, 1)
             return
-        if kind == "directory" and not relative.endswith("/"):
-            relative += "/"
+        relative_key = relative.rstrip("/")
         try:
             encoded_relative = relative.encode("utf-8")
         except UnicodeEncodeError:
@@ -556,16 +666,24 @@ def parse_fs_usage(
         ):
             unresolved = _bounded_add(unresolved, 1)
             return
-        existing = inputs.get(relative)
+        existing = inputs.get(relative_key)
         if existing is not None and existing["kind"] != kind:
-            conflicts.add(relative)
-            return
+            if {existing["kind"], kind} <= {"file", "directory"}:
+                existing["kind"] = "directory"
+                existing["path"] = relative_key + "/"
+            else:
+                conflicts.add(relative_key)
+                return
         if existing is None:
             if len(inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
                 unresolved = _bounded_add(unresolved, 1)
                 return
-            existing = {"path": relative, "kind": kind, "operations": []}
-            inputs[relative] = existing
+            existing = {
+                "path": relative_key + "/" if kind == "directory" else relative_key,
+                "kind": kind,
+                "operations": [],
+            }
+            inputs[relative_key] = existing
         if operation not in existing["operations"]:
             existing["operations"].append(operation)
 
@@ -584,6 +702,14 @@ def parse_fs_usage(
             if re.match(r"^\s*\d{2}:\d{2}:\d{2}", line):
                 unresolved = _bounded_add(unresolved, 1)
             continue
+        if root_thread_id is not None:
+            try:
+                observed_thread_id = int(match.group("thread_id"))
+            except (IndexError, TypeError, ValueError):
+                unresolved = _bounded_add(unresolved, 1)
+                continue
+            if observed_thread_id != root_thread_id:
+                continue
         operation_name = match.group("operation").rstrip("*").lower()
         details = match.group("details")
         if operation_name in _CHILD_OPERATIONS:
@@ -624,11 +750,27 @@ def parse_fs_usage(
         if not path_text and root_execution_bound:
             relative_path = _bound_relative_candidate(operation_name, details)
             if relative_path:
-                path_text = posixpath.join(root_text, relative_path)
-                projected_relative_path = True
+                path_text = _known_rootless_absolute_candidate(
+                    relative_path,
+                    workspace=workspace,
+                    absolute_roots=absolute_roots,
+                )
+                if not path_text:
+                    path_text = posixpath.join(root_text, relative_path)
+                    projected_relative_path = True
+        if (
+            path_text
+            and _canonical_macos_path(path_text)
+            in (_DYLD_INTERNAL_PATHS | _DYLD_INTERNAL_DIRFD_PATHS)
+        ) or (
+            not path_text
+            and _dyld_internal_dirfd_lookup(operation_name, details)
+        ):
+            observed_operation = ""
+            ignored_operation = True
         if observed_operation and path_text:
             add_path(path_text, kind=kind, operation=observed_operation)
-            if projected_relative_path:
+            if projected_relative_path and not relative_cwd_bound:
                 # fs_usage may report the first VFS lookup as relative.  The
                 # suspended launch binds the initial cwd, so retain the useful
                 # repository candidate, but keep the observation partial: the
@@ -637,17 +779,18 @@ def parse_fs_usage(
                 unresolved = _bounded_add(unresolved, 1)
         elif observed_operation:
             unresolved = _bounded_add(unresolved, 1)
-        elif path_text and operation_name not in {
-            "close",
-            "fsync",
-            "pwrite",
-            "write",
-            "write_nocancel",
-        } and not ignored_operation:
+        elif (
+            path_text
+            and operation_name not in _IGNORED_OPERATIONS
+            and not ignored_operation
+        ):
             unresolved = _bounded_add(unresolved, 1)
 
     for relative in conflicts:
         inputs.pop(relative, None)
+        unresolved = _bounded_add(unresolved, 1)
+    for absolute in absolute_conflicts:
+        absolute_inputs.pop(absolute, None)
         unresolved = _bounded_add(unresolved, 1)
     if not root_exec_observed:
         unresolved = _bounded_add(unresolved, 1)
@@ -673,6 +816,14 @@ def parse_fs_usage(
         child_process_count=child_processes,
         process_tree_complete=process_tree_complete,
         root_exec_observed=root_exec_observed,
+        absolute_inputs=tuple(
+            {
+                "path": item["path"],
+                "kind": item["kind"],
+                "operations": sorted(item["operations"]),
+            }
+            for _, item in sorted(absolute_inputs.items())
+        ),
     )
 
 
@@ -721,7 +872,9 @@ def collect_command(
     resume_target: ResumeTarget = _resume_suspended_target,
     discard_suspended: DiscardTarget = _discard_suspended_target,
     terminate_group: TerminateGroup = click_process.terminate_process_group,
+    drain_wait: Callable[[float], None] = time.sleep,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
+    strict_pid_scope: bool = False,
 ) -> CollectedExecution:
     """Collect one PID-scoped trace while executing the target at most once."""
 
@@ -750,6 +903,33 @@ def collect_command(
             env=dict(environment),
         )
         collector_started = time.monotonic()
+        # ktrace's PID selection can stop producing events across the target's
+        # initial exec on current macOS runners.  Keep the command-name filter
+        # as a collection superset; the authoritative adapter accepts only the
+        # native companion's exact main-thread identifier from that stream.
+        filters = [str(target.pid), str(target.command_name)]
+        collector_environment = dict(environment)
+        original_pythonpath = collector_environment.get(
+            "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH", ""
+        )
+        pythonpath_present = (
+            collector_environment.get("CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT")
+            == "1"
+        )
+        for key in (
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_FORCE_FLAT_NAMESPACE",
+            "CLICK_NATIVE_OBSERVER_BOOTSTRAP",
+            "CLICK_NATIVE_OBSERVER_CHANNEL",
+            "CLICK_NATIVE_OBSERVER_ORIGINAL_PYTHONPATH",
+            "CLICK_NATIVE_OBSERVER_PYTHONPATH_PRESENT",
+            "CLICK_NATIVE_OBSERVER_ROOT",
+        ):
+            collector_environment.pop(key, None)
+        if pythonpath_present:
+            collector_environment["PYTHONPATH"] = original_pythonpath
+        else:
+            collector_environment.pop("PYTHONPATH", None)
         collector = spawn_argv(
             [
                 executable,
@@ -758,11 +938,10 @@ def collect_command(
                 "pathname",
                 "-f",
                 "exec",
-                str(target.pid),
-                str(target.command_name),
+                *filters,
             ],
             cwd=workspace,
-            env=dict(environment),
+            env=collector_environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
@@ -816,6 +995,8 @@ def collect_command(
                 failed = True
         if collector is not None and collector.poll() is None:
             try:
+                if target_started and not failed:
+                    drain_wait(COLLECTOR_DRAIN_SECONDS)
                 _stop_collector(collector, terminate_group=terminate_group)
             except Exception:
                 failed = True
@@ -840,7 +1021,9 @@ def collect_command(
             _bounded_add(collector_preparation_ms, collector_cleanup_ms),
             duration_ms,
         ),
-        process_scope_complete=False,
+        process_scope_complete=bool(
+            strict_pid_scope and target_started and not failed and not capture.truncated
+        ),
     )
 
 
@@ -856,7 +1039,7 @@ def run_command(
     execute_unobserved: FallbackExecutor,
     resolve_backend: BackendResolver,
     digest_file: FileDigester = _file_digest,
-    native_backend_probe: NativeBackendProbe = _native_fs_usage,
+    native_backend_probe: NativeBackendProbe = native_fs_usage,
     system_version: Callable[[], str] = probe_macos_version,
     privilege_probe: Callable[[], bool] = has_privilege,
     collector: Collector = collect_command,

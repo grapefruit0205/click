@@ -108,7 +108,7 @@ Evidence 模式下直接提出普通请求即可：
 
 ## 更新
 
-当前版本：**v0.82.0**
+当前版本：**v0.90.0**
 
 ~~~bash
 codex plugin marketplace upgrade click
@@ -137,11 +137,12 @@ codex plugin add click@click
 .click/evidence-dependencies.json
 ~~~
 
-已提交的映射决定每项检查的复用权限。明确列出的文件始终是硬依赖；当
-baseline 观察完整时，`*`、`**` 和目录前缀等扩展模式会收窄到检查实际读取的
-输入，并一起写入 receipt 的哈希。仅存在于工作区的映射修改不能缩小已提交的
-策略。如果观察不可用、失败、读取了外部输入，或未覆盖完整的子进程树，Click
-会在 mutation 之后重新执行检查。该文件仍非必需；没有映射时也会重新检查。
+已提交的映射声明每项检查的候选输入边界，但它本身不授予复用权限。明确列出的
+文件始终是硬依赖。只有在单独批准的 Guarded 合约中明确启用 authoritative
+观察并取得完整 baseline 后，`*`、`**` 和目录前缀等扩展模式才会收窄到检查
+实际读取的输入，并把所有观察输入写入 receipt 的哈希。仅存在于工作区的映射
+修改不能缩小已提交策略。观察缺失或不完整时，Click 会在 mutation 后重新执行
+检查。该文件仍非必需；没有映射时也会重新检查。
 
 对于 README 或文档等仓库明确知道不会影响某项检查的改动，可以提交无需
 observer 的安全改动策略：
@@ -167,11 +168,21 @@ Git 和插件自带的 Python，因此 Linux、macOS 与 Windows 都无需另装
 此列表是仓库所有者的明确策略，并不表示 Click 自动发现了全部依赖。
 已提交的 [Evidence Shards 映射](skills/click/references/evidence-shards-v1.md)可把一个精确 broad suite 拆成独立子项，并在后续 shard 失败时保留先前通过结果。该映射本身不能授权 mutation 后复用；上述规则仍逐项生效，映射无效时会执行原始 suite。
 
+对于受支持项目，`click-gate sharding init`、`sharding status` 与 `sharding refresh` 提供无需编写 JSON 的完整流程：选择命令、审阅 proposal、在 Evidence 中应用或经单独批准在 Guarded 中应用、由用户提交策略、执行 parent/child bootstrap，并记录 baseline evidence。实测成本规则会让短 suite 继续使用原 parent 命令。测试发现目标或测试结构变化后，Click 会生成受限 diff，并且只更新当前 bytes 仍与先前 Click 生成且已提交的 digest 谱系完全一致的策略。用户拥有或修改过的配置不会被覆盖，Click 也不执行 `git add`、`commit` 或 `push`。首次 bootstrap 属于设置成本；在每个子项都具备完整 authoritative 观察前，状态保持为 `sharding-ready / reuse-unavailable`。详见[自动分片设置](skills/click/references/automatic-sharding-setup.md)。
+
+[两个无配置项目的端到端记录](docs/auto-sharding-e2e.md)展示了真实的 Guarded A→B 模块变更、部分子项复用、相同最终代码的完整审计，以及短 fixture 中保留的负整体请求结果。
+
 Observer 默认关闭，并且与 Dashboard 独立。使用 `click-gate observer off`、
-`shadow`、`status` 控制；只有明确开启 `shadow` 后，兼容的真实检查才会附加原生
-收集器。Linux 使用 `strace`，已有权限的 macOS 使用 `fs_usage`，Windows 使用系统
-自带的 ETW 工具 `logman.exe` 与 `tracerpt.exe`。Click 不安装工具，也不提升权限。
-Shadow 预测本身绝不会授权跳过检查。Dashboard 分开显示真实执行、获得权威授权的
+`click-gate observer shadow`、`click-gate observer authoritative` 和
+`click-gate observer status` 控制。`shadow` 只是受支持 Linux、macOS 与 Windows
+后端的非权威遥测，不能授权跳过检查。`authoritative` 只可在单独批准的 Guarded
+合约中使用，并且只适用于 CPython 3.12.3 的直接 `python -m unittest` 检查。
+Linux 的精确 strace 6.8、macOS 的特权 `fs_usage` 与 Windows 内置 ETW profile
+都已在 CPython 3.12.3 原生主机上通过 authoritative 合约和跨合约复用验证。无配置
+自动分片的完整 E2E 范围仍为 Linux。每个 profile 都使用
+现有构建输入准备身份绑定的原生 companion，只执行一次原始检查，且只有完整、签名的
+输入 snapshot 才能授予复用权限。Click
+不安装工具，也不提升权限。详见 [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)。Dashboard 分开显示真实执行、获得权威授权的
 exact/dependency/policy 复用、根据最近运行估算的避免时间，以及 Shadow 潜在值。
 使用 `click-gate dashboard start`、`status`、`stop` 打开、查看或关闭。
 
@@ -179,7 +190,7 @@ exact/dependency/policy 复用、根据最近运行估算的避免时间，以�
 
 ## 完成 receipt
 
-版本说明：v0.82.0 已包含以下 Guarded 后续合约重新验证、receipt v5 和结果优先界面。
+版本说明：v0.90.0 新增持续且带成本门控的 unittest/pytest 分片设置、受限检查结果缓存，以及故障关闭的原生观察器配置。
 
 Guarded 的已完成合约 A 可以把真实成功结果作为候选交给新合约 B，但 B 必须使用新 ID 并在独立用户轮次中批准。重新核对当前请求、环境与既有策略后才能复用；批准、runner token、未完成工作和完成状态不会继承。实际应用跨合约复用时使用 receipt v5，保留原合约、检查批次、revision 和重新判定来源；旧版 v1–v4 继续兼容。Evidence 仍是默认模式。
 
@@ -235,7 +246,7 @@ README 有意保持简单。协议和架构细节放在以下文档：
 - [Guarded contract 格式](skills/click/references/directive-format.md)
 - [验证 profile](skills/click/references/verification-profiles.md)
 - [Capability protocol](skills/click/references/capability-protocol.md)
-- [Shadow Observer v1](skills/click/references/observer-v1.md)、[Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md) 与 [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
+- [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)、[Shadow Observer v1](skills/click/references/observer-v1.md)、[Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md) 与 [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Anti-loop policy](skills/click/references/anti-loop-policy.md)
 
 ## 许可证

@@ -140,6 +140,14 @@ class ClickObserverWindowsTests(unittest.TestCase):
         self.assertNotIn("C:\\Windows", rendered)
         self.assertNotIn(self.workspace_text, rendered)
         self.assertNotIn("unrelated", rendered)
+        self.assertEqual(
+            {item["path"] for item in parsed.absolute_inputs},
+            {
+                r"C:\Windows\System32\kernel32.dll",
+                r"C:\work\click\input.txt",
+                r"C:\work\click\pkg",
+            },
+        )
 
     def test_parser_uses_file_key_mapping_and_native_device_paths(self) -> None:
         raw = _document(
@@ -185,6 +193,186 @@ class ClickObserverWindowsTests(unittest.TestCase):
             ),
         )
         self.assertTrue(parsed.process_tree_complete)
+        self.assertEqual(
+            parsed.absolute_inputs,
+            (
+                {
+                    "path": r"C:\work\click\bound.txt",
+                    "kind": "file",
+                    "operations": ["metadata", "read"],
+                },
+            ),
+        )
+
+    def test_authoritative_parser_maps_file_objects_and_binds_root(self) -> None:
+        raw = _document(
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={"ProcessID": 100, "ParentProcessID": 50},
+            ),
+            _event(
+                FILE_PROVIDER,
+                12,
+                execution_pid=100,
+                data={"FileObject": "0x456", "FileName": self.workspace_text},
+            ),
+            _event(
+                FILE_PROVIDER,
+                20,
+                execution_pid=100,
+                data={
+                    "FileObject": "0x456",
+                    "FileKey": "0x789",
+                    "FileName": "*",
+                },
+            ),
+        )
+
+        shadow = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+        )
+        authoritative = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+            allow_workspace_root=True,
+        )
+
+        self.assertEqual(shadow.unresolved_event_count, 2)
+        self.assertFalse(shadow.process_tree_complete)
+        self.assertEqual(authoritative.unresolved_event_count, 0)
+        self.assertTrue(authoritative.process_tree_complete)
+        self.assertEqual(
+            authoritative.absolute_inputs,
+            (
+                {
+                    "path": self.workspace_text,
+                    "kind": "directory",
+                    "operations": ["enumerate", "read"],
+                },
+            ),
+        )
+
+    def test_parser_merges_directory_metadata_and_current_query_events(self) -> None:
+        raw = _document(
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={"ProcessID": 100, "ParentProcessID": 50},
+            ),
+            _event(
+                FILE_PROVIDER,
+                22,
+                execution_pid=100,
+                data={"FileName": r"C:\work\click\pkg"},
+            ),
+            _event(
+                FILE_PROVIDER,
+                20,
+                execution_pid=100,
+                data={"FileName": r"C:\work\click\pkg"},
+            ),
+            _event(
+                FILE_PROVIDER,
+                10,
+                execution_pid=100,
+                data={
+                    "FileKey": "0x321",
+                    "FileName": r"C:\work\click\input.txt",
+                },
+            ),
+            _event(
+                FILE_PROVIDER,
+                32,
+                execution_pid=100,
+                data={"FileObject": "0x321"},
+            ),
+            _event(
+                FILE_PROVIDER,
+                34,
+                execution_pid=100,
+                data={"FileObject": "0x321"},
+            ),
+        )
+
+        parsed = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+        )
+
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+        self.assertEqual(
+            parsed.inputs,
+            (
+                {
+                    "path": "input.txt",
+                    "kind": "file",
+                    "operations": ["metadata"],
+                },
+                {
+                    "path": "pkg/",
+                    "kind": "directory",
+                    "operations": ["enumerate", "metadata"],
+                },
+            ),
+        )
+
+    def test_parser_collapses_the_known_venv_interpreter_redirect(self) -> None:
+        raw = _document(
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={
+                    "ProcessID": 100,
+                    "ParentProcessID": 50,
+                    "ImageName": r"\Device\HarddiskVolume5\venv\python.exe",
+                },
+            ),
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={
+                    "ProcessID": 200,
+                    "ParentProcessID": 100,
+                    "ImageName": r"\Device\HarddiskVolume4\Python\python.exe",
+                },
+            ),
+            _event(
+                FILE_PROVIDER,
+                12,
+                execution_pid=200,
+                data={"FileName": r"C:\work\click\input.txt"},
+            ),
+        )
+
+        parsed = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+            device_paths={
+                r"\Device\HarddiskVolume4": "C:",
+                r"\Device\HarddiskVolume5": "D:",
+            },
+            transparent_child_images=(r"C:\Python\python.exe",),
+        )
+
+        self.assertEqual(parsed.child_process_count, 0)
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+        self.assertEqual(parsed.inputs[0]["path"], "input.txt")
 
     def test_parser_marks_loss_truncation_and_unknown_events_incomplete(self) -> None:
         raw = _document(
@@ -373,6 +561,58 @@ class ClickObserverWindowsTests(unittest.TestCase):
         self.assertTrue(result.failed)
         self.assertEqual(sum(call[1] == "start" for call in calls), 2)
         self.assertEqual(sum(call[1] == "stop" for call in calls), 2)
+
+        class InterruptingTarget(_FakeTarget):
+            def __init__(self) -> None:
+                super().__init__()
+                self.wait_timeouts: list[float | None] = []
+
+            def wait(self, timeout: float | None = None) -> int:
+                self.wait_calls += 1
+                self.wait_timeouts.append(timeout)
+                if self.wait_calls == 1:
+                    raise subprocess.TimeoutExpired("target", timeout)
+                raise KeyboardInterrupt
+
+        target = InterruptingTarget()
+        interrupted_calls: list[list[str]] = []
+        terminated: list[int] = []
+
+        def interrupt_control(argv: list[str], **_kwargs: object):
+            interrupted_calls.append(list(argv))
+            return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+        def terminate(child: _FakeTarget) -> int:
+            terminated.append(child.pid)
+            child.returncode = 130
+            return 130
+
+        interrupted = click_observer_windows.collect_command(
+            ["tool"],
+            workspace=Path.cwd(),
+            environment={},
+            logman_executable="logman.exe",
+            tracerpt_executable="tracerpt.exe",
+            run_control=interrupt_control,
+            spawn_argv=lambda *_args, **_kwargs: target,
+            terminate_group=terminate,
+            wait_for_sessions=lambda _seconds: None,
+        )
+
+        self.assertTrue(interrupted.target_started)
+        self.assertEqual(interrupted.exit_code, 130)
+        self.assertTrue(interrupted.failed)
+        self.assertEqual(terminated, [100])
+        self.assertEqual(
+            target.wait_timeouts,
+            [
+                click_observer_windows.TARGET_WAIT_POLL_SECONDS,
+                click_observer_windows.TARGET_WAIT_POLL_SECONDS,
+            ],
+        )
+        self.assertEqual(
+            sum(call[1] == "stop" for call in interrupted_calls), 2
+        )
 
     def test_unavailable_tools_use_fallback_exactly_once(self) -> None:
         fallback = mock.Mock(return_value=7)

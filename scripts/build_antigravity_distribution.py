@@ -13,6 +13,20 @@ DESTINATION = ROOT / "dist" / "antigravity"
 
 HOOK_FILES = (
     "__init__.py",
+    "click_auto_sharding.py",
+    "click_shard_proposal.py",
+    "click_sharding_setup.py",
+    "click_authoritative_observer.py",
+    "click_observation_inputs.py",
+    "click_observation_cache.py",
+    "click_observer_runtime.py",
+    "click_observer_bootstrap.py",
+    "click_observer_native.c",
+    "click_collector_runtime.py",
+    "click_test_inventory.py",
+    "click_unittest_collector.py",
+    "click_pytest_collector.py",
+    "click_dependency_candidates.py",
     "click_browser.py",
     "click_browser_advisory.py",
     "click_capability.py",
@@ -58,6 +72,8 @@ HOOK_FILES = (
     "platform_protocol.py",
     "antigravity_gate.py",
 )
+ANTIGRAVITY_HOOK_EXCLUDES = frozenset({"click_hook.py", "click_windows.py"})
+ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c"})
 CLICK_REFERENCE_FILES = (
     "modes.md",
     "translation-guide.md",
@@ -65,11 +81,44 @@ CLICK_REFERENCE_FILES = (
     "anti-loop-policy.md",
     "verification-profiles.md",
     "capability-protocol.md",
+    "authoritative-observer-v2.md",
+    "automatic-sharding-setup.md",
     "observer-v1.md",
     "shadow-intelligence-v1.md",
     "evidence-shards-v1.md",
     "antigravity.md",
 )
+
+
+def hook_manifest_errors(root: Path = ROOT) -> list[str]:
+    """Find unclassified runtime sources before a distribution can omit them."""
+    hook_root = root / "hooks"
+    source_files = {path.name for path in hook_root.glob("*.py")}
+    source_files.update(
+        name
+        for name in ANTIGRAVITY_EXTRA_HOOK_SOURCES
+        if (hook_root / name).is_file()
+    )
+    expected = source_files - ANTIGRAVITY_HOOK_EXCLUDES
+    declared = set(HOOK_FILES)
+    errors: list[str] = []
+    if len(declared) != len(HOOK_FILES):
+        errors.append("Antigravity hook manifest contains duplicate entries")
+    missing = sorted(expected - declared)
+    extra = sorted(declared - expected)
+    absent_exclusions = sorted(ANTIGRAVITY_HOOK_EXCLUDES - source_files)
+    if missing:
+        errors.append("Antigravity hook manifest omits: " + ", ".join(missing))
+    if extra:
+        errors.append(
+            "Antigravity hook manifest has unknown entries: " + ", ".join(extra)
+        )
+    if absent_exclusions:
+        errors.append(
+            "Antigravity hook exclusions are stale: "
+            + ", ".join(absent_exclusions)
+        )
+    return errors
 
 RUNTIME_NOTE = """
 ## Google Antigravity runtime
@@ -106,6 +155,9 @@ def rendered_skill(skill_name: str) -> str:
 
 
 def build(destination: Path = DESTINATION) -> Path:
+    manifest_errors = hook_manifest_errors(ROOT)
+    if manifest_errors:
+        raise ValueError("; ".join(manifest_errors))
     destination = destination.resolve()
     expected_parent = (ROOT / "dist").resolve()
     if destination.parent != expected_parent or destination.name != "antigravity":

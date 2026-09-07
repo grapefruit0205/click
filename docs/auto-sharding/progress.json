@@ -1,0 +1,322 @@
+{
+  "workflow": "auto-sharding-reuse-v1",
+  "current_phase": 5,
+  "completed_phases": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "status": "completed",
+  "approval_gate": {
+    "id": "phase-3-to-5",
+    "status": "approved",
+    "contract_id": "ctr_4a75fae62dfcdf2116f5506d0a006398",
+    "authority": "Click Hook passed this exact ID after explicit user approval; checkpoint is not authority."
+  },
+  "phase_results": {
+    "0": {
+      "status": "completed",
+      "verification": [
+        "Manual requirement-by-requirement phase-0.md audit of the saved auto-sharding-plan.md: all four completion conditions and required sections covered.",
+        "All original user-file hashes unchanged.",
+        "All seven workflow/specification files byte-identical to the supplied source.",
+        "Actual Hook state approved for ctr_dba22b2e9573102454b7b6c143c7b42d after explicit user approval."
+      ],
+      "changed_files": [
+        "docs/auto-sharding-plan.md",
+        "docs/auto-sharding/phase-0.md through phase-5.md",
+        "docs/auto-sharding/workflow.json",
+        "docs/auto-sharding/progress.json"
+      ],
+      "tests_run": [],
+      "blocker": null
+    },
+    "1": {
+      "status": "completed",
+      "verification": [
+        "Actual Click E_TESTS: python3 -m unittest discover -s tests -q: 708 tests, OK, 5 environment-dependent skips, 353.457 seconds.",
+        "Actual Click E_TESTS: git diff --check passed.",
+        "Two independent Git fixtures, library/nested layouts, filters and spaces use real bounded TestLoader subprocess collection, including the shipped entrypoint.",
+        "Import/custom loader/load_tests/dynamic/unstable/duplicate/empty/error/mutation/timeout/output and project-boundary cases passed; unknown dependencies remain candidate-only.",
+        "All 16 original user files still byte-identical to the initial snapshot."
+      ],
+      "changed_files": [
+        "hooks/click_test_inventory.py",
+        "hooks/click_unittest_collector.py",
+        "hooks/click_dependency_candidates.py",
+        "hooks/click_auto_sharding.py",
+        "tests/test_click_auto_sharding.py",
+        "scripts/build_antigravity_distribution.py",
+        "dist/antigravity/hooks/click_auto_sharding.py",
+        "dist/antigravity/hooks/click_test_inventory.py",
+        "dist/antigravity/hooks/click_unittest_collector.py",
+        "dist/antigravity/hooks/click_dependency_candidates.py"
+      ],
+      "blocker": null
+    },
+    "2": {
+      "status": "completed",
+      "verification": [
+        "Actual Click E_TESTS: python3 -m unittest discover -s tests -q: 719 tests, OK, 5 environment-dependent skips, 395.954 seconds.",
+        "Actual Click E_TESTS: git diff --check passed.",
+        "Independent retail and nested science projects generated v1 shard/dependency proposals without handwritten shard JSON; real parent/child test-ID multisets and source/module/context identities matched.",
+        "Missing/duplicate/invalid children, whole-module/class fixtures, shared fixtures/global state, new/deleted tests, stable regeneration, non-root cwd, existing config preservation, unknown and bounded split cases passed.",
+        "Source and shipped proposal CLI both passed; all five shipped adapter files are byte-identical to source.",
+        "Manual phase-2.md completion audit passed; proposal-ready and reuse-ready remain separate, static candidates do not grant authority.",
+        "All 16 original user files and all seven supplied workflow/specification files remain byte-identical.",
+        "This final checkpoint mutation requires one final exact E_TESTS request before E_SPEC completion and staging. Current Hook receipts, not this checkpoint, determine evidence validity.",
+        "Final checkpoint revision 22: Click E_SPEC manual attestation completed and exact E_TESTS rerun passed 719 tests, 5 skips, 394.223 seconds plus git diff --check before staging the successor contract."
+      ],
+      "changed_files": [
+        "hooks/click_shard_proposal.py",
+        "hooks/click_auto_sharding.py",
+        "hooks/click_test_inventory.py",
+        "hooks/click_dependency_candidates.py",
+        "tests/test_click_shard_proposal.py",
+        "scripts/build_antigravity_distribution.py",
+        "dist/antigravity/hooks/click_shard_proposal.py",
+        "dist/antigravity/hooks/click_auto_sharding.py",
+        "dist/antigravity/hooks/click_test_inventory.py",
+        "dist/antigravity/hooks/click_dependency_candidates.py",
+        "docs/auto-sharding-proposals.md",
+        "docs/auto-sharding/progress.json"
+      ],
+      "proposal_examples": [
+        {
+          "project": "retail library fixture",
+          "tests": 3,
+          "shards": 2,
+          "parent": "python3 -m unittest discover -s tests -q",
+          "dependencies": [
+            "retail/constants.py",
+            "retail/prices.py",
+            "pyproject.toml"
+          ]
+        },
+        {
+          "project": "nested science fixture",
+          "tests": 2,
+          "shards": 2,
+          "parent": "python3 -m unittest discover -s checks -t . -p case_*.py -k works -q",
+          "dependencies": [
+            "science/units/length.py"
+          ]
+        }
+      ],
+      "reuse_ready": false,
+      "actual_reuse_claim": null,
+      "blocker": null
+    },
+    "3": {
+      "status": "completed",
+      "verification": [
+        "Actual installed Linux CPython 3.12.3 and exact strace 6.8 passed the real ptrace capability probe; the identity-bound native companion builds from already installed headers/compiler without installation or elevation.",
+        "The real one-use verification runner issues signed runtime-dependency-observation-v2 evidence from a separate authoritative path; caller JSON, static proposals, Shadow records and dashboards cannot mint authority.",
+        "A real separately approved contract A/B scenario ran two independent shards, reused only the unaffected shard after an unrelated source change, reran the related shard, and reran both after shared config changed; approval and runner authority were not inherited.",
+        "Actual backend and boundary tests cover file/content/metadata inputs, directory membership, missing lookup, symlink, executable/interpreter/runtime identities, create/delete/rename, new import candidate, environment drift, time, child process, native/dynamic access, event loss, observer absence, forged evidence and Shadow contamination.",
+        "Pre-start observer absence executes the original command once through fallback; post-start observation failure preserves the original PASS/FAIL result and never reruns the test for telemetry.",
+        "Focused Gate regression passed 92 tests; authoritative, dependency, platform-observer, policy and distribution groups passed 140 tests with 2 environment-dependent skips across the latest focused runs.",
+        "The first locked full-suite attempt exposed one Shadow projection regression: a lexical symlink needed only by authoritative snapshots leaked into Shadow v1 inputs. The parser now retains it only in transient absolute_inputs, the legacy projection is unchanged, and the focused parser/authoritative/distribution regression group passed 27 tests.",
+        "A strace-version probe test now clears its mocked LRU value during cleanup, preventing its synthetic 6.1 identity from contaminating later real-backend tests in an alternate module order.",
+        "Source and Antigravity distribution include the authoritative runtime, input model and v2 reference; multilingual README, Skill, mode and capability documentation state the exact support and authority boundary.",
+        "All pre-existing user edits remain layered in place; the four originally modified source/distribution hook pairs were byte-identical at intake and distribution regeneration copied their current source counterparts without a reset.",
+        "The locked exact E_TESTS group then passed: 734 tests, 5 environment-dependent skips, 430.542 seconds; git diff --check also passed."
+      ],
+      "changed_files": [
+        "hooks/click_authoritative_observer.py",
+        "hooks/click_observation_inputs.py",
+        "hooks/click_observer_native.c",
+        "hooks/click_observer_runtime.py",
+        "hooks/click_observer_linux.py",
+        "hooks/click_dependency_cache.py",
+        "hooks/click_observer_control.py",
+        "hooks/click_dashboard_projection.py",
+        "hooks/click_incremental.py",
+        "hooks/click_lifecycle.py",
+        "hooks/click_gate.py",
+        "hooks/click_verification.py",
+        "tests/test_click_authoritative_observer.py",
+        "tests/test_click_authoritative_reuse.py",
+        "tests/test_click_dependency_trace.py",
+        "tests/test_click_gate_verification.py",
+        "tests/test_click_observer_control.py",
+        "tests/test_repository_policy.py",
+        "scripts/build_antigravity_distribution.py",
+        "skills/click/SKILL.md",
+        "skills/click/references/authoritative-observer-v2.md",
+        "skills/click/references/capability-protocol.md",
+        "skills/click/references/modes.md",
+        "skills/click/references/observer-v1.md",
+        "README.md",
+        "README.ko.md",
+        "README.zh-CN.md",
+        "dist/antigravity/hooks/click_authoritative_observer.py",
+        "dist/antigravity/hooks/click_observation_inputs.py",
+        "dist/antigravity/hooks/click_observer_native.c",
+        "dist/antigravity/hooks/click_observer_runtime.py",
+        "dist/antigravity/hooks/click_observer_linux.py",
+        "dist/antigravity/hooks/click_dependency_cache.py",
+        "dist/antigravity/hooks/click_observer_control.py",
+        "dist/antigravity/hooks/click_dashboard_projection.py",
+        "dist/antigravity/hooks/click_incremental.py",
+        "dist/antigravity/hooks/click_lifecycle.py",
+        "dist/antigravity/hooks/click_gate.py",
+        "dist/antigravity/hooks/click_verification.py",
+        "dist/antigravity/skills/click/SKILL.md",
+        "dist/antigravity/skills/click/references/authoritative-observer-v2.md",
+        "dist/antigravity/skills/click/references/capability-protocol.md",
+        "dist/antigravity/skills/click/references/modes.md",
+        "dist/antigravity/skills/click/references/observer-v1.md",
+        "docs/auto-sharding/progress.json"
+      ],
+      "reuse_ready": true,
+      "actual_reuse_claim": {
+        "profile": "linux-cpython3123-strace68-v1",
+        "provider": "runtime-dependency-observation-v2",
+        "scope": "separately approved Guarded contracts with current complete signed observations",
+        "result": "one unaffected shard reused; related and shared-input shards reran"
+      },
+      "blocker": null
+    },
+    "4": {
+      "status": "completed",
+      "verification": [
+        "The JSON-free click-gate sharding init|status|refresh flow covers selection, approved proposal generation, a separately approved digest-bound application, commit confirmation, parent/child bootstrap, baseline evidence, sharding-ready/reuse-unavailable, and reuse-ready.",
+        "A real end-to-end Gate test used two Guarded contracts and an unconfigured Git fixture, rejected unapproved init, preserved the Git index during application, required the exact user commit, ran the real parent and generated children, prepared the installed Linux CPython 3.12.3 / strace 6.8 observer, and reached reuse-ready from complete child v2 observations.",
+        "Direct state-machine tests cover idempotent status/generation, proposal digest and fixed evidence binding, unsupported commands, bootstrap failure, ordinary source edits, added-test drift, existing user-policy preservation, partial-target no-overwrite behavior, and concurrent initialization.",
+        "Dashboard projection v6 retains v4/v5 read compatibility, keeps the result-first primary order, and shows setup, observation, processing, request, parent/shard, and signed comparison details without labeling the first baseline as savings or hiding a negative comparison.",
+        "Focused setup tests passed 7 tests; authoritative/Gate regressions passed 112 tests; dashboard, distribution, repository-policy, and Antigravity groups passed 73 tests with 1 environment-dependent skip.",
+        "Source and Antigravity distribution include the setup controller and reference, and multilingual README plus Skill, mode, and capability documentation describe the approval, Git, baseline, fallback, and authority boundaries.",
+        "Manual phase-4.md audit passed every completion condition. The final locked full suite and specification audit remain Phase 5 work."
+      ],
+      "changed_files": [
+        "hooks/click_sharding_setup.py",
+        "hooks/click_lifecycle.py",
+        "hooks/click_gate.py",
+        "hooks/click_verification.py",
+        "hooks/click_dashboard_projection.py",
+        "hooks/click_shadow_dashboard.py",
+        "tests/test_click_sharding_setup.py",
+        "tests/test_click_dashboard_projection.py",
+        "tests/test_click_shadow_dashboard.py",
+        "scripts/build_antigravity_distribution.py",
+        "skills/click/SKILL.md",
+        "skills/click/references/automatic-sharding-setup.md",
+        "skills/click/references/capability-protocol.md",
+        "skills/click/references/modes.md",
+        "README.md",
+        "README.ko.md",
+        "README.zh-CN.md",
+        "docs/auto-sharding-setup.md",
+        "dist/antigravity/hooks/click_sharding_setup.py",
+        "dist/antigravity/hooks/click_lifecycle.py",
+        "dist/antigravity/hooks/click_gate.py",
+        "dist/antigravity/hooks/click_verification.py",
+        "dist/antigravity/hooks/click_dashboard_projection.py",
+        "dist/antigravity/hooks/click_shadow_dashboard.py",
+        "dist/antigravity/skills/click/SKILL.md",
+        "dist/antigravity/skills/click/references/automatic-sharding-setup.md",
+        "dist/antigravity/skills/click/references/capability-protocol.md",
+        "dist/antigravity/skills/click/references/modes.md",
+        "docs/auto-sharding/progress.json"
+      ],
+      "reuse_ready": true,
+      "blocker": null
+    },
+    "5": {
+      "status": "completed",
+      "verification": [
+        "Two setting-free Git projects completed the public sharding init/status/refresh flow without handwritten policy JSON. Each used a separately approved baseline contract A and successor contract B, a real Hook-recorded library change, the original parent request, actual partial child execution/reuse, provenance checks, and a same-final-code full parent audit.",
+        "The library fixture executed 1 of 2 generated shards and reused 1; the nested science fixture executed 1 of 3 and reused 2. Test-count reuse was 50% in both, shard reuse was 50% and 66.67%, and compatible timing coverage was 1/1 and 2/2.",
+        "One representative no-sleep run estimated 447.93 ms and 975.04 ms of omitted test execution. Same-final-code direct parent wall minus Click request wall was -1669.67 ms and -1732.13 ms; the negative whole-request results and distinct measurement scopes are retained.",
+        "Initial setup measured 2330.23 ms and 3089.72 ms. Bootstrap parent-minus-sequential-child comparisons were -48.34 ms and -112.13 ms and remain labeled setup comparisons; isolated observer setup cost and live management overhead remain unmeasured rather than zero.",
+        "The canonical Python savings object exactly matched dashboard current/per-batch projections and the emitted host summary. The focused Node UI/export group also checked the same fields and labels in JSON and standalone HTML.",
+        "Phase 5 setup integration passed 8 tests in 29.610 seconds. Gate, dependency-trace, and native-observer safety regressions passed 114 tests in 144.015 seconds. Dashboard, efficiency, distribution, repository-policy, and Antigravity regressions passed 99 tests with 1 environment-dependent skip in 26.419 seconds. Proposal discovery passed 11 tests in 21.173 seconds, and the added shared lockfile invalidation case passed directly in 11.372 seconds.",
+        "A preliminary module-list invocation ran 37 tests without product failures but exited 1 because test_click_shard_proposal expects the discovery-added sibling import path. Its exact standard-discovery rerun passed all 11 tests; the final locked full suite uses standard discovery.",
+        "Source and Antigravity setup controller/reference bytes match after the final distribution build. HEAD remains ea7ce2c0073da4031a6bf0dc9d2f37f7094d6e1a, the development Git index is empty, and no commit, push, install, deploy, or publish occurred.",
+        "The exact final E_TESTS group and manual E_AUDIT are deliberately executed after this last project mutation; only the resulting Click Hook evidence, not this checkpoint, establishes their validity.",
+        "Release validation on CPython 3.12.3 native macOS and Windows hosts passed the authoritative contract and cross-contract reuse suite; the Phase 5 setting-free automatic-sharding E2E remains Linux-scoped."
+      ],
+      "changed_files": [
+        "tests/test_click_sharding_setup.py",
+        "tests/test_click_authoritative_reuse.py",
+        "docs/auto-sharding-e2e.md",
+        "docs/auto-sharding-setup.md",
+        "docs/revalidation-savings-plan.md",
+        "docs/auto-sharding/progress.json",
+        "skills/click/references/automatic-sharding-setup.md",
+        "README.md",
+        "README.ko.md",
+        "README.zh-CN.md",
+        "dist/antigravity/skills/click/references/automatic-sharding-setup.md"
+      ],
+      "projects": [
+        {
+          "layout": "app plus tests",
+          "tests": 2,
+          "generated_shards": 2,
+          "executed_shards": 1,
+          "reused_shards": 1,
+          "test_count_reuse_rate": 0.5,
+          "shard_reuse_rate": 0.5,
+          "avoided_test_execution_ms": 447.926976,
+          "click_request_wall_ms": 1727.074675,
+          "same_final_code_full_wall_ms": 57.401392,
+          "signed_net_comparison_ms": -1669.673283
+        },
+        {
+          "layout": "science plus nested checks unit",
+          "tests": 4,
+          "generated_shards": 3,
+          "executed_shards": 1,
+          "reused_shards": 2,
+          "test_count_reuse_rate": 0.5,
+          "shard_reuse_rate": 0.6666666666666666,
+          "avoided_test_execution_ms": 975.0407029999999,
+          "click_request_wall_ms": 1788.660755,
+          "same_final_code_full_wall_ms": 56.52817,
+          "signed_net_comparison_ms": -1732.132585
+        }
+      ],
+      "support": "Linux CPython 3.12.3 direct unittest discovery with exact strace 6.8 and the identity-bound native companion",
+      "release_validation": {
+        "scope": "Native authoritative contract and cross-contract reuse; separate from the Phase 5 setting-free automatic-sharding E2E",
+        "environments": [
+          "macOS CPython 3.12.3 with privileged fs_usage and the DYLD native audit companion",
+          "Windows CPython 3.12.3 with inbox ETW and the native audit extension"
+        ],
+        "result": "passed"
+      },
+      "unverified": [
+        "setting-free automatic-sharding E2E on macOS and Windows",
+        "other Python versions and test frameworks",
+        "parallel runners",
+        "positive whole-request speedup"
+      ],
+      "reuse_ready": true,
+      "blocker": null
+    }
+  },
+  "repository": {
+    "workflow_source": "/home/grapefruit/docs/auto-sharding",
+    "implementation_checkout": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+    "head": "ea7ce2c0073da4031a6bf0dc9d2f37f7094d6e1a",
+    "selection": "User explicitly selected this existing checkout; preserve its original 15 dirty files and docs/revalidation-savings-plan.md."
+  },
+  "conflicts": [
+    "The saved project named click points to a workflow-only non-Git directory. Existing Click checkouts are older and one contains user changes; propose a separate current-source checkout within the first contract.",
+    "The active default is Evidence, while the user explicitly requires Guarded approval. Arm this task without changing the persistent default.",
+    "Write this non-authoritative approval-required checkpoint before staging. A staged Guarded contract prohibits subsequent project mutation, so the emitted contract ID must remain in the authoritative Hook state until approval permits checkpoint synchronization.",
+    "Resolved checkout ambiguity by explicit user selection. Synchronize the workflow source checkpoint with the selected repository checkpoint after approval."
+  ],
+  "final_audit": {
+    "tests_evidence_id": "E_TESTS",
+    "manual_evidence_id": "E_AUDIT",
+    "authority": "The Click evidence recorded after this final checkpoint, not progress.json, determines final test and audit completion."
+  },
+  "blocker": null,
+  "next_phase": null
+}

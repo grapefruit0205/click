@@ -138,10 +138,11 @@ def group_digest(checks: Any) -> str:
 
 
 def _manifest_group_digest(value: Any) -> str:
+    """Compatibility wrapper around the canonical dependency-policy digest."""
     normalized, error = _normalize_argv_group(value)
     if error or normalized is None:
         return ""
-    return _digest({"checks": [{"argv": argv} for argv in normalized]})
+    return click_dependency_cache.manifest_group_digest(normalized)
 
 
 def _source_key(evidence_id: str) -> str:
@@ -191,8 +192,8 @@ def _matched_paths(patterns: tuple[str, ...], paths: list[str]) -> list[str]:
 
 def _unittest_discovery_spec(
     parent_checks: list[list[str]],
-) -> tuple[tuple[str, str] | None, str]:
-    """Return ``(start directory, pattern)`` for one unittest discover check."""
+) -> tuple[tuple[str, tuple[str, ...]] | None, str]:
+    """Return ``(start directory, patterns)`` for one unittest discover check."""
     if len(parent_checks) != 1:
         return None, ""
     argv = parent_checks[0]
@@ -268,6 +269,8 @@ def _unittest_discovery_spec(
         pattern = positionals[1]
     start = start or "."
     pattern = pattern or "test*.py"
+    if os.name == "nt":
+        start = start.replace("\\", "/")
     if (
         not start
         or not pattern
@@ -280,7 +283,64 @@ def _unittest_discovery_spec(
         or "\\" in pattern
     ):
         return None, "parent-discovery-arguments-unsupported"
-    return (start, pattern), ""
+    return (start, (pattern,)), ""
+
+
+def _pytest_discovery_spec(
+    parent_checks: list[list[str]],
+) -> tuple[tuple[str, tuple[str, ...]] | None, str]:
+    if len(parent_checks) != 1 or not parent_checks[0]:
+        return None, ""
+    argv = parent_checks[0]
+    executable = Path(argv[0]).name.lower()
+    index = 1
+    if executable in {"py", "py.exe"} and index < len(argv) and re.fullmatch(
+        r"-3(?:\.\d+)?", argv[index]
+    ):
+        index += 1
+    if not re.fullmatch(r"python(?:3(?:\.\d+)?)?(?:\.exe)?", executable) and executable not in {"py", "py.exe"}:
+        return None, ""
+    if argv[index : index + 2] != ["-m", "pytest"]:
+        return None, ""
+    arguments = argv[index + 2 :]
+    flags = {
+        "-q", "--quiet", "-v", "--verbose", "--strict-markers",
+        "--strict-config", "--disable-warnings",
+    }
+    value_options = {"-k", "-m", "--maxfail", "--tb"}
+    positionals: list[str] = []
+    cursor = 0
+    while cursor < len(arguments):
+        value = arguments[cursor]
+        if value in flags:
+            cursor += 1
+            continue
+        if value in value_options:
+            if cursor + 1 >= len(arguments) or not arguments[cursor + 1]:
+                return None, "parent-discovery-arguments-unsupported"
+            cursor += 2
+            continue
+        if value.startswith(("--maxfail=", "--tb=")) and value.partition("=")[2]:
+            cursor += 1
+            continue
+        if value.startswith("-") or "::" in value:
+            return None, "parent-discovery-arguments-unsupported"
+        positionals.append(value)
+        cursor += 1
+    if len(positionals) > 1:
+        return None, "parent-discovery-arguments-unsupported"
+    start = positionals[0] if positionals else "."
+    if os.name == "nt":
+        start = start.replace("\\", "/")
+    if (
+        not start
+        or "\x00" in start
+        or "\\" in start
+        or PurePosixPath(start).is_absolute()
+        or any(part in {"", ".."} for part in PurePosixPath(start).parts)
+    ):
+        return None, "parent-discovery-arguments-unsupported"
+    return (start, ("test_*.py", "*_test.py")), ""
 
 
 def _parent_discovery_paths(
@@ -290,9 +350,11 @@ def _parent_discovery_paths(
     working_prefix: str,
 ) -> tuple[set[str] | None, str]:
     spec, error = _unittest_discovery_spec(parent_checks)
+    if not error and spec is None:
+        spec, error = _pytest_discovery_spec(parent_checks)
     if error or spec is None:
         return None, error
-    start, pattern = spec
+    start, patterns = spec
     start_parts = [] if start == "." else list(PurePosixPath(start).parts)
     prefix_parts = (
         [] if not working_prefix else list(PurePosixPath(working_prefix).parts)
@@ -306,7 +368,10 @@ def _parent_discovery_paths(
         for relative in repository_paths
         if (not prefix or relative.startswith(prefix))
         and relative.endswith(".py")
-        and fnmatch.fnmatchcase(PurePosixPath(relative).name, pattern)
+        and any(
+            fnmatch.fnmatchcase(PurePosixPath(relative).name, pattern)
+            for pattern in patterns
+        )
     }, ""
 
 

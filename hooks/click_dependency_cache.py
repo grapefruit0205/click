@@ -20,6 +20,11 @@ import re
 import stat
 from typing import Any
 
+if __package__:
+    from . import click_observation_inputs
+else:
+    import click_observation_inputs
+
 
 CONFIG_RELATIVE_PATH = ".click/evidence-dependencies.json"
 CONFIG_VERSION = 1
@@ -45,6 +50,45 @@ OBSERVATION_FIELDS = frozenset(
         "process_tree_complete",
     }
 )
+AUTHORITATIVE_OBSERVATION_PROVIDER_NAME = "runtime-dependency-observation-v2"
+AUTHORITATIVE_OBSERVATION_PROFILE = click_observation_inputs.PROFILE
+AUTHORITATIVE_OBSERVATION_PROFILES = click_observation_inputs.PROFILES
+AUTHORITATIVE_PROFILE_BACKENDS = {
+    click_observation_inputs.PROFILE: ("strace", "6.8"),
+    click_observation_inputs.DARWIN_PROFILE: ("fs_usage", None),
+    click_observation_inputs.WINDOWS_PROFILE: ("windows-etw", None),
+}
+AUTHORITATIVE_OBSERVATION_FIELDS = frozenset({
+    "provider", "status", "profile", "paths", "external_access",
+    "child_processes", "process_tree_complete", "backend", "companion",
+    "binding", "inputs", "ineligibility_reasons",
+})
+AUTHORITATIVE_BINDING_FIELDS = frozenset({
+    "evidence_key", "check_digest", "mutation_revision", "cwd_digest",
+    "workspace_root_digest", "workspace_tree_digest", "environment_digest",
+    "executable_digest", "host_coverage_digest", "policy_digest",
+    "shard_digest", "contract_digest", "execution_digest",
+})
+AUTHORITATIVE_CURRENT_BINDING_FIELDS = frozenset({
+    "evidence_key", "check_digest", "cwd_digest", "workspace_root_digest",
+    "environment_digest", "executable_digest", "host_coverage_digest",
+    "policy_digest", "shard_digest",
+})
+AUTHORITATIVE_BACKEND_FIELDS = frozenset({"name", "version", "digest"})
+AUTHORITATIVE_COMPANION_FIELDS = frozenset({
+    "artifact_digest", "source_digest", "compiler_digest",
+})
+AUTHORITATIVE_INELIGIBILITY_REASONS = frozenset({
+    "backend-changed", "backend-unavailable", "capture-failed",
+    "child-process-unsupported", "descriptor-operation-needs-review",
+    "concurrent-execution-unsupported",
+    "dynamic-runtime-introspection", "event-loss", "external-or-native-input",
+    "inherited-descriptor-input", "input-snapshot-failed",
+    "native-companion-unavailable", "native-profile-unavailable",
+    "observer-introspection-or-tampering", "process-tree-incomplete",
+    "time-random-input", "unresolved-event", "unsupported-command",
+    "unsupported-runtime",
+})
 MAX_CONFIG_BYTES = 256 * 1024
 
 SHADOW_OBSERVER_SCHEMA_VERSION = 1
@@ -128,7 +172,8 @@ def _group_digest(checks: list[dict[str, Any]]) -> str:
     return _digest({"checks": payload}) if payload else ""
 
 
-def _manifest_group_digest(value: Any) -> str:
+def manifest_group_digest(value: Any) -> str:
+    """Return the canonical digest for one repository manifest argv group."""
     if not isinstance(value, list) or not value:
         return ""
     checks: list[dict[str, Any]] = []
@@ -141,6 +186,10 @@ def _manifest_group_digest(value: Any) -> str:
             return ""
         checks.append({"argv": list(argv)})
     return _group_digest(checks)
+
+
+# Compatibility for releases that imported the prior private helper.
+_manifest_group_digest = manifest_group_digest
 
 
 def _valid_pattern(pattern: Any) -> bool:
@@ -315,6 +364,8 @@ def unavailable_dependency_observation(*, failed: bool = False) -> dict[str, Any
 
 
 def dependency_observation_is_valid(value: Any) -> bool:
+    if authoritative_dependency_observation_is_valid(value):
+        return True
     if not isinstance(value, dict) or set(value) != OBSERVATION_FIELDS:
         return False
     child_processes = value.get("child_processes")
@@ -332,6 +383,8 @@ def dependency_observation_is_valid(value: Any) -> bool:
 
 def dependency_observation_is_complete(value: Any) -> bool:
     """Return whether runtime observation can safely support evidence reuse."""
+    if authoritative_dependency_observation_is_valid(value):
+        return authoritative_dependency_observation_is_complete(value)
     return bool(
         dependency_observation_is_valid(value)
         and value.get("status") == "complete"
@@ -349,7 +402,14 @@ def combine_dependency_observations(values: Iterable[Any]) -> dict[str, Any]:
     observations = list(values)
     if not observations:
         return unavailable_dependency_observation()
-    if any(not dependency_observation_is_valid(value) for value in observations):
+    # V2 observations bind one original execution and are never merged from
+    # caller-provided JSON.  The supported authoritative profile uses exactly
+    # one command per evidence source.
+    if any(
+        not dependency_observation_is_valid(value)
+        or value.get("provider") != OBSERVATION_PROVIDER_NAME
+        for value in observations
+    ):
         return unavailable_dependency_observation(failed=True)
     statuses = {str(value["status"]) for value in observations}
     status = (
@@ -372,6 +432,177 @@ def combine_dependency_observations(values: Iterable[Any]) -> dict[str, Any]:
             value["process_tree_complete"] for value in observations
         ),
     )
+
+
+def _authoritative_digest(value: Any) -> bool:
+    return bool(isinstance(value, str) and _SHA256_DIGEST.fullmatch(value))
+
+
+def authoritative_dependency_observation(
+    *,
+    status: str,
+    paths: Iterable[str],
+    child_processes: int,
+    process_tree_complete: bool,
+    backend: dict[str, Any] | None,
+    companion: dict[str, Any] | None,
+    binding: dict[str, Any],
+    inputs: list[dict[str, Any]],
+    ineligibility_reasons: Iterable[str] = (),
+    profile: str = AUTHORITATIVE_OBSERVATION_PROFILE,
+) -> dict[str, Any]:
+    value = {
+        "provider": AUTHORITATIVE_OBSERVATION_PROVIDER_NAME,
+        "status": status,
+        "profile": profile,
+        "paths": sorted(set(paths)),
+        "external_access": False,
+        "child_processes": child_processes,
+        "process_tree_complete": process_tree_complete,
+        "backend": backend,
+        "companion": companion,
+        "binding": binding,
+        "inputs": inputs,
+        "ineligibility_reasons": sorted(set(ineligibility_reasons)),
+    }
+    if not authoritative_dependency_observation_is_valid(value):
+        raise ValueError("invalid authoritative dependency observation")
+    return value
+
+
+def authoritative_dependency_observation_is_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != AUTHORITATIVE_OBSERVATION_FIELDS:
+        return False
+    if (
+        value.get("provider") != AUTHORITATIVE_OBSERVATION_PROVIDER_NAME
+        or value.get("profile") not in AUTHORITATIVE_OBSERVATION_PROFILES
+        or value.get("status") not in OBSERVATION_STATUSES
+        or not observation_paths_are_valid(value.get("paths"))
+        or value.get("external_access") is not False
+        or not isinstance(value.get("child_processes"), int)
+        or isinstance(value.get("child_processes"), bool)
+        or value.get("child_processes", -1) < 0
+        or not isinstance(value.get("process_tree_complete"), bool)
+    ):
+        return False
+    backend = value.get("backend")
+    companion = value.get("companion")
+    expected_backend = AUTHORITATIVE_PROFILE_BACKENDS.get(value.get("profile"))
+    if (
+        expected_backend is None
+        or
+        not isinstance(backend, dict)
+        or set(backend) != AUTHORITATIVE_BACKEND_FIELDS
+        or backend.get("name") != expected_backend[0]
+        or (
+            expected_backend[1] is not None
+            and backend.get("version") != expected_backend[1]
+        )
+        or not isinstance(backend.get("version"), str)
+        or _SHADOW_BACKEND_VERSION.fullmatch(backend["version"]) is None
+        or not _authoritative_digest(backend.get("digest"))
+        or not isinstance(companion, dict)
+        or set(companion) != AUTHORITATIVE_COMPANION_FIELDS
+        or any(not _authoritative_digest(companion.get(field)) for field in companion)
+    ):
+        return False
+    binding = value.get("binding")
+    if (
+        not isinstance(binding, dict)
+        or set(binding) != AUTHORITATIVE_BINDING_FIELDS
+        or not isinstance(binding.get("mutation_revision"), int)
+        or isinstance(binding.get("mutation_revision"), bool)
+        or binding.get("mutation_revision", -1) < 0
+        or any(
+            not _authoritative_digest(binding.get(field))
+            for field in AUTHORITATIVE_BINDING_FIELDS - {"mutation_revision"}
+        )
+    ):
+        return False
+    reasons = value.get("ineligibility_reasons")
+    if (
+        not isinstance(reasons, list)
+        or reasons != sorted(set(reasons))
+        or any(reason not in AUTHORITATIVE_INELIGIBILITY_REASONS for reason in reasons)
+        or not isinstance(value.get("inputs"), list)
+    ):
+        return False
+    complete = value.get("status") == "complete"
+    if complete != (not reasons):
+        return False
+    if complete and (
+        value.get("process_tree_complete") is not True
+        or value.get("child_processes") != 0
+        or not click_observation_inputs.records_valid(value.get("inputs"))
+    ):
+        return False
+    if not complete and value.get("inputs") and not click_observation_inputs.records_valid(value["inputs"]):
+        return False
+    projected = []
+    for row in value.get("inputs", []):
+        if row.get("root") != "project" or not row.get("path"):
+            continue
+        projected.append(
+            row["path"] + "/" if row.get("kind") == "directory" else row["path"]
+        )
+    return value.get("paths") == sorted(set(projected))
+
+
+def authoritative_dependency_observation_is_complete(value: Any) -> bool:
+    return bool(
+        authoritative_dependency_observation_is_valid(value)
+        and value.get("status") == "complete"
+        and value.get("process_tree_complete") is True
+        and value.get("child_processes") == 0
+        and not value.get("ineligibility_reasons")
+    )
+
+
+def authoritative_dependency_observation_matches(
+    value: Any,
+    *,
+    project: Path,
+    runtime: Any,
+    binding: Any,
+) -> bool:
+    if (
+        not authoritative_dependency_observation_is_valid(value)
+        or not isinstance(runtime, dict)
+        or set(runtime) != {
+            "version", "profile", "artifact_id", "artifact_digest", "source_digest",
+            "compiler_digest", "backend",
+        }
+        or runtime.get("version") != 1
+        or runtime.get("profile") not in AUTHORITATIVE_OBSERVATION_PROFILES
+        or not isinstance(binding, dict)
+        or set(binding) != AUTHORITATIVE_CURRENT_BINDING_FIELDS
+        or any(not _authoritative_digest(binding.get(field)) for field in binding)
+    ):
+        return False
+    expected_companion = {
+        field: runtime.get(field)
+        for field in AUTHORITATIVE_COMPANION_FIELDS
+    }
+    if (
+        value.get("profile") != runtime.get("profile")
+        or value.get("backend") != runtime.get("backend")
+        or value.get("companion") != expected_companion
+    ):
+        return False
+    observed_binding = value["binding"]
+    if any(observed_binding.get(field) != binding[field] for field in binding):
+        return False
+    if authoritative_dependency_observation_is_complete(value):
+        artifact_id = runtime.get("artifact_id")
+        if not isinstance(artifact_id, str):
+            return False
+        return click_observation_inputs.records_current(
+            project,
+            artifact_id,
+            value["inputs"],
+            profile=str(runtime["profile"]),
+        )
+    return True
 
 
 def _shadow_text(
@@ -912,7 +1143,7 @@ def _load_repository(
     for entry in raw_entries:
         if not isinstance(entry, dict) or set(entry) != {"checks", "paths"}:
             return None
-        group_digest = _manifest_group_digest(entry.get("checks"))
+        group_digest = manifest_group_digest(entry.get("checks"))
         paths, error = normalize_patterns(entry.get("paths"))
         if not group_digest or group_digest in entries or error or paths is None:
             return None
@@ -925,12 +1156,50 @@ def _load_repository(
     )
 
 
+def observation_policy_bindings(
+    cwd: Path,
+    grouped_checks: dict[str, list[dict[str, Any]]],
+    *,
+    declarations: dict[str, list[str] | tuple[str, ...]] | None = None,
+    git_capture: GitCapture,
+) -> dict[str, str]:
+    """Bind the exact check group to its approved/committed dependency policy."""
+    loaded = _load_repository(cwd, git_capture)
+    if loaded is None:
+        return {}
+    _, _, entries, _ = loaded
+    approved = declarations or {}
+    output: dict[str, str] = {}
+    for source_key, checks in grouped_checks.items():
+        if not isinstance(source_key, str):
+            continue
+        manifest_patterns = entries.get(_group_digest(checks), ())
+        raw_declared = approved.get(source_key, ())
+        if raw_declared:
+            declared_patterns, error = normalize_patterns(list(raw_declared))
+            if error or declared_patterns is None:
+                continue
+        else:
+            declared_patterns = ()
+        if not declared_patterns and not manifest_patterns:
+            continue
+        output[source_key] = _digest({
+            "checks": [check["argv"] for check in checks],
+            "contract_paths": list(declared_patterns),
+            "manifest_paths": list(manifest_patterns),
+        })
+    return output
+
+
 def receipts_for_groups(
     cwd: Path,
     grouped_checks: dict[str, list[dict[str, Any]]],
     *,
     declarations: dict[str, list[str] | tuple[str, ...]] | None = None,
     observations: dict[str, dict[str, Any]] | None = None,
+    authoritative_only: bool = False,
+    authoritative_runtime: dict[str, Any] | None = None,
+    authoritative_bindings: dict[str, dict[str, Any]] | None = None,
     git_capture: GitCapture,
 ) -> dict[str, dict[str, Any]]:
     """Return manifest-plus-observation receipts, or `{}` on ambiguity."""
@@ -963,14 +1232,32 @@ def receipts_for_groups(
             provider = CONTRACT_PROVIDER_NAME
         else:
             provider = MANIFEST_PROVIDER_NAME
+        entry_payload = {
+            "checks": [check["argv"] for check in checks],
+            "contract_paths": list(declared_patterns),
+            "manifest_paths": list(manifest_patterns),
+        }
+        entry_digest = _digest(entry_payload)
         raw_observation = observed.get(source_key)
         if raw_observation is None:
             observation = unavailable_dependency_observation()
+        elif authoritative_only:
+            binding = (authoritative_bindings or {}).get(source_key)
+            if (
+                isinstance(binding, dict)
+                and binding.get("policy_digest") == entry_digest
+                and authoritative_dependency_observation_matches(
+                    raw_observation,
+                    project=root,
+                    runtime=authoritative_runtime,
+                    binding=binding,
+                )
+            ):
+                observation = json.loads(json.dumps(raw_observation))
+            else:
+                observation = unavailable_dependency_observation(failed=True)
         elif dependency_observation_is_valid(raw_observation):
-            observation = {
-                **raw_observation,
-                "paths": list(raw_observation["paths"]),
-            }
+            observation = json.loads(json.dumps(raw_observation))
         else:
             observation = unavailable_dependency_observation(failed=True)
         # Approval-bound contract paths are always hard dependencies. With a
@@ -1015,12 +1302,6 @@ def receipts_for_groups(
         resolved_paths = sorted(declared_closure | observed_closure)
         if not resolved_paths:
             continue
-        entry_payload = {
-            "checks": [check["argv"] for check in checks],
-            "contract_paths": list(declared_patterns),
-            "manifest_paths": list(manifest_patterns),
-        }
-        entry_digest = _digest(entry_payload)
         hasher = hashlib.sha256()
         hasher.update(provider.encode())
         hasher.update(entry_digest.encode())

@@ -2,13 +2,38 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 from pathlib import Path
 import unittest
+from unittest import mock
 
 from hooks import click_gate, click_inspection, click_inspection_policy
 
 
 class ClickInspectionTests(unittest.TestCase):
+    def test_read_only_environment_drops_loader_and_ripgrep_configuration(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "RIPGREP_CONFIG_PATH": "/tmp/untrusted-ripgrep-config",
+                "LD_PRELOAD": "/tmp/untrusted-loader.so",
+                "CLICK_PRESERVED": "yes",
+            },
+        ):
+            environment = click_inspection.sanitized_read_only_environment()
+
+        self.assertNotIn("RIPGREP_CONFIG_PATH", environment)
+        self.assertNotIn("LD_PRELOAD", environment)
+        self.assertEqual(environment["CLICK_PRESERVED"], "yes")
+
+    def test_local_execution_argv_does_not_mutate_validated_request(self) -> None:
+        request = ["cat", "README.md"]
+        prepared = click_inspection.execution_argv(request)
+        self.assertEqual(prepared, request)
+        self.assertIsNot(prepared, request)
+        prepared[0] = "/usr/bin/cat"
+        self.assertEqual(request, ["cat", "README.md"])
+
     def test_inspection_depends_only_on_policy_capability_and_process_leaves(self) -> None:
         source = Path(click_inspection.__file__).read_text(encoding="utf-8")
         imported: set[str] = set()
@@ -97,6 +122,40 @@ class ClickInspectionTests(unittest.TestCase):
         self.assertEqual(error, "")
         self.assertTrue(broad)
         self.assertEqual(request, {"version": 1, "commands": [["rg", "--files"]]})
+
+        request, broad, error = click_inspection_policy.validate_request(
+            json.dumps(
+                {
+                    "version": 1,
+                    "commands": [["cat", "README.md"]],
+                    "fresh": True,
+                }
+            )
+        )
+        self.assertEqual(error, "")
+        self.assertFalse(broad)
+        self.assertEqual(
+            request,
+            {
+                "version": 1,
+                "commands": [["cat", "README.md"]],
+                "fresh": True,
+            },
+        )
+        request, broad, error = click_inspection_policy.validate_request(
+            json.dumps(
+                {
+                    "version": 1,
+                    "commands": [["cat", "README.md"]],
+                    "fresh": "yes",
+                }
+            )
+        )
+        self.assertIsNone(request)
+        self.assertFalse(broad)
+        self.assertEqual(
+            error, "Inspection `fresh` must be a boolean when provided."
+        )
 
 
 if __name__ == "__main__":

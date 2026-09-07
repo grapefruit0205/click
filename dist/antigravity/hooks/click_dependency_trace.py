@@ -53,6 +53,7 @@ MacOSCollector = click_observer_macos.Collector
 WindowsCollector = Callable[..., click_observer_windows.CollectedExecution]
 
 select_backend = click_observer_backend.select_backend
+platform_support = click_observer_backend.support_report
 run_unobserved = click_observer_common.run_unobserved
 combine_records = click_observer_common.combine_records
 fresh_state = click_observer_common.fresh_state

@@ -77,6 +77,30 @@ class ClickObserverBackendTests(unittest.TestCase):
                 reason="invalid",
             )
 
+    def test_support_report_separates_common_shadow_and_authoritative_tiers(self) -> None:
+        linux = click_observer_backend.support_report("Linux")
+        self.assertEqual(linux["base_reuse"]["status"], "implemented")
+        self.assertEqual(linux["static_configuration"]["status"], "implemented")
+        self.assertEqual(linux["shadow_observer"]["backend"], "strace")
+        self.assertEqual(
+            linux["authoritative_observer"]["status"], "profile-implemented"
+        )
+
+        for system in ("Darwin", "Windows"):
+            with self.subTest(system=system):
+                report = click_observer_backend.support_report(
+                    system, macos_privileged=False
+                )
+                self.assertEqual(report["base_reuse"]["status"], "implemented")
+                self.assertEqual(report["static_configuration"]["status"], "implemented")
+                self.assertEqual(
+                    report["authoritative_observer"]["status"],
+                    "profile-implemented",
+                )
+                self.assertIn(
+                    "real-host-validation-required",
+                    report["authoritative_observer"]["reason"],
+                )
     def test_unavailable_facade_executes_target_once_without_backend_probe(self) -> None:
         calls: list[str] = []
         for system in ("Darwin", "OtherOS"):

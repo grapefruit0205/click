@@ -39,6 +39,200 @@ def spawned_child(
 
 
 class ClickGateInspectionTests(ClickGateTestCase):
+    def observation_entry(self, request: dict[str, object]) -> dict[str, object]:
+        state_path = next(
+            (self.plugin_data / "gate-state").glob("session-contract-*.json")
+        )
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        return state["observations"]["entries"][CLICK_CAPABILITY.digest(request)]
+
+    def test_supported_cat_cache_reuses_once_and_fresh_bypasses_it(self) -> None:
+        target = self.workspace / "notes.txt"
+        target.write_text("alpha\nbeta\n", encoding="utf-8")
+        request = {"version": 1, "commands": [["cat", "notes.txt"]]}
+
+        first = self.pre_tool(
+            "Bash", "cat notes.txt", "turn-1", tool_use_id="cat-first"
+        )
+        assert first is not None
+        first_result = self.run_rewritten(first)
+        self.assertEqual(first_result.returncode, 0, first_result.stderr)
+        self.assertEqual(first_result.stdout, "alpha\nbeta\n")
+        first_entry = self.observation_entry(request)
+        self.assertEqual(first_entry["status"], "success")
+        self.assertTrue(first_entry["actual_process_executed"])
+        self.assertEqual(first_entry["cache_status"], "stored", first_entry)
+        self.assertRegex(first_entry["cache_key"], r"^[0-9a-f]{64}$")
+
+        second = self.pre_tool(
+            "Bash", "cat notes.txt", "turn-1", tool_use_id="cat-second"
+        )
+        self.assert_observation_advisory(second, "already succeeded")
+        second_result = self.run_rewritten(second)
+        self.assertEqual(second_result.returncode, 0, second_result.stderr)
+        self.assertEqual(second_result.stdout, first_result.stdout)
+        self.assertIn("no read/search child process ran", second_result.stderr)
+        self.assertIn("Sources: notes.txt", second_result.stderr)
+        self.assertIn(
+            f"stdout {first_entry['output_bytes']} bytes / 2 lines",
+            second_result.stderr,
+        )
+        second_entry = self.observation_entry(request)
+        self.assertEqual(second_entry["status"], "reused")
+        self.assertFalse(second_entry["actual_process_executed"])
+        self.assertEqual(second_entry["cache_reuse_count"], 1)
+        self.assertTrue(second_entry["cache_notice_shown"])
+        self.assertEqual(second_entry["output_bytes"], first_entry["output_bytes"])
+
+        third = self.pre_tool(
+            "Bash", "cat notes.txt", "turn-1", tool_use_id="cat-third"
+        )
+        assert third is not None
+        third_result = self.run_rewritten(third)
+        self.assertEqual(third_result.returncode, 0, third_result.stderr)
+        self.assertEqual(third_result.stdout, first_result.stdout)
+        self.assertNotIn("[Click cache]", third_result.stderr)
+        self.assertEqual(self.observation_entry(request)["cache_reuse_count"], 2)
+
+        fresh_request = {**request, "fresh": True}
+        command = f"click-gate inspect {shlex.quote(json.dumps(fresh_request))}"
+        fresh = self.pre_tool(
+            "Bash", command, "turn-1", tool_use_id="cat-fresh"
+        )
+        assert fresh is not None
+        fresh_result = self.run_rewritten(fresh)
+        self.assertEqual(fresh_result.returncode, 0, fresh_result.stderr)
+        self.assertEqual(fresh_result.stdout, first_result.stdout)
+        fresh_entry = self.observation_entry(fresh_request)
+        self.assertEqual(fresh_entry["status"], "success")
+        self.assertTrue(fresh_entry["actual_process_executed"])
+
+        target.write_text("alpha\nchanged\n", encoding="utf-8")
+        changed = self.pre_tool(
+            "Bash", "cat notes.txt", "turn-1", tool_use_id="cat-changed"
+        )
+        assert changed is not None
+        changed_result = self.run_rewritten(changed)
+        self.assertEqual(changed_result.stdout, "alpha\nchanged\n")
+        self.assertNotIn("[Click cache]", changed_result.stderr)
+        self.assertTrue(self.observation_entry(request)["actual_process_executed"])
+
+    def test_rg_directory_cache_invalidates_inventory_changes(self) -> None:
+        sources = self.workspace / "src"
+        sources.mkdir()
+        first_path = sources / "a.txt"
+        first_path.write_text("needle one\n", encoding="utf-8")
+        request = {"version": 1, "commands": [["rg", "-n", "needle", "src"]]}
+
+        first = self.inspect_gate(request["commands"], "turn-1")
+        first_result = self.run_rewritten(first)
+        self.assertEqual(first_result.returncode, 0, first_result.stderr)
+        repeated = self.inspect_gate(request["commands"], "turn-1")
+        repeated_result = self.run_rewritten(repeated)
+        self.assertIn("[Click cache]", repeated_result.stderr)
+        self.assertFalse(self.observation_entry(request)["actual_process_executed"])
+
+        second_path = sources / "b.txt"
+        second_path.write_text("needle two\n", encoding="utf-8")
+        added = self.inspect_gate(request["commands"], "turn-1")
+        added_result = self.run_rewritten(added)
+        self.assertIn("a.txt", added_result.stdout)
+        self.assertIn("b.txt", added_result.stdout)
+        self.assertNotIn("[Click cache]", added_result.stderr)
+        self.assertTrue(self.observation_entry(request)["actual_process_executed"])
+
+        first_path.rename(sources / "renamed.txt")
+        renamed = self.inspect_gate(request["commands"], "turn-1")
+        renamed_result = self.run_rewritten(renamed)
+        self.assertIn("renamed.txt", renamed_result.stdout)
+        self.assertNotIn("a.txt", renamed_result.stdout)
+        self.assertTrue(self.observation_entry(request)["actual_process_executed"])
+
+        second_path.unlink()
+        deleted = self.inspect_gate(request["commands"], "turn-1")
+        deleted_result = self.run_rewritten(deleted)
+        self.assertNotIn("b.txt", deleted_result.stdout)
+        self.assertTrue(self.observation_entry(request)["actual_process_executed"])
+
+    def test_supported_sed_range_reuses_only_the_same_range(self) -> None:
+        target = self.workspace / "lines.txt"
+        target.write_text("one\ntwo\nthree\n", encoding="utf-8")
+        first_request = {
+            "version": 1,
+            "commands": [["sed", "-n", "1,2p", "lines.txt"]],
+        }
+        first = self.inspect_gate(first_request["commands"], "turn-1")
+        first_result = self.run_rewritten(first)
+        self.assertEqual(first_result.stdout, "one\ntwo\n")
+        repeated = self.inspect_gate(first_request["commands"], "turn-1")
+        repeated_result = self.run_rewritten(repeated)
+        self.assertEqual(repeated_result.stdout, first_result.stdout)
+        self.assertIn("[Click cache]", repeated_result.stderr)
+        self.assertFalse(
+            self.observation_entry(first_request)["actual_process_executed"]
+        )
+
+        other_request = {
+            "version": 1,
+            "commands": [["sed", "-n", "2,3p", "lines.txt"]],
+        }
+        other = self.inspect_gate(other_request["commands"], "turn-1")
+        other_result = self.run_rewritten(other)
+        self.assertEqual(other_result.stdout, "two\nthree\n")
+        self.assertNotIn("[Click cache]", other_result.stderr)
+        self.assertTrue(
+            self.observation_entry(other_request)["actual_process_executed"]
+        )
+
+    def test_incomplete_and_corrupt_cache_fall_back_to_real_read(self) -> None:
+        small = self.workspace / "small.txt"
+        small.write_text("cached\n", encoding="utf-8")
+        request = {"version": 1, "commands": [["cat", "small.txt"]]}
+        first = self.inspect_gate(request["commands"], "turn-1")
+        self.assertEqual(self.run_rewritten(first).returncode, 0)
+        cache_key = self.observation_entry(request)["cache_key"]
+        cache_path = (
+            self.plugin_data
+            / "observation-cache-v1"
+            / f"{cache_key}.json"
+        )
+        cache_path.write_text("{broken", encoding="utf-8")
+        recovered = self.inspect_gate(request["commands"], "turn-1")
+        recovered_result = self.run_rewritten(recovered)
+        self.assertEqual(recovered_result.stdout, "cached\n")
+        self.assertNotIn("[Click cache]", recovered_result.stderr)
+        recovered_entry = self.observation_entry(request)
+        self.assertEqual(recovered_entry["status"], "success")
+        self.assertTrue(recovered_entry["actual_process_executed"])
+
+        large = self.workspace / "large.txt"
+        large.write_text("x" * 50_000, encoding="utf-8")
+        large_request = {"version": 1, "commands": [["cat", "large.txt"]]}
+        for index in range(2):
+            payload = self.inspect_gate(large_request["commands"], "turn-1")
+            result = self.run_rewritten(payload)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("output exceeded 48,000 bytes", result.stderr)
+            entry = self.observation_entry(large_request)
+            self.assertEqual(entry["status"], "incomplete")
+            self.assertTrue(entry["actual_process_executed"])
+            self.assertEqual(entry["cache_key"], "")
+
+        no_match = self.workspace / "no-match.txt"
+        no_match.write_text("haystack\n", encoding="utf-8")
+        failed_request = {
+            "version": 1,
+            "commands": [["rg", "needle", "no-match.txt"]],
+        }
+        for index in range(2):
+            payload = self.inspect_gate(failed_request["commands"], "turn-1")
+            result = self.run_rewritten(payload)
+            self.assertEqual(result.returncode, 1)
+            entry = self.observation_entry(failed_request)
+            self.assertEqual(entry["status"], "failed")
+            self.assertTrue(entry["actual_process_executed"])
+            self.assertEqual(entry["cache_key"], "")
+
     def test_hook_payload_writer_is_safe_for_legacy_windows_code_pages(self) -> None:
         stdout = mock.Mock()
         with mock.patch.object(CLICK_GATE.sys, "stdout", stdout):
@@ -1114,3 +1308,12 @@ class ClickGateInspectionTests(ClickGateTestCase):
         self.assertEqual(environment["GIT_OPTIONAL_LOCKS"], "0")
         self.assertEqual(environment["GIT_CONFIG_NOSYSTEM"], "1")
         self.assertEqual(environment["GIT_CONFIG_GLOBAL"], os.devnull)
+
+        with mock.patch.dict(
+            os.environ,
+            {"RIPGREP_CONFIG_PATH": str(self.workspace / "unsafe-rg-config")},
+        ):
+            read_environment = CLICK_INSPECTION.sanitized_read_only_environment(
+                workspace=self.workspace
+            )
+        self.assertNotIn("RIPGREP_CONFIG_PATH", read_environment)

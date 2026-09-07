@@ -1,0 +1,46 @@
+{
+  "id": "auto-sharding-reuse-v1",
+  "title": "Click automatic sharding and cross-contract reuse",
+  "phase_root": "docs/auto-sharding",
+  "progress_file": "docs/auto-sharding/progress.json",
+  "phases": [
+    {
+      "id": 0,
+      "file": "docs/auto-sharding/phase-0.md",
+      "approval_gate": "phase-0-to-2"
+    },
+    {
+      "id": 1,
+      "file": "docs/auto-sharding/phase-1.md",
+      "approval_gate": null
+    },
+    {
+      "id": 2,
+      "file": "docs/auto-sharding/phase-2.md",
+      "approval_gate": null
+    },
+    {
+      "id": 3,
+      "file": "docs/auto-sharding/phase-3.md",
+      "approval_gate": "phase-3-to-5"
+    },
+    {
+      "id": 4,
+      "file": "docs/auto-sharding/phase-4.md",
+      "approval_gate": null
+    },
+    {
+      "id": 5,
+      "file": "docs/auto-sharding/phase-5.md",
+      "approval_gate": null
+    }
+  ],
+  "transition_policy": {
+    "on_phase_success": "advance",
+    "on_phase_failure": "stop",
+    "on_approval_required": "stage_contract_and_stop",
+    "skip_phase": false,
+    "future_phase_preimplementation": false
+  },
+  "completion": "all phases completed and final audit passed"
+}

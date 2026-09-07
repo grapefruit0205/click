@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -22,6 +23,7 @@ if __package__:
         click_dependency_trace,
         click_incremental,
         click_observer_control,
+        click_sharding_setup,
         click_shadow_intelligence,
     )
 else:  # Executed beside the bundled hook modules.
@@ -29,10 +31,13 @@ else:  # Executed beside the bundled hook modules.
     import click_dependency_trace
     import click_incremental
     import click_observer_control
+    import click_sharding_setup
     import click_shadow_intelligence
 
 
-PROJECTION_VERSION = 4
+PROJECTION_VERSION = 6
+LEGACY_PROJECTION_VERSION = 4
+LEGACY_PROJECTION_VERSIONS = frozenset({4, 5})
 PROJECTION_MODE = "incremental-verification"
 MAX_SOURCES = click_shadow_intelligence.MAX_STATE_SOURCES
 MAX_INPUTS = click_shadow_intelligence.MAX_PROJECTION_INPUTS
@@ -51,9 +56,11 @@ _INPUT_STATUSES = frozenset(
     {"current-observed", "changed", "baseline-only", "newly-observed"}
 )
 
-_FIELDS = frozenset(
+_V4_FIELDS = frozenset(
     {"version", "mode", "generated_at", "task", "summary", "sources", "map", "batches", "history", "accounting", "controls", "engine"}
 )
+_V5_FIELDS = _V4_FIELDS | {"batch_summaries"}
+_FIELDS = _V5_FIELDS | {"setup"}
 _TASK_FIELDS = frozenset(
     {
         "runtime_mode",
@@ -64,7 +71,25 @@ _TASK_FIELDS = frozenset(
         "name", "promises", "in_scope", "out_of_scope", "must_hold", "contract_id", "approval_bound",
     }
 )
-_SUMMARY_FIELDS = frozenset({"incremental", "shadow"})
+_LEGACY_SUMMARY_FIELDS = frozenset({"incremental", "shadow"})
+_SUMMARY_FIELDS = _LEGACY_SUMMARY_FIELDS | {"revalidation_savings"}
+_BATCH_SUMMARY_FIELDS = frozenset({"incremental", "revalidation_savings"})
+_SETUP_FIELDS = frozenset(
+    {
+        "version",
+        "status",
+        "sharding_ready",
+        "reuse_ready",
+        "reuse_status",
+        "initial_setup_ms",
+        "observation_ms",
+        "click_processing_ms",
+        "bootstrap_parent_ms",
+        "bootstrap_shards_ms",
+        "comparison_net_ms",
+        "comparison_scope",
+    }
+)
 _INCREMENTAL_FIELDS = frozenset(click_incremental.SUMMARY_FIELDS) | {"current_source_count"}
 _TIME_FIELDS = frozenset({"executed_duration_ms", "estimated_avoided_ms", "request_wall_ms", "measured_processing_ms"})
 _SHADOW_FIELDS = frozenset(
@@ -328,7 +353,13 @@ def dashboard_projection(
             presentation_history.get(origin_contract) if isinstance(presentation_history, dict) else None
         )
         duration_baseline = result.get("duration_baseline")
-        if result.get("status") == "reused" and click_incremental.baseline_is_valid(duration_baseline):
+        if (
+            result.get("status") == "reused"
+            and click_incremental.timing_baseline_is_valid(duration_baseline)
+            and duration_baseline["source_key"] == key
+            and duration_baseline["check_digest"]
+            == result.get("check_digest")
+        ):
             estimated_avoided_ms = duration_baseline["duration_ms"]
 
         observer = observer_records.get(key, {})
@@ -451,6 +482,23 @@ def dashboard_projection(
     incremental["current_source_count"] = sum(
         _source_status(evidence_sources.get(key)) == "passed" for key in plan_keys
     )
+    visible_batches = history[-MAX_RECENT_BATCHES:]
+    batch_summaries = {
+        item["batch_id"]: {
+            "incremental": click_incremental.batch_summary(item),
+            "revalidation_savings": click_incremental.revalidation_savings(item),
+        }
+        for item in visible_batches
+    }
+    current_savings = (
+        click_incremental.revalidation_savings(batch)
+        if batch is not None
+        else click_incremental.unmeasured_revalidation_savings(
+            requested_source_count=(
+                plan["total_source_count"] if plan is not None else None
+            )
+        )
+    )
     observer_control = click_observer_control.projection(verification)
     runtime_mode = raw_state.get("runtime_mode")
     if runtime_mode not in {"evidence", "guarded"}:
@@ -487,10 +535,15 @@ def dashboard_projection(
         "engine": engine_identity(),
         "summary": {
             "incremental": incremental,
+            "revalidation_savings": current_savings,
             "shadow": _shadow_metrics(intelligence),
         },
         "sources": sources,
-        "batches": history[-MAX_RECENT_BATCHES:],
+        "batches": visible_batches,
+        "batch_summaries": batch_summaries,
+        "setup": click_sharding_setup.dashboard_setup_projection(
+            raw_state.get("auto_sharding_setup")
+        ),
         "history": {
             "totals": click_incremental.history_totals(verification),
             "retained_batch_count": len(history),
@@ -506,7 +559,8 @@ def dashboard_projection(
         },
     }
     while projection["batches"] and len(_canonical_bytes(projection)) > MAX_BYTES:
-        projection["batches"].pop(0)
+        removed = projection["batches"].pop(0)
+        projection["batch_summaries"].pop(removed["batch_id"], None)
     projection["history"]["visible_batch_count"] = len(projection["batches"])
     if len(_canonical_bytes(projection)) > MAX_BYTES:
         source_ids = {source["id"] for source in sources}
@@ -524,10 +578,15 @@ def dashboard_projection(
 
 
 def projection_is_valid(value: Any) -> bool:
+    version = value.get("version") if isinstance(value, dict) else None
+    legacy = version == 4
+    expected_fields = (
+        _V4_FIELDS if version == 4 else _V5_FIELDS if version == 5 else _FIELDS
+    )
     if (
         not isinstance(value, dict)
-        or set(value) != _FIELDS
-        or value.get("version") != PROJECTION_VERSION
+        or set(value) != expected_fields
+        or version not in {*LEGACY_PROJECTION_VERSIONS, PROJECTION_VERSION}
         or value.get("mode") != PROJECTION_MODE
         or not _is_count(value.get("generated_at"), minimum=1)
         or len(_canonical_bytes(value)) > MAX_BYTES
@@ -554,7 +613,7 @@ def projection_is_valid(value: Any) -> bool:
         or not _is_count(task.get("mutation_revision"))
         or task.get("observer_mode") not in click_observer_control.MODES
         or task.get("observer_enabled")
-        != (task.get("observer_mode") == "shadow")
+        != (task.get("observer_mode") != "off")
         or task.get("name") != click_incremental.safe_display_text(task.get("name"), "")
         or not isinstance(task.get("approval_bound"), bool)
         or not isinstance(task.get("contract_id"), str)
@@ -566,7 +625,9 @@ def projection_is_valid(value: Any) -> bool:
         or not isinstance(value.get("controls"), list)
         or value["controls"] != click_incremental.control_events({"control_events": value["controls"]})
         or not isinstance(summary, dict)
-        or set(summary) != _SUMMARY_FIELDS
+        or set(summary) != (
+            _LEGACY_SUMMARY_FIELDS if legacy else _SUMMARY_FIELDS
+        )
         or not isinstance(sources, list)
         or len(sources) > MAX_SOURCES
         or not isinstance(map_value, dict)
@@ -574,6 +635,7 @@ def projection_is_valid(value: Any) -> bool:
     ):
         return False
     incremental = summary.get("incremental")
+    revalidation = summary.get("revalidation_savings")
     shadow = summary.get("shadow")
     if (
         not isinstance(incremental, dict)
@@ -594,6 +656,12 @@ def projection_is_valid(value: Any) -> bool:
         or shadow.get("tracing_slowdown_measured") is not False
         or shadow["confirmed_candidate_count"] > shadow["evaluated_source_count"]
         or shadow["contradiction_count"] > shadow["evaluated_source_count"]
+        or (
+            not legacy
+            and not click_incremental.revalidation_savings_is_valid(
+                revalidation
+            )
+        )
     ):
         return False
     reused_counts = [incremental[key] for key in ("authoritative_reuse_count", "exact_reuse_count", "dependency_reuse_count", "safe_change_reuse_count")]
@@ -618,6 +686,69 @@ def projection_is_valid(value: Any) -> bool:
         ))
     ):
         return False
+    if not legacy:
+        batch_summaries = value.get("batch_summaries")
+        batches_by_id = {item["batch_id"]: item for item in batches}
+        if (
+            not isinstance(batch_summaries, dict)
+            or set(batch_summaries) != set(batches_by_id)
+        ):
+            return False
+        for batch_id, batch in batches_by_id.items():
+            projected = batch_summaries.get(batch_id)
+            if (
+                not isinstance(projected, dict)
+                or set(projected) != _BATCH_SUMMARY_FIELDS
+                or projected.get("incremental")
+                != click_incremental.batch_summary(batch)
+                or projected.get("revalidation_savings")
+                != click_incremental.revalidation_savings(batch)
+            ):
+                return False
+        current_id = history.get("current_batch_id")
+        if current_id in batch_summaries:
+            selected = batch_summaries[current_id]
+            if revalidation != selected["revalidation_savings"]:
+                return False
+            for field in click_incremental.SUMMARY_FIELDS:
+                if incremental[field] != selected["incremental"][field]:
+                    return False
+
+    if version == PROJECTION_VERSION:
+        setup = value.get("setup")
+        if (
+            not isinstance(setup, dict)
+            or set(setup) != _SETUP_FIELDS
+            or setup.get("version") != click_sharding_setup.VERSION
+            or not isinstance(setup.get("status"), str)
+            or re.fullmatch(r"[a-z0-9-]{1,64}", setup["status"]) is None
+            or not isinstance(setup.get("sharding_ready"), bool)
+            or not isinstance(setup.get("reuse_ready"), bool)
+            or not isinstance(setup.get("reuse_status"), str)
+            or re.fullmatch(r"[a-z0-9-]{1,64}", setup["reuse_status"]) is None
+            or not isinstance(setup.get("comparison_scope"), str)
+            or len(setup["comparison_scope"]) > 96
+            or any(
+                setup.get(field) is not None
+                and not click_incremental.is_duration(setup[field])
+                for field in (
+                    "initial_setup_ms",
+                    "observation_ms",
+                    "click_processing_ms",
+                    "bootstrap_parent_ms",
+                    "bootstrap_shards_ms",
+                )
+            )
+            or (
+                setup.get("comparison_net_ms") is not None
+                and (
+                    not isinstance(setup["comparison_net_ms"], (int, float))
+                    or isinstance(setup["comparison_net_ms"], bool)
+                    or not math.isfinite(setup["comparison_net_ms"])
+                )
+            )
+        ):
+            return False
 
     source_ids: set[str] = set()
     for source in sources:

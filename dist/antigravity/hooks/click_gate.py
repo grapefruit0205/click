@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -35,16 +36,20 @@ else:  # Executed directly from the bundled hooks directory.
     click_evidence,
     click_host_coverage,
     click_host_router,
+    click_incremental,
     click_inspection,
     click_lifecycle,
     click_mutation,
     click_observation,
+    click_observer_backend,
     click_observer_control,
+    click_observer_runtime,
     click_process,
     click_prompt,
     click_receipt_runtime,
     click_runner_transport,
     click_service,
+    click_sharding_setup,
     click_shadow_dashboard,
     click_shadow_intelligence,
     click_state,
@@ -61,16 +66,20 @@ else:  # Executed directly from the bundled hooks directory.
     "click_evidence",
     "click_host_coverage",
     "click_host_router",
+    "click_incremental",
     "click_inspection",
     "click_lifecycle",
     "click_mutation",
     "click_observation",
+    "click_observer_backend",
     "click_observer_control",
+    "click_observer_runtime",
     "click_process",
     "click_prompt",
     "click_receipt_runtime",
     "click_runner_transport",
     "click_service",
+    "click_sharding_setup",
     "click_shadow_dashboard",
     "click_shadow_intelligence",
     "click_state",
@@ -82,6 +91,11 @@ else:  # Executed directly from the bundled hooks directory.
 # Compatibility alias for direct callers and the deterministic suite. Contract
 # schema validation now lives in the one-way click_contract boundary.
 _validate_contract = click_contract.validate_contract
+
+
+JSON_REPORT_FILE_PREFIX = ".click-json-report-"
+JSON_REPORT_MAX_BYTES = 2 * 1024 * 1024
+JSON_REPORT_MAX_AGE_SECONDS = 60 * 60
 
 
 STATE_LOCK_STALE_SECONDS = click_state.STATE_LOCK_STALE_SECONDS
@@ -431,6 +445,191 @@ def _prepare_verification(
     )
 
 
+def _json_report_command(report: dict[str, Any]) -> str:
+    inline = click_runner_transport.render_runner_shell_command(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.write(sys.argv[1] + '\\n')",
+            json.dumps(report, sort_keys=True, ensure_ascii=True),
+        ]
+    )
+    if inline != "exit 2":
+        return inline
+
+    encoded = json.dumps(report, ensure_ascii=False, separators=(",", ":")).encode()
+    if len(encoded) > JSON_REPORT_MAX_BYTES:
+        return inline
+    root = click_state.state_root()
+    report_path = root / f"{JSON_REPORT_FILE_PREFIX}{secrets.token_hex(16)}.json"
+    click_state.write_json(report_path, report)
+    now = time.time()
+    try:
+        candidates = list(root.glob(f"{JSON_REPORT_FILE_PREFIX}*.json"))[:128]
+    except OSError:
+        candidates = []
+    for candidate in candidates:
+        if candidate == report_path:
+            continue
+        try:
+            if now - candidate.stat().st_mtime > JSON_REPORT_MAX_AGE_SECONDS:
+                candidate.unlink()
+        except OSError:
+            pass
+    bounded = click_runner_transport.render_runner_shell_command(
+        [
+            *_stateful_runner_prefix("run-json-report"),
+            str(report_path.resolve()),
+        ]
+    )
+    if bounded == "exit 2":
+        report_path.unlink(missing_ok=True)
+    return bounded
+
+
+def _verification_progress_report(event: dict[str, Any]) -> dict[str, Any]:
+    state = click_contract_state.read_contract_state(event)
+    sources = click_evidence.sources_from_state(
+        state,
+        expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+    )
+    candidates: dict[str, Any] = {}
+    successor = state.get(click_evidence.SUCCESSOR_EVIDENCE_FIELD)
+    scope_digest = click_evidence.successor_scope_digest(
+        str(click_state.contract_path(event).resolve())
+    )
+    if click_evidence.successor_evidence_is_valid(
+        successor,
+        expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+        scope_digest=scope_digest,
+    ):
+        candidate_state = {
+            "state_schema_version": CONTRACT_STATE_SCHEMA_VERSION,
+            "evidence_state": successor["evidence_state"],
+        }
+        candidate_registry = click_evidence.sources_from_state(
+            candidate_state,
+            expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+        )
+        origins = successor.get("origins", {})
+        if isinstance(candidate_registry, dict) and isinstance(origins, dict):
+            candidates = {
+                key: source
+                for key, source in candidate_registry.items()
+                if key in origins
+            }
+    return click_incremental.progress_projection(
+        state, sources, successor_candidates=candidates
+    )
+
+
+def _save_sharding_projection(
+    event: dict[str, Any], state: dict[str, Any], report: dict[str, Any]
+) -> None:
+    if state.get("status") == "none":
+        return
+    state["auto_sharding_setup"] = click_sharding_setup.dashboard_setup_projection(
+        report
+    )
+    click_contract_state.save_contract_state(event, state)
+
+
+def _prepare_sharding_control(
+    event: dict[str, Any], raw: str
+) -> tuple[str, str, str]:
+    try:
+        request = json.loads(raw)
+        if (
+            not isinstance(request, dict)
+            or set(request) != {"operation", "command"}
+            or request.get("operation") not in {"init", "status", "refresh"}
+            or not isinstance(request.get("command"), list)
+            or any(not isinstance(item, str) or not item for item in request["command"])
+        ):
+            raise click_sharding_setup.SetupError("invalid-sharding-control")
+        project = _tool_working_directory(event)
+        state = click_contract_state.read_contract_state(event)
+        guarded_active = click_lifecycle.approved_contract_is_active(state)
+        evidence_active = bool(
+            state.get("status") == "evidence"
+            and state.get("runtime_mode") == "evidence"
+            and isinstance(state.get("evidence_session_id"), str)
+        )
+        runtime_mode = (
+            "guarded" if guarded_active else "evidence" if evidence_active else ""
+        )
+        authority_id = str(
+            state.get(
+                "contract_id" if runtime_mode == "guarded" else "evidence_session_id",
+                "",
+            )
+        )
+        planned = click_sharding_setup.plan(
+            project,
+            request["operation"],
+            request["command"],
+            state,
+            runtime_mode=runtime_mode,
+            authority_id=authority_id,
+        )
+    except (
+        click_sharding_setup.SetupError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        reason = str(exc) if str(exc) else "setup-status-unavailable"
+        return "", reason, ""
+
+    report = planned.get("report")
+    if isinstance(report, dict):
+        _save_sharding_projection(event, state, report)
+    action = planned.get("action")
+    if action == "report":
+        assert isinstance(report, dict)
+        return _json_report_command(report), "", ""
+
+    if runtime_mode not in {"guarded", "evidence"}:
+        return "", (
+            "Start Evidence mode or an approved Guarded contract before Click "
+            "sharding analysis, application, or bootstrap."
+        ), "approval-required"
+    script = str(Path(click_sharding_setup.__file__).resolve())
+    if action in {"generate", "apply", "bootstrap"}:
+        argv = [
+            sys.executable,
+            script,
+            action,
+            "--project",
+            str(project),
+            "--authority-id",
+            authority_id,
+            "--runtime-mode",
+            runtime_mode,
+        ]
+        if action == "generate":
+            argv.extend(["--", *planned["command"]])
+        rewritten, error = _prepare_mutation(
+            event,
+            json.dumps({"version": 1, "argv": argv}, sort_keys=True),
+        )
+        return rewritten, error, ""
+    if action == "verify":
+        batch = {
+            "version": 2,
+            "workdir": str(project),
+            "checks": [
+                {
+                    "evidence_id": click_sharding_setup.BASELINE_EVIDENCE_ID,
+                    "argv": planned["command"],
+                    "class": "broad",
+                }
+            ],
+        }
+        return _prepare_verification(event, json.dumps(batch, sort_keys=True))
+    return "", "invalid-sharding-state", ""
+
+
 
 def _is_plan_tool(tool_name: str) -> bool:
     normalized = tool_name.lower().replace("::", "__").replace(".", "__")
@@ -565,14 +764,43 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                     click_lifecycle.write_state(event, "idle")
                 _allow_rewritten(f"echo Click mode set to {value}")
                 return
+            if action == "status":
+                _allow_rewritten(
+                    _json_report_command(_verification_progress_report(event))
+                )
+                return
+            if action == "sharding":
+                rewritten, setup_error, detail = _prepare_sharding_control(
+                    event, value
+                )
+                if setup_error:
+                    _deny(setup_error, event=event, code=detail)
+                elif detail:
+                    _allow_rewritten_with_advisory(rewritten, detail)
+                else:
+                    _allow_rewritten(rewritten)
+                return
             if action == "observer":
                 runtime_state = click_contract_state.read_contract_state(event)
                 verification = runtime_state.get("verification")
                 if value == "status":
                     selected = click_observer_control.mode(verification)
+                    support = click_observer_backend.support_report()
+                    detail = (
+                        "authoritative profile prepared, only complete bound observations may reuse"
+                        if selected == "authoritative"
+                        else "non-authoritative, reuse disabled"
+                    )
+                    tiers = (
+                        f"platform {support['system']}: "
+                        f"base reuse {support['base_reuse']['status']}, "
+                        f"static configuration {support['static_configuration']['status']}, "
+                        f"Shadow {support['shadow_observer']['status']}, "
+                        "authoritative "
+                        f"{support['authoritative_observer']['status']}"
+                    )
                     _allow_rewritten(
-                        f"echo Click observer mode: {selected} - "
-                        "non-authoritative, reuse disabled"
+                        f"echo Click observer mode: {selected} - {detail} - {tiers}"
                     )
                     return
                 current_status = click_lifecycle.read_state(event).get("status")
@@ -600,12 +828,47 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                         "Observer mode."
                     )
                     return
+                if value == "authoritative" and not approved_active:
+                    _deny(
+                        "Authoritative Observer requires a separately approved Guarded contract."
+                    )
+                    return
+                previous_runtime = click_observer_runtime.state_from_verification(
+                    verification
+                )
+                if value == "authoritative":
+                    try:
+                        build = click_observer_runtime.prepare(
+                            Path(str(event.get("cwd", ""))).resolve(strict=True)
+                        )
+                        prepared_runtime = click_observer_runtime.control_state(build)
+                        if click_observer_runtime.validate(
+                            Path(str(event.get("cwd", ""))), prepared_runtime
+                        ) is None:
+                            raise ValueError("prepared runtime did not validate")
+                    except Exception:
+                        _deny(
+                            "The native CPython 3.12.3 authoritative profile "
+                            "for this platform could not be prepared."
+                        )
+                        return
+                    verification[click_observer_runtime.STATE_FIELD] = prepared_runtime
+                else:
+                    verification.pop(click_observer_runtime.STATE_FIELD, None)
                 click_observer_control.set_mode(verification, value)
                 runtime_state["verification"] = verification
                 click_contract_state.save_contract_state(event, runtime_state)
+                if previous_runtime is not None and previous_runtime != verification.get(
+                    click_observer_runtime.STATE_FIELD
+                ):
+                    click_observer_runtime.discard(previous_runtime)
+                detail = (
+                    "authoritative profile prepared, reuse still requires a complete bound run"
+                    if value == "authoritative"
+                    else "non-authoritative, reuse disabled"
+                )
                 _allow_rewritten(
-                    f"echo Click observer mode set to {value} - "
-                    "non-authoritative, reuse disabled"
+                    f"echo Click observer mode set to {value} - {detail}"
                 )
                 return
             if action == "receipt-export":
@@ -726,6 +989,13 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
             if action == "dashboard":
                 current_status = click_lifecycle.read_state(event).get("status")
                 runtime_state = click_contract_state.read_contract_state(event)
+                try:
+                    setup_report = click_sharding_setup.status(
+                        _tool_working_directory(event), runtime_state
+                    )
+                    _save_sharding_projection(event, runtime_state, setup_report)
+                except (OSError, TypeError, ValueError):
+                    pass
                 evidence_active = runtime_state.get("status") == "evidence"
                 approved_active = click_lifecycle.approved_contract_is_active(
                     runtime_state
@@ -1029,6 +1299,7 @@ def _record_verification_result(
     workspace_digest: str = "",
     environment_digests: dict[str, str] | None = None,
     dependency_observations: dict[str, dict[str, Any]] | None = None,
+    authoritative_observations: dict[str, dict[str, Any]] | None = None,
     shadow_observer_records: dict[str, dict[str, Any]] | None = None,
     shadow_intelligence_baselines: dict[str, dict[str, Any]] | None = None,
     shadow_source_exit_codes: dict[str, int] | None = None,
@@ -1046,6 +1317,7 @@ def _record_verification_result(
         workspace_digest=workspace_digest,
         environment_digests=environment_digests,
         dependency_observations=dependency_observations,
+        authoritative_observations=authoritative_observations,
         shadow_observer_records=shadow_observer_records,
         shadow_intelligence_baselines=shadow_intelligence_baselines,
         shadow_source_exit_codes=shadow_source_exit_codes,
@@ -1273,6 +1545,50 @@ def _run_receipt_verify(arguments: list[str]) -> int:
     return 0
 
 
+def _run_json_report(arguments: list[str]) -> int:
+    if len(arguments) != 1:
+        sys.stderr.write("Click JSON report runner arguments were invalid.\n")
+        return 2
+    path = Path(arguments[0])
+    try:
+        root = click_state.state_root().resolve(strict=True)
+        resolved = path.resolve(strict=True)
+        metadata = path.lstat()
+        if (
+            path != resolved
+            or resolved.parent != root
+            or not resolved.name.startswith(JSON_REPORT_FILE_PREFIX)
+            or resolved.suffix != ".json"
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_size > JSON_REPORT_MAX_BYTES
+        ):
+            raise ValueError("invalid report path")
+        flags = os.O_RDONLY | int(getattr(os, "O_BINARY", 0))
+        flags |= int(getattr(os, "O_NOFOLLOW", 0))
+        descriptor = os.open(resolved, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size > JSON_REPORT_MAX_BYTES:
+                raise ValueError("invalid report file")
+            with os.fdopen(descriptor, "rb", closefd=True) as stream:
+                descriptor = -1
+                raw = stream.read(JSON_REPORT_MAX_BYTES + 1)
+            if len(raw) > JSON_REPORT_MAX_BYTES:
+                raise ValueError("report too large")
+            report = json.loads(raw)
+            if not isinstance(report, dict):
+                raise ValueError("invalid report")
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            resolved.unlink(missing_ok=True)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        sys.stderr.write("Click JSON report was unavailable.\n")
+        return 2
+    sys.stdout.write(json.dumps(report, sort_keys=True, ensure_ascii=True) + "\n")
+    return 0
+
+
 STATEFUL_RUNNER_ACTIONS = {
     "run-observation",
     "run-mutation",
@@ -1284,6 +1600,7 @@ STATEFUL_RUNNER_ACTIONS = {
     "run-dashboard-stop",
     "run-dashboard-status",
     "run-dashboard-server",
+    "run-json-report",
     "run-verification",
 }
 
@@ -1357,6 +1674,8 @@ def main() -> int:
         return _run_dashboard_status(arguments[1:])
     if arguments and arguments[0] == "run-dashboard-server":
         return _run_dashboard_server(arguments[1:])
+    if arguments and arguments[0] == "run-json-report":
+        return _run_json_report(arguments[1:])
     if arguments and arguments[0] == "run-verification":
         return _run_verification(arguments[1:])
     if arguments and arguments[0] == "run-receipt-export":

@@ -51,8 +51,10 @@ FILE_KEYWORDS = "0x1f0"
 TRACE_LEVEL = "0xff"
 MAX_ETL_MIB = 8
 MAX_RAW_TRACE_BYTES = 16 * 1024 * 1024
+MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
 MAX_XML_EVENTS = 200_000
 CONTROL_TIMEOUT_SECONDS = 30.0
+TARGET_WAIT_POLL_SECONDS = 0.1
 # ``logman start -ets`` returns after admitting the session, but the kernel
 # providers may still need a short interval before their first events are
 # observable.  Without this barrier, a fast target can start and read its
@@ -79,9 +81,16 @@ _PATH_FIELDS = (
 _FILE_KEY_FIELDS = ("filekey", "fileobject")
 _PID_FIELDS = ("processid", "issuingprocessid", "targetprocessid")
 _PARENT_PID_FIELDS = ("parentprocessid", "parentid")
+_IMAGE_FIELDS = (
+    "imagefilename",
+    "imagepath",
+    "imagename",
+    "processname",
+    "commandline",
+)
 _READ_EVENT_IDS = frozenset({12, 15})
 _DIRECTORY_EVENT_IDS = frozenset({20, 25})
-_METADATA_EVENT_IDS = frozenset({10, 22, 23})
+_METADATA_EVENT_IDS = frozenset({10, 22, 23, 32, 34})
 _IGNORED_FILE_EVENT_IDS = frozenset({11, 13, 14, 16, 17, 19, 21, 24, 26, 27, 28, 29, 30})
 
 FallbackExecutor = click_observer_common.FallbackExecutor
@@ -104,6 +113,9 @@ class ParsedTrace:
     child_process_count: int
     process_tree_complete: bool
     root_exec_observed: bool
+    # Kept only in memory for the authoritative adapter. Shadow records still
+    # persist repository-relative paths and an external count, never host paths.
+    absolute_inputs: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,7 +149,7 @@ def _file_digest(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _combined_digest(logman_digest: str, tracerpt_digest: str) -> str:
+def combined_backend_digest(logman_digest: str, tracerpt_digest: str) -> str:
     if _DIGEST.fullmatch(logman_digest) is None or _DIGEST.fullmatch(
         tracerpt_digest
     ) is None:
@@ -145,6 +157,9 @@ def _combined_digest(logman_digest: str, tracerpt_digest: str) -> str:
     return hashlib.sha256(
         f"logman:{logman_digest}\ntracerpt:{tracerpt_digest}\n".encode("ascii")
     ).hexdigest()
+
+
+_combined_digest = combined_backend_digest
 
 
 def probe_windows_version() -> str:
@@ -157,7 +172,7 @@ def probe_windows_version() -> str:
     return version if isinstance(version, str) and _VERSION.fullmatch(version) else ""
 
 
-def _native_windows_tool(executable: str, expected_name: str) -> bool:
+def native_windows_tool(executable: str, expected_name: str) -> bool:
     """Accept only the named inbox executable under the Windows directory."""
 
     if not isinstance(executable, str) or not isinstance(expected_name, str):
@@ -185,7 +200,10 @@ def _native_windows_tool(executable: str, expected_name: str) -> bool:
     return os.path.normcase(str(candidate)) in allowed
 
 
-def _windows_device_paths() -> Mapping[str, str]:
+_native_windows_tool = native_windows_tool
+
+
+def windows_device_paths() -> Mapping[str, str]:
     """Map native ``\\Device`` volume prefixes to DOS drives when available."""
 
     if os.name != "nt":
@@ -213,6 +231,9 @@ def _windows_device_paths() -> Mapping[str, str]:
         return mappings
     except (AttributeError, OSError, TypeError, ValueError):
         return {}
+
+
+_windows_device_paths = windows_device_paths
 
 
 def _canonical_windows_path(
@@ -301,6 +322,14 @@ def _first_text(fields: Mapping[str, str], names: Sequence[str]) -> str:
     return ""
 
 
+def _event_path(fields: Mapping[str, str]) -> str:
+    """Return a concrete ETW path, excluding directory search patterns."""
+
+    value = _first_text(fields, _PATH_FIELDS)
+    candidate = _DEVICE_PREFIX.sub("", value.replace("/", "\\"))
+    return "" if "*" in candidate or "?" in candidate else value
+
+
 def _event_pid(fields: Mapping[str, str]) -> int | None:
     return _first_integer(fields, (*_PID_FIELDS, "execution.processid", "pid"))
 
@@ -340,6 +369,8 @@ def parse_windows_etw(
     root_execution_bound: bool = False,
     process_scope_complete: bool = True,
     device_paths: Mapping[str, str] | None = None,
+    transparent_child_images: Sequence[str] = (),
+    allow_workspace_root: bool = False,
 ) -> ParsedTrace:
     """Normalize bounded ETW XML into content-free repository inputs."""
 
@@ -351,6 +382,16 @@ def parse_windows_etw(
         unresolved = _bounded_add(unresolved, 1)
         root_pid = -1
     mappings = dict(device_paths or {})
+    transparent_images: set[str] = set()
+    for image in transparent_child_images:
+        try:
+            transparent_images.add(
+                ntpath.normcase(
+                    _canonical_windows_path(image, device_paths=mappings)
+                )
+            )
+        except (TypeError, ValueError):
+            unresolved = _bounded_add(unresolved, 1)
     root_text = str(workspace)
     try:
         root = _canonical_windows_path(root_text, device_paths=mappings)
@@ -359,6 +400,7 @@ def parse_windows_etw(
     root_case = ntpath.normcase(root).rstrip("\\")
 
     parent_by_pid: dict[int, int] = {}
+    image_by_pid: dict[int, str] = {}
     process_start_pids: set[int] = set()
     file_events: list[tuple[int | None, int | None, dict[str, str], str]] = []
     file_keys: dict[str, str] = {}
@@ -374,15 +416,37 @@ def parse_windows_etw(
                 unresolved = _bounded_add(unresolved, 1)
                 continue
             parent_by_pid[pid] = parent
+            image = _first_text(fields, _IMAGE_FIELDS)
+            if image:
+                try:
+                    image_by_pid[pid] = ntpath.normcase(
+                        _canonical_windows_path(image, device_paths=mappings)
+                    )
+                except ValueError:
+                    pass
             process_start_pids.add(pid)
         elif provider in _FILE_NAMES:
             pid = _event_pid(fields)
-            path = _first_text(fields, _PATH_FIELDS)
-            key = _first_text(fields, _FILE_KEY_FIELDS).lower()
-            if event_id == 10 and path and key:
-                file_keys[key] = path
-            if not path and key:
-                path = file_keys.get(key, "")
+            path = _event_path(fields)
+            identifiers = tuple(
+                dict.fromkeys(
+                    value.lower()
+                    for field in _FILE_KEY_FIELDS
+                    if (value := fields.get(field, ""))
+                )
+            )
+            if not path:
+                path = next(
+                    (
+                        file_keys[identifier]
+                        for identifier in identifiers
+                        if identifier in file_keys
+                    ),
+                    "",
+                )
+            if path:
+                for identifier in identifiers:
+                    file_keys[identifier] = path
             file_events.append((pid, event_id, fields, path))
 
     descendants = {root_pid}
@@ -393,12 +457,17 @@ def parse_windows_etw(
             if parent in descendants and pid not in descendants:
                 descendants.add(pid)
                 changed = True
-    child_process_count = max(0, len(descendants) - 1)
+    child_process_count = sum(
+        pid != root_pid and image_by_pid.get(pid) not in transparent_images
+        for pid in descendants
+    )
     process_root_observed = root_pid in process_start_pids
     root_exec_observed = bool(root_execution_bound or process_root_observed)
 
     inputs: dict[str, dict[str, Any]] = {}
+    absolute_inputs: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()
+    absolute_conflicts: set[str] = set()
     external_digests: set[str] = set()
 
     def add_path(path_text: str, *, kind: str, operation: str) -> None:
@@ -411,9 +480,28 @@ def parse_windows_etw(
             unresolved = _bounded_add(unresolved, 1)
             return
         normalized_case = ntpath.normcase(normalized)
+        absolute = absolute_inputs.get(normalized_case)
+        if absolute is not None and absolute["kind"] != kind:
+            if {absolute["kind"], kind} <= {"file", "directory"}:
+                absolute["kind"] = "directory"
+            else:
+                absolute_conflicts.add(normalized_case)
+        elif absolute is None:
+            if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
+                unresolved = _bounded_add(unresolved, 1)
+            else:
+                absolute = {
+                    "path": normalized,
+                    "kind": kind,
+                    "operations": [],
+                }
+                absolute_inputs[normalized_case] = absolute
+        if absolute is not None and operation not in absolute["operations"]:
+            absolute["operations"].append(operation)
         prefix = root_case + "\\"
         if normalized_case == root_case:
-            unresolved = _bounded_add(unresolved, 1)
+            if not allow_workspace_root:
+                unresolved = _bounded_add(unresolved, 1)
             return
         if not normalized_case.startswith(prefix):
             try:
@@ -431,8 +519,7 @@ def parse_windows_etw(
         if not relative or relative in {".", ".."} or relative.startswith("../"):
             unresolved = _bounded_add(unresolved, 1)
             return
-        if kind == "directory" and not relative.endswith("/"):
-            relative += "/"
+        relative_key = relative.rstrip("/")
         try:
             encoded = relative.encode("utf-8")
         except UnicodeEncodeError:
@@ -445,16 +532,24 @@ def parse_windows_etw(
         ):
             unresolved = _bounded_add(unresolved, 1)
             return
-        existing = inputs.get(relative)
+        existing = inputs.get(relative_key)
         if existing is not None and existing["kind"] != kind:
-            conflicts.add(relative)
-            return
+            if {existing["kind"], kind} <= {"file", "directory"}:
+                existing["kind"] = "directory"
+                existing["path"] = relative_key + "/"
+            else:
+                conflicts.add(relative_key)
+                return
         if existing is None:
             if len(inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
                 unresolved = _bounded_add(unresolved, 1)
                 return
-            existing = {"path": relative, "kind": kind, "operations": []}
-            inputs[relative] = existing
+            existing = {
+                "path": relative_key + "/" if kind == "directory" else relative_key,
+                "kind": kind,
+                "operations": [],
+            }
+            inputs[relative_key] = existing
         if operation not in existing["operations"]:
             existing["operations"].append(operation)
 
@@ -497,6 +592,9 @@ def parse_windows_etw(
     for relative in conflicts:
         inputs.pop(relative, None)
         unresolved = _bounded_add(unresolved, 1)
+    for absolute in absolute_conflicts:
+        absolute_inputs.pop(absolute, None)
+        unresolved = _bounded_add(unresolved, 1)
     if not root_exec_observed:
         unresolved = _bounded_add(unresolved, 1)
     if root_execution_bound and not process_root_observed:
@@ -523,6 +621,14 @@ def parse_windows_etw(
         child_process_count=child_process_count,
         process_tree_complete=process_tree_complete,
         root_exec_observed=root_exec_observed,
+        absolute_inputs=tuple(
+            {
+                "path": item["path"],
+                "kind": item["kind"],
+                "operations": sorted(item["operations"]),
+            }
+            for _, item in sorted(absolute_inputs.items())
+        ),
     )
 
 
@@ -559,6 +665,15 @@ def _read_bounded(path: Path, limit: int) -> tuple[bytes, bool]:
     except OSError:
         return b"", True
     return raw[:limit], bool(size > limit or len(raw) > limit)
+
+
+def _wait_for_target(target: subprocess.Popen[Any]) -> int:
+    """Wait in bounded intervals so Windows can deliver KeyboardInterrupt."""
+    while True:
+        try:
+            return int(target.wait(timeout=TARGET_WAIT_POLL_SECONDS))
+        except subprocess.TimeoutExpired:
+            continue
 
 
 def collect_command(
@@ -649,7 +764,7 @@ def collect_command(
                     root_pid = int(target.pid)
                     target_started = True
                     click_process.target_started()
-                    exit_code = int(target.wait())
+                    exit_code = _wait_for_target(target)
             except KeyboardInterrupt:
                 failed = True
                 exit_code = 130
@@ -779,9 +894,9 @@ def run_command(
     execute_unobserved: FallbackExecutor,
     resolve_backend: BackendResolver,
     digest_file: FileDigester = _file_digest,
-    native_backend_probe: NativeBackendProbe = _native_windows_tool,
+    native_backend_probe: NativeBackendProbe = native_windows_tool,
     system_version: Callable[[], str] = probe_windows_version,
-    device_map_provider: DeviceMapProvider = _windows_device_paths,
+    device_map_provider: DeviceMapProvider = windows_device_paths,
     collector: Callable[..., CollectedExecution] = collect_command,
     run_control: ControlRunner = click_process.run_argv,
     spawn_argv: SpawnArgv = click_process.spawn_argv,
@@ -831,7 +946,7 @@ def run_command(
     try:
         logman_digest = digest_file(Path(resolved["logman"]))
         tracerpt_digest = digest_file(Path(resolved["tracerpt"]))
-        digest = _combined_digest(logman_digest, tracerpt_digest)
+        digest = combined_backend_digest(logman_digest, tracerpt_digest)
         version = system_version()
     except Exception:
         logman_digest = tracerpt_digest = digest = version = ""
@@ -915,7 +1030,7 @@ def run_command(
     )
     identity_started = time.monotonic()
     try:
-        final_digest = _combined_digest(
+        final_digest = combined_backend_digest(
             digest_file(Path(resolved["logman"])),
             digest_file(Path(resolved["tracerpt"])),
         )
@@ -976,8 +1091,11 @@ __all__ = [
     "BACKEND_NAME",
     "CollectedExecution",
     "ParsedTrace",
+    "combined_backend_digest",
     "collect_command",
+    "native_windows_tool",
     "parse_windows_etw",
     "probe_windows_version",
     "run_command",
+    "windows_device_paths",
 ]

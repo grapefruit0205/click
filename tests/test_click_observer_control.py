@@ -29,14 +29,14 @@ class ClickObserverControlTests(ClickGateTestCase):
         )
 
     def test_control_parser_accepts_only_public_observer_actions(self) -> None:
-        for action in ("off", "shadow", "status"):
+        for action in ("off", "shadow", "authoritative", "status"):
             self.assertEqual(
                 CLICK_LIFECYCLE.control_request(f"click-gate observer {action}"),
                 ("observer", action, ""),
             )
         parsed = CLICK_LIFECYCLE.control_request("click-gate observer automatic")
         self.assertEqual(parsed[0], "")
-        self.assertIn("observer off|shadow|status", parsed[2])
+        self.assertIn("observer off|shadow|authoritative|status", parsed[2])
 
     def test_status_without_runtime_reports_safe_default(self) -> None:
         payload = self.pre_tool("Bash", "click-gate observer status")
@@ -46,6 +46,8 @@ class ClickObserverControlTests(ClickGateTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("observer mode: off", result.stdout)
         self.assertIn("reuse disabled", result.stdout)
+        self.assertIn("base reuse implemented", result.stdout)
+        self.assertIn("static configuration implemented", result.stdout)
 
     def test_setting_preserves_revision_evidence_and_dashboard(self) -> None:
         self.approve_contract()

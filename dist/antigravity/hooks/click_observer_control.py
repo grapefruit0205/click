@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit lifecycle-local control for non-authoritative observation."""
+"""Explicit lifecycle-local control for Shadow and authoritative observation."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 CONTROL_FIELD = "observer_control"
 CONTROL_VERSION = 1
-MODES = frozenset({"off", "shadow"})
+MODES = frozenset({"off", "shadow", "authoritative"})
 _FIELDS = frozenset({"version", "mode", "updated_at"})
 
 
@@ -39,7 +39,7 @@ def set_mode(
     verification: dict[str, Any], selected: str, *, updated_at: int | None = None
 ) -> None:
     if selected not in MODES:
-        raise ValueError("observer mode must be off or shadow")
+        raise ValueError("observer mode must be off, shadow, or authoritative")
     timestamp = int(time.time()) if updated_at is None else updated_at
     value = {"version": CONTROL_VERSION, "mode": selected, "updated_at": timestamp}
     if not state_is_valid(value):
@@ -51,7 +51,7 @@ def projection(verification: Any) -> dict[str, Any]:
     selected = mode(verification)
     return {
         "mode": selected,
-        "enabled": selected == "shadow",
-        "authoritative": False,
-        "reuse_authorized": False,
+        "enabled": selected != "off",
+        "authoritative": selected == "authoritative",
+        "reuse_authorized": selected == "authoritative",
     }
