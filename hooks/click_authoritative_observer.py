@@ -58,6 +58,7 @@ FULL_BINDING_FIELDS = click_dependency_cache.AUTHORITATIVE_BINDING_FIELDS - {
     "execution_digest"
 }
 DIGEST = re.compile(r"^[0-9a-f]{64}$")
+MAX_AUTHORITATIVE_CAPTURE_BYTES = click_observer_windows.MAX_RAW_TRACE_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,6 +255,9 @@ def _snapshot_records(
 ) -> list[dict[str, Any]]:
     inputs: dict[str, set[str]] = {}
     resolved_root = observation_root.resolve()
+    runtime_roots = tuple(
+        Path(path) for path in getattr(snapshot, "roots", {}).values()
+    )
     for row in absolute_inputs:
         if (
             not isinstance(row, dict)
@@ -266,7 +270,10 @@ def _snapshot_records(
         operations = set(row["operations"])
         if not operations or not operations <= {"read", "metadata", "enumerate", "execute"}:
             raise click_observation_inputs.InputError("invalid-native-operation")
-        if operations == {"metadata"} and observed_path in resolved_root.parents:
+        if operations == {"metadata"} and (
+            observed_path in resolved_root.parents
+            or any(observed_path in root.parents for root in runtime_roots)
+        ):
             continue
         kind = str(row["kind"])
         if kind == "missing" and observed_path.exists():
@@ -607,6 +614,12 @@ def _windows_command(
             root_execution_bound=True,
             process_scope_complete=collected.process_scope_complete,
             device_paths=click_observer_windows.windows_device_paths(),
+            transparent_child_images=(
+                str(getattr(sys, "_base_executable", "")),
+            )
+            if sys.prefix != sys.base_prefix
+            and getattr(sys, "_base_executable", "")
+            else (),
         )
         events, native_failed = _read_native_events(read_descriptor)
         reasons.update(_native_event_reasons(events, native_failed))
@@ -672,7 +685,7 @@ def run_command(
     digest_file: Callable[[Path], str],
     spawn_argv: Callable[..., subprocess.Popen[Any]] = click_process.spawn_argv,
     terminate_group: Callable[[subprocess.Popen[Any]], int] = click_process.terminate_process_group,
-    capture_limit: int = click_observer_linux.MAX_RAW_TRACE_BYTES,
+    capture_limit: int = MAX_AUTHORITATIVE_CAPTURE_BYTES,
 ) -> AuthoritativeExecution:
     """Execute one supported unittest argv and return a runner-token attestation."""
     binding = _binding(binding_context)

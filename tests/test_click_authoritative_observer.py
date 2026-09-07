@@ -129,6 +129,31 @@ class PortableAuthoritativeAdapterTests(unittest.TestCase):
 
         self.assertEqual(snapshot.inputs, {str(directory): {"metadata"}})
 
+    def test_native_metadata_ignores_ancestors_of_bound_runtime_roots(self) -> None:
+        runtime_root = self.project / "runtime" / "venv"
+        runtime_root.mkdir(parents=True)
+        snapshot = _PortableSnapshot()
+        snapshot.roots = {"environment-prefix": runtime_root}
+
+        authoritative._snapshot_records(
+            snapshot,
+            [
+                {
+                    "path": str(runtime_root.parent),
+                    "kind": "directory",
+                    "operations": ["metadata"],
+                },
+                {
+                    "path": str(runtime_root),
+                    "kind": "directory",
+                    "operations": ["metadata"],
+                },
+            ],
+            observation_root=self.project,
+        )
+
+        self.assertEqual(snapshot.inputs, {str(runtime_root): {"metadata"}})
+
     def run_windows(self, *, native_events=None, collector_effect=None):
         fallback = mock.Mock(return_value=91)
         collected = authoritative.click_observer_windows.CollectedExecution(
@@ -553,6 +578,66 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
         self.assertRegex(darwin, r"^[0-9a-f]{64}$")
         self.assertRegex(windows, r"^[0-9a-f]{64}$")
         self.assertEqual(len({native_only, darwin, windows}), 3)
+
+    def test_windows_portable_roots_cover_runtime_and_system_inputs(self) -> None:
+        module = authoritative.click_observation_inputs
+        with tempfile.TemporaryDirectory(prefix="click-windows-roots-") as raw:
+            directory = Path(raw)
+            project = directory / "project"
+            artifact = directory / "artifact"
+            windows = directory / "Windows"
+            base = directory / "Python" / "3.12.3" / "x64"
+            for path in (project, artifact, windows / "System32", base):
+                path.mkdir(parents=True)
+            with (
+                mock.patch.object(module.sys, "platform", "win32"),
+                mock.patch.object(module.sys, "base_prefix", str(base)),
+                mock.patch.dict(
+                    module.os.environ,
+                    {"SystemRoot": str(windows)},
+                    clear=False,
+                ),
+                mock.patch.object(
+                    module.sysconfig,
+                    "get_path",
+                    return_value=str(base / "Lib"),
+                ),
+                mock.patch.object(
+                    module.site,
+                    "getusersitepackages",
+                    return_value=str(directory / "user-packages"),
+                ),
+            ):
+                roots = module._portable_runtime_roots(project, artifact)
+
+            self.assertEqual(roots["runtime-dlls"], base / "DLLs")
+            self.assertEqual(
+                roots["python-build-modules"], directory / "Python" / "Modules"
+            )
+            self.assertEqual(roots["windows-appcompat"], windows / "AppPatch")
+
+    def test_system32_snapshot_indexes_one_resource_directory_level(self) -> None:
+        module = authoritative.click_observation_inputs
+        with tempfile.TemporaryDirectory(prefix="click-system32-index-") as raw:
+            system32 = Path(raw)
+            locale_root = system32 / "en-US"
+            deeper = locale_root / "nested"
+            deeper.mkdir(parents=True)
+            resource = locale_root / "KERNELBASE.dll.mui"
+            resource.write_bytes(b"resource")
+            nested = deeper / "not-indexed.dll"
+            nested.write_bytes(b"nested")
+            snapshot = object.__new__(module.InputSnapshot)
+            snapshot.roots = {"system32": system32}
+            snapshot.before = {}
+            snapshot.enumerated = set()
+            snapshot.project_content = {}
+            snapshot.total_bytes = 0
+
+            snapshot._index()
+
+            self.assertIn(module._path_key(resource), snapshot.before)
+            self.assertNotIn(module._path_key(nested), snapshot.before)
 
     def test_input_snapshot_read_flags_are_portable(self) -> None:
         module = authoritative.click_observation_inputs

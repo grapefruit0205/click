@@ -83,7 +83,7 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         self,
         body: str,
         *,
-        capture_limit: int = 4 * 1024 * 1024,
+        capture_limit: int = authoritative.MAX_AUTHORITATIVE_CAPTURE_BYTES,
         resolve_backend=None,
         fallback=None,
     ):

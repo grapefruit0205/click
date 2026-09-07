@@ -142,9 +142,20 @@ def _portable_runtime_roots(project: Path, artifact: Path) -> dict[str, Path]:
         if not system_root:
             raise InputError("windows-system-root-unavailable")
         windows = Path(system_root).resolve()
+        base_prefix = Path(sys.base_prefix).resolve()
+        python_distribution = (
+            base_prefix.parents[1]
+            if len(base_prefix.parents) > 1
+            else base_prefix.parent
+        )
         candidates.update({
             "windows-root": windows,
             "system32": (windows / "System32").resolve(),
+            "windows-appcompat": (windows / "AppPatch").resolve(),
+            "runtime-dlls": (base_prefix / "DLLs").resolve(),
+            "python-build-modules": (
+                python_distribution / "Modules"
+            ).resolve(),
         })
     return candidates
 
@@ -247,9 +258,16 @@ class InputSnapshot:
                 "system-libraries", "system-frameworks", "local-frameworks",
                 "usr-libraries", "system32",
             )
-            pending = [root]
+            depth_limit = {
+                # System32 language resources live one directory beneath the
+                # main runtime files. AppCompat databases use at most two
+                # levels on supported Windows hosts.
+                "system32": 1,
+                "windows-appcompat": 2,
+            }.get(role, 0 if shallow else None)
+            pending = [(root, 0)]
             while pending:
-                path = pending.pop()
+                path, depth = pending.pop()
                 key = _path_key(path)
                 if key in seen:
                     continue
@@ -272,12 +290,12 @@ class InputSnapshot:
                     for child in entries:
                         if role == "project" and child.name == ".git":
                             continue
-                        if shallow:
+                        if depth_limit is not None and depth >= depth_limit:
                             self.before[_path_key(child)] = metadata(child)
                             if len(self.before) > MAX_INDEX_FILES:
                                 raise InputError("runtime-index-limit")
                         else:
-                            pending.append(child)
+                            pending.append((child, depth + 1))
                 elif stat.S_ISLNK(mode):
                     os.readlink(path)
                     self.before[key] = metadata(path)

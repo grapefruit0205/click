@@ -204,6 +204,121 @@ class ClickObserverWindowsTests(unittest.TestCase):
             ),
         )
 
+    def test_parser_merges_directory_metadata_and_current_query_events(self) -> None:
+        raw = _document(
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={"ProcessID": 100, "ParentProcessID": 50},
+            ),
+            _event(
+                FILE_PROVIDER,
+                22,
+                execution_pid=100,
+                data={"FileName": r"C:\work\click\pkg"},
+            ),
+            _event(
+                FILE_PROVIDER,
+                20,
+                execution_pid=100,
+                data={"FileName": r"C:\work\click\pkg"},
+            ),
+            _event(
+                FILE_PROVIDER,
+                10,
+                execution_pid=100,
+                data={
+                    "FileKey": "0x321",
+                    "FileName": r"C:\work\click\input.txt",
+                },
+            ),
+            _event(
+                FILE_PROVIDER,
+                32,
+                execution_pid=100,
+                data={"FileObject": "0x321"},
+            ),
+            _event(
+                FILE_PROVIDER,
+                34,
+                execution_pid=100,
+                data={"FileObject": "0x321"},
+            ),
+        )
+
+        parsed = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+        )
+
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+        self.assertEqual(
+            parsed.inputs,
+            (
+                {
+                    "path": "input.txt",
+                    "kind": "file",
+                    "operations": ["metadata"],
+                },
+                {
+                    "path": "pkg/",
+                    "kind": "directory",
+                    "operations": ["enumerate", "metadata"],
+                },
+            ),
+        )
+
+    def test_parser_collapses_the_known_venv_interpreter_redirect(self) -> None:
+        raw = _document(
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={
+                    "ProcessID": 100,
+                    "ParentProcessID": 50,
+                    "ImageName": r"\Device\HarddiskVolume5\venv\python.exe",
+                },
+            ),
+            _event(
+                PROCESS_PROVIDER,
+                1,
+                execution_pid=4,
+                data={
+                    "ProcessID": 200,
+                    "ParentProcessID": 100,
+                    "ImageName": r"\Device\HarddiskVolume4\Python\python.exe",
+                },
+            ),
+            _event(
+                FILE_PROVIDER,
+                12,
+                execution_pid=200,
+                data={"FileName": r"C:\work\click\input.txt"},
+            ),
+        )
+
+        parsed = click_observer_windows.parse_windows_etw(
+            raw,
+            workspace=self.workspace_text,
+            root_pid=100,
+            root_execution_bound=True,
+            device_paths={
+                r"\Device\HarddiskVolume4": "C:",
+                r"\Device\HarddiskVolume5": "D:",
+            },
+            transparent_child_images=(r"C:\Python\python.exe",),
+        )
+
+        self.assertEqual(parsed.child_process_count, 0)
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+        self.assertEqual(parsed.inputs[0]["path"], "input.txt")
+
     def test_parser_marks_loss_truncation_and_unknown_events_incomplete(self) -> None:
         raw = _document(
             _event(

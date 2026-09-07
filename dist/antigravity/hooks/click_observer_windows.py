@@ -81,9 +81,16 @@ _PATH_FIELDS = (
 _FILE_KEY_FIELDS = ("filekey", "fileobject")
 _PID_FIELDS = ("processid", "issuingprocessid", "targetprocessid")
 _PARENT_PID_FIELDS = ("parentprocessid", "parentid")
+_IMAGE_FIELDS = (
+    "imagefilename",
+    "imagepath",
+    "imagename",
+    "processname",
+    "commandline",
+)
 _READ_EVENT_IDS = frozenset({12, 15})
 _DIRECTORY_EVENT_IDS = frozenset({20, 25})
-_METADATA_EVENT_IDS = frozenset({10, 22, 23})
+_METADATA_EVENT_IDS = frozenset({10, 22, 23, 32, 34})
 _IGNORED_FILE_EVENT_IDS = frozenset({11, 13, 14, 16, 17, 19, 21, 24, 26, 27, 28, 29, 30})
 
 FallbackExecutor = click_observer_common.FallbackExecutor
@@ -354,6 +361,7 @@ def parse_windows_etw(
     root_execution_bound: bool = False,
     process_scope_complete: bool = True,
     device_paths: Mapping[str, str] | None = None,
+    transparent_child_images: Sequence[str] = (),
 ) -> ParsedTrace:
     """Normalize bounded ETW XML into content-free repository inputs."""
 
@@ -365,6 +373,16 @@ def parse_windows_etw(
         unresolved = _bounded_add(unresolved, 1)
         root_pid = -1
     mappings = dict(device_paths or {})
+    transparent_images: set[str] = set()
+    for image in transparent_child_images:
+        try:
+            transparent_images.add(
+                ntpath.normcase(
+                    _canonical_windows_path(image, device_paths=mappings)
+                )
+            )
+        except (TypeError, ValueError):
+            unresolved = _bounded_add(unresolved, 1)
     root_text = str(workspace)
     try:
         root = _canonical_windows_path(root_text, device_paths=mappings)
@@ -373,6 +391,7 @@ def parse_windows_etw(
     root_case = ntpath.normcase(root).rstrip("\\")
 
     parent_by_pid: dict[int, int] = {}
+    image_by_pid: dict[int, str] = {}
     process_start_pids: set[int] = set()
     file_events: list[tuple[int | None, int | None, dict[str, str], str]] = []
     file_keys: dict[str, str] = {}
@@ -388,6 +407,14 @@ def parse_windows_etw(
                 unresolved = _bounded_add(unresolved, 1)
                 continue
             parent_by_pid[pid] = parent
+            image = _first_text(fields, _IMAGE_FIELDS)
+            if image:
+                try:
+                    image_by_pid[pid] = ntpath.normcase(
+                        _canonical_windows_path(image, device_paths=mappings)
+                    )
+                except ValueError:
+                    pass
             process_start_pids.add(pid)
         elif provider in _FILE_NAMES:
             pid = _event_pid(fields)
@@ -407,7 +434,10 @@ def parse_windows_etw(
             if parent in descendants and pid not in descendants:
                 descendants.add(pid)
                 changed = True
-    child_process_count = max(0, len(descendants) - 1)
+    child_process_count = sum(
+        pid != root_pid and image_by_pid.get(pid) not in transparent_images
+        for pid in descendants
+    )
     process_root_observed = root_pid in process_start_pids
     root_exec_observed = bool(root_execution_bound or process_root_observed)
 
@@ -429,7 +459,10 @@ def parse_windows_etw(
         normalized_case = ntpath.normcase(normalized)
         absolute = absolute_inputs.get(normalized_case)
         if absolute is not None and absolute["kind"] != kind:
-            absolute_conflicts.add(normalized_case)
+            if {absolute["kind"], kind} <= {"file", "directory"}:
+                absolute["kind"] = "directory"
+            else:
+                absolute_conflicts.add(normalized_case)
         elif absolute is None:
             if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
                 unresolved = _bounded_add(unresolved, 1)
@@ -462,8 +495,7 @@ def parse_windows_etw(
         if not relative or relative in {".", ".."} or relative.startswith("../"):
             unresolved = _bounded_add(unresolved, 1)
             return
-        if kind == "directory" and not relative.endswith("/"):
-            relative += "/"
+        relative_key = relative.rstrip("/")
         try:
             encoded = relative.encode("utf-8")
         except UnicodeEncodeError:
@@ -476,16 +508,24 @@ def parse_windows_etw(
         ):
             unresolved = _bounded_add(unresolved, 1)
             return
-        existing = inputs.get(relative)
+        existing = inputs.get(relative_key)
         if existing is not None and existing["kind"] != kind:
-            conflicts.add(relative)
-            return
+            if {existing["kind"], kind} <= {"file", "directory"}:
+                existing["kind"] = "directory"
+                existing["path"] = relative_key + "/"
+            else:
+                conflicts.add(relative_key)
+                return
         if existing is None:
             if len(inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
                 unresolved = _bounded_add(unresolved, 1)
                 return
-            existing = {"path": relative, "kind": kind, "operations": []}
-            inputs[relative] = existing
+            existing = {
+                "path": relative_key + "/" if kind == "directory" else relative_key,
+                "kind": kind,
+                "operations": [],
+            }
+            inputs[relative_key] = existing
         if operation not in existing["operations"]:
             existing["operations"].append(operation)
 

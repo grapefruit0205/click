@@ -67,6 +67,9 @@ _DIRFD_ABSOLUTE_PATH = re.compile(
 _AT_FDCWD_RELATIVE_PATH = re.compile(
     r"(?:^|\s)\[\s*-2\s*\]/(?P<path>[^/\x00\r\n][^\x00\r\n]*?)\s*$"
 )
+_DIRFD_RELATIVE_PATH = re.compile(
+    r"(?:^|\s)\[\s*[0-9]+\s*\]/(?P<path>[^/\x00\r\n][^\x00\r\n]*?)\s*$"
+)
 _POSIX_DRIVE_PATH = re.compile(r"^[A-Za-z]:/")
 _OPEN_FLAGS = re.compile(r"\((?P<flags>[A-Z_]{2,32})\)")
 _MISSING_ERRNO = re.compile(r"\[\s*2\s*\]")
@@ -101,6 +104,24 @@ _DIRECTORY_OPERATIONS = frozenset(
 _EXEC_OPERATIONS = frozenset({"exec", "execve"})
 _CHILD_OPERATIONS = frozenset({"fork", "posix_spawn", "posix_spawnp", "vfork"})
 _MISSING_MARKERS = ("ENOENT", "Err#2", "No such file")
+_IGNORED_OPERATIONS = frozenset(
+    {"close", "fsgetpath", "fsync", "pwrite", "write", "write_nocancel"}
+)
+_DYLD_INTERNAL_PATHS = frozenset(
+    {
+        "/AppleInternal/XBS/.isChrooted",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Volumes/Preboot/Cryptexes/OS/usr/lib/libSystem.B.dylib",
+        "/dev/dtracehelper",
+    }
+)
+_DYLD_INTERNAL_DIRFD_PATHS = frozenset(
+    {
+        "/System/Library/dyld",
+        "/System/Volumes/Preboot/Cryptexes/OS",
+    }
+)
 
 FallbackExecutor = click_observer_common.FallbackExecutor
 BackendResolver = Callable[..., tuple[str | None, str]]
@@ -475,6 +496,22 @@ def _bound_relative_candidate(operation_name: str, details: str) -> str:
     return value
 
 
+def _dyld_internal_dirfd_lookup(operation_name: str, details: str) -> bool:
+    """Recognize fixed dyld startup directory opens with an opaque dirfd."""
+
+    if operation_name != "openat":
+        return False
+    match = _DIRFD_RELATIVE_PATH.search(details)
+    if match is None:
+        return False
+    value = match.group("path").strip()
+    try:
+        normalized = posixpath.normpath("/" + value)
+    except (TypeError, ValueError):
+        return False
+    return normalized in _DYLD_INTERNAL_DIRFD_PATHS
+
+
 def _canonical_macos_path(path_text: str) -> str:
     """Normalize stable logical/physical aliases emitted by macOS ktrace."""
 
@@ -651,6 +688,15 @@ def parse_fs_usage(
             if relative_path:
                 path_text = posixpath.join(root_text, relative_path)
                 projected_relative_path = True
+        if (
+            path_text
+            and _canonical_macos_path(path_text) in _DYLD_INTERNAL_PATHS
+        ) or (
+            not path_text
+            and _dyld_internal_dirfd_lookup(operation_name, details)
+        ):
+            observed_operation = ""
+            ignored_operation = True
         if observed_operation and path_text:
             add_path(path_text, kind=kind, operation=observed_operation)
             if projected_relative_path:
@@ -662,13 +708,11 @@ def parse_fs_usage(
                 unresolved = _bounded_add(unresolved, 1)
         elif observed_operation:
             unresolved = _bounded_add(unresolved, 1)
-        elif path_text and operation_name not in {
-            "close",
-            "fsync",
-            "pwrite",
-            "write",
-            "write_nocancel",
-        } and not ignored_operation:
+        elif (
+            path_text
+            and operation_name not in _IGNORED_OPERATIONS
+            and not ignored_operation
+        ):
             unresolved = _bounded_add(unresolved, 1)
 
     for relative in conflicts:

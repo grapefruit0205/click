@@ -209,6 +209,30 @@ class ClickObserverMacOSTests(unittest.TestCase):
         self.assertEqual(parsed.unresolved_event_count, 1)
         self.assertFalse(parsed.process_tree_complete)
 
+    def test_parser_ignores_fixed_dyld_startup_housekeeping(self) -> None:
+        parsed = click_observer_macos.parse_fs_usage(
+            self.trace_text(
+                "12:00:00.000001 fsgetpath /usr/lib/dyld "
+                "0.000010 Python.20",
+                "12:00:00.000002 openat F=4 (R______________) "
+                "[3]/../../System/Volumes/Preboot/Cryptexes/OS "
+                "0.000011 Python.20",
+                "12:00:00.000003 openat F=6 (R______________) "
+                "[4]/System/Library/dyld 0.000012 Python.20",
+                "12:00:00.000004 stat64 Err#2 "
+                "/AppleInternal/XBS/.isChrooted 0.000013 Python.20",
+                "12:00:00.000005 open F=3 (R_____) /dev/dtracehelper "
+                "0.000014 Python.20",
+            ),
+            workspace=self.workspace,
+            root_execution_bound=True,
+        )
+
+        self.assertEqual(parsed.inputs, ())
+        self.assertEqual(parsed.absolute_inputs, ())
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertTrue(parsed.process_tree_complete)
+
     def test_parser_accepts_absolute_openat_path_after_dirfd_prefix(self) -> None:
         root = self.workspace.as_posix()
         parsed = click_observer_macos.parse_fs_usage(
