@@ -767,7 +767,11 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
         super().setUp()
         environment = mock.patch.dict(
             os.environ,
-            {"PYTHONHASHSEED": "0", "PYTHONDONTWRITEBYTECODE": "1"},
+            {
+                "CLICK_NATIVE_OBSERVER_DIAGNOSTICS": "1",
+                "PYTHONHASHSEED": "0",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
         )
         environment.start()
         self.addCleanup(environment.stop)
@@ -888,7 +892,10 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
             self.assertEqual(
                 source["verified_dependency_observation"]["status"],
                 "complete",
-                source["verified_dependency_observation"],
+                {
+                    "observation": source["verified_dependency_observation"],
+                    "stderr": first_result.stderr,
+                },
             )
 
         contract_b = self.contract_for_shards(

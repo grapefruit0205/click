@@ -24,6 +24,7 @@ import posixpath  # noqa: E402
 import re  # noqa: E402
 import signal  # noqa: E402
 import subprocess  # noqa: E402
+import sys  # noqa: E402
 import threading  # noqa: E402
 import time  # noqa: E402
 from typing import Any, BinaryIO  # noqa: E402
@@ -278,6 +279,29 @@ _native_fs_usage = native_fs_usage
 
 
 def _bounded_add(left: int, right: int) -> int:
+    if os.environ.get("CLICK_NATIVE_OBSERVER_DIAGNOSTICS") == "1":
+        try:
+            frame = sys._getframe(1)
+            if frame.f_code.co_name in {"add_path", "parse_fs_usage"}:
+                local = frame.f_locals
+                print(
+                    "authoritative macOS unresolved diagnostic: "
+                    + repr(
+                        {
+                            "function": frame.f_code.co_name,
+                            "line": frame.f_lineno,
+                            "operation": local.get("operation_name"),
+                            "details": str(local.get("details", ""))[:500],
+                            "path": str(local.get("path_text", ""))[:500],
+                            "kind": local.get("kind"),
+                            "left": left,
+                            "right": right,
+                        }
+                    ),
+                    file=sys.stderr,
+                )
+        except Exception:
+            pass
     return click_observer_common.bounded_add(left, right)
 
 
