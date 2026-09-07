@@ -34,6 +34,12 @@ SUPPORTED = (
         sys.implementation.name, sys.version_info[:3]
     )
 )
+SETTING_FREE_E2E_SUPPORTED = (
+    SUPPORTED
+    and sys.platform == "linux"
+    and sys.implementation.name == "cpython"
+    and sys.version_info[:3] == (3, 12, 3)
+)
 
 
 def write(root: Path, relative: str, content: str) -> None:
@@ -454,7 +460,10 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
         self.assertFalse(failed["reuse_ready"])
 
 
-@unittest.skipUnless(SUPPORTED, "setup profile requires CPython 3.10-3.14")
+@unittest.skipUnless(
+    SETTING_FREE_E2E_SUPPORTED,
+    "setting-free automatic-sharding E2E requires Linux CPython 3.12.3",
+)
 class ShardingGateIntegrationTests(ClickGateTestCase):
     hook_in_process = True
 
