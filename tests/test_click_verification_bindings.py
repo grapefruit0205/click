@@ -7,14 +7,102 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import subprocess
 import unittest
 from unittest import mock
 
 from hooks import click_verification as verification
 from hooks import click_verification_bindings as bindings
+from hooks import click_verification_inputs as inputs
 
 
 class VerificationBindingStageTests(unittest.TestCase):
+    def test_shared_inputs_keep_per_group_membership_and_fresh_boundary_hashes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cwd = Path(directory)
+            config = cwd / "options.json"
+            config.write_text('{"value":1}')
+            groups = {str(index): [{"argv": [sys.executable, "-m", "unittest", "one"],
+                                   "inputs": ["*.json"]}] for index in range(3)}
+            environment = bindings.verification_environment(cwd=cwd)
+            with mock.patch.object(bindings, "hash_file_content", wraps=bindings.hash_file_content) as digest:
+                first = bindings.collect_group_bindings(groups, set(groups), cwd=cwd,
+                                                        environment=environment, digest_file=digest)
+                self.assertIsNotNone(first)
+                self.assertEqual(digest.call_count, 2 * (len(groups) if os.name == "nt" else 1))
+                for key, checks in groups.items():
+                    self.assertEqual(first[0][key], bindings.verification_environment_digest(
+                        checks, cwd=cwd, environment=environment))
+                original = config.stat()
+                config.write_text('{"value":2}')
+                os.utime(config, ns=(original.st_atime_ns, original.st_mtime_ns))
+                second = bindings.collect_group_bindings(groups, set(groups), cwd=cwd,
+                                                         environment=environment, digest_file=digest)
+            self.assertNotEqual(first[0], second[0])
+            stage = bindings.FileDigestStage()
+            baseline = inputs.snapshot(cwd, ("*.json",), file_content_digest=stage)
+            added = cwd / "new.json"
+            added.write_text("{}")
+            self.assertNotEqual(baseline["digest"], inputs.snapshot(
+                cwd, ("*.json",), file_content_digest=stage)["digest"])
+            added.unlink()
+            self.assertEqual(baseline, inputs.snapshot(cwd, ("*.json",), file_content_digest=stage))
+            config.rename(cwd / "moved.json")
+            self.assertNotEqual(baseline["digest"], inputs.snapshot(
+                cwd, ("*.json",), file_content_digest=stage)["digest"])
+
+    def test_snapshot_keeps_legacy_digest_and_observes_dirty_index_and_new_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cwd = Path(directory)
+            def git(*arguments):
+                return subprocess.run(["git", *arguments], cwd=cwd, capture_output=True, check=True)
+            git("init", "-q")
+            def legacy_snapshot():
+                hasher = hashlib.sha256()
+                has_head = bindings.git_capture(cwd, ["rev-parse", "--verify", "HEAD"]) is not None
+                if has_head:
+                    tree = bindings.git_capture(cwd, ["rev-parse", "HEAD^{tree}"])
+                    hasher.update(len(tree).to_bytes(8, "big")); hasher.update(tree)
+                commands = [["diff", "--binary", "--no-ext-diff", "--no-textconv", "HEAD", "--"]] if has_head else [
+                    ["diff", "--binary", "--no-ext-diff", "--no-textconv", "--cached", "--"],
+                    ["diff", "--binary", "--no-ext-diff", "--no-textconv", "--"],
+                ]
+                for command in commands:
+                    diff = bindings.git_capture(cwd, command)
+                    hasher.update(len(diff).to_bytes(8, "big")); hasher.update(diff)
+                untracked = bindings.git_capture(cwd, ["ls-files", "--others", "--exclude-standard", "-z"])
+                for relative in sorted(os.fsdecode(value) for value in untracked.split(b"\0") if value):
+                    bindings.hash_workspace_path(hasher, cwd, relative)
+                return hasher.hexdigest()
+            self.assertEqual(bindings.git_workspace_snapshot(cwd)["digest"], legacy_snapshot())
+            source = cwd / "source.txt"
+            source.write_text("original")
+            git("add", ".")
+            git("-c", "user.name=Click Tests", "-c", "user.email=click-tests@example.invalid", "commit", "-qm", "fixture")
+            with mock.patch.object(bindings, "git_capture", wraps=bindings.git_capture) as capture:
+                clean = bindings.git_workspace_snapshot(cwd)
+            self.assertEqual(capture.call_count, 4)
+            self.assertEqual(clean["digest"], legacy_snapshot())
+            source.write_text("staged")
+            git("add", "source.txt")
+            source.write_text("worktree")
+            (cwd / "new.txt").write_text("untracked")
+            dirty = bindings.git_workspace_snapshot(cwd)
+            self.assertEqual(dirty["digest"], legacy_snapshot())
+            self.assertNotEqual(dirty["digest"], clean["digest"])
+
+    def test_unreadable_head_tree_does_not_become_an_unborn_snapshot(self):
+        def capture(cwd, arguments):
+            if arguments == ["rev-parse", "--show-toplevel"]:
+                return os.fsencode(str(cwd)) + b"\n"
+            if arguments == ["rev-parse", "--verify", "HEAD^{tree}"]:
+                return None
+            if arguments == ["rev-parse", "--verify", "HEAD"]:
+                return b"a" * 40 + b"\n"
+            raise AssertionError("A malformed repository must not reach diff execution")
+        with mock.patch.object(bindings, "git_capture", side_effect=capture):
+            self.assertIsNone(bindings.git_workspace_snapshot(Path.cwd()))
+
     def test_shared_executable_is_hashed_once_per_stage_and_fresh_next_stage(self):
         groups = {
             "argv:E_ONE": [{"argv": [sys.executable, "-m", "unittest", "one"]}],
@@ -39,6 +127,33 @@ class VerificationBindingStageTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(digest.call_count, 2 * per_stage)
 
+    def test_executable_payload_uses_content_instead_of_volatile_mtime(self):
+        baseline = {
+            "name": "npx.cmd",
+            "selected_path": "c:/node/npx.cmd",
+            "path": "c:/node/npx.cmd",
+            "size": 12,
+            "mtime_ns": 1,
+            "content_digest": "a" * 64,
+            "runtime_identity": {
+                "status": "complete",
+                "digest": "b" * 64,
+                "reason_codes": [],
+            },
+            "_execution_path": "C:/node/npx.cmd",
+        }
+        touched = {**baseline, "mtime_ns": 2}
+
+        self.assertEqual(
+            bindings.verification_executable_payload([baseline]),
+            bindings.verification_executable_payload([touched]),
+        )
+        changed = {**baseline, "content_digest": "c" * 64}
+        self.assertNotEqual(
+            bindings.verification_executable_payload([baseline]),
+            bindings.verification_executable_payload([changed]),
+        )
+
     def test_windows_equal_metadata_cannot_hide_an_executable_content_change(self):
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "verifier"
@@ -52,6 +167,27 @@ class VerificationBindingStageTests(unittest.TestCase):
                 executable.write_bytes(b"other")
                 self.assertNotEqual(first, stage(executable))
                 self.assertEqual(stage(executable), hashlib.sha256(b"other").hexdigest())
+
+    def test_windows_metadata_only_transition_gets_one_stable_content_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "verifier"
+            executable.write_bytes(b"stable")
+            stage = bindings.FileDigestStage()
+            before = ("verifier", 1)
+            after = ("verifier", 2)
+            with (
+                mock.patch.object(bindings.os, "name", "nt"),
+                mock.patch.object(
+                    stage, "_identity", side_effect=[before, after, after]
+                ),
+                mock.patch.object(
+                    stage, "_digest_file", wraps=bindings.hash_file_content
+                ) as digest,
+            ):
+                self.assertEqual(
+                    stage(executable), hashlib.sha256(b"stable").hexdigest()
+                )
+            self.assertEqual(digest.call_count, 2)
 
     def test_in_stage_replacement_invalidates_the_file_digest(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -81,7 +217,7 @@ class VerificationBindingStageTests(unittest.TestCase):
             stage = bindings.FileDigestStage(digest)
             self.assertEqual(stage(executable), "")
             self.assertEqual(stage(executable), hashlib.sha256(b"replacement").hexdigest())
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 3 if os.name == "nt" else 2)
 
     def test_typed_result_keeps_every_legacy_record_field_and_avoids_copying(self):
         signature = inspect.signature(verification.record_result)

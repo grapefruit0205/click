@@ -70,6 +70,13 @@ REASON_CODES = frozenset(
         "external-input-unmodeled",
         "policy-unavailable",
         "safe-change-policy-not-covered",
+        "explicit-rerun-requested",
+        "always-run-policy",
+        "required-output-not-guaranteed",
+        "explicit-input-receipt-missing",
+        "explicit-input-changed",
+        "explicit-input-unavailable",
+        "runtime-identity-incomplete",
         "receipt-invalid",
     }
 )
@@ -1199,7 +1206,7 @@ def current_batch(verification: Any) -> dict[str, Any] | None:
         return None
     for item in reversed(prune_history(history, now=int(time.time()))):
         if isinstance(item, dict) and item.get("batch_id") == selected and batch_is_valid(item):
-            return json.loads(json.dumps(item))
+            return item  # prune_history already detached it from stored state.
     return None
 
 
@@ -1405,7 +1412,7 @@ def batch_history(verification: Any, *, now: int | None = None) -> list[dict[str
     records = prune_history(events, now=int(time.time()) if now is None else now)
     # Repeated deliveries of the same batch never become new performance samples.
     unique = {item["batch_id"]: item for item in records if item.get("event") == BATCH_EVENT}
-    return json.loads(json.dumps(list(unique.values())))
+    return list(unique.values())  # Each retained record is already detached.
 
 
 def reject_batch(
@@ -1541,11 +1548,16 @@ def merge_history(previous: Any, current: dict[str, Any]) -> None:
 
 
 def history_totals(verification: Any) -> dict[str, int]:
-    batches = [item for item in batch_history(verification)
-               if item["status"] not in {"planned", "running", "incomplete"}]
-    summaries = [batch_summary(item) for item in batches]
-    return {"finalized_batch_count": len(batches), **{
-        key: sum(item[key] for item in summaries) for key in (
+    batches = batch_history(verification)
+    summaries = {item["batch_id"]: batch_summary(item) for item in batches}
+    return _history_totals(batches, summaries)
+
+
+def _history_totals(batches: list[dict], summaries: dict[str, dict]) -> dict[str, int]:
+    finalized = [summaries[item["batch_id"]] for item in batches
+                 if item["status"] not in {"planned", "running", "incomplete"}]
+    return {"finalized_batch_count": len(finalized), **{
+        key: sum(item[key] for item in finalized) for key in (
             "executed_source_count", "authoritative_reuse_count", "not_run_source_count"
         )}}
 
@@ -1553,7 +1565,10 @@ def history_totals(verification: Any) -> dict[str, int]:
 def history_accounting(verification: Any) -> dict[str, Any]:
     """Count actual group requests, including distinct retries, not test cases."""
     batches = batch_history(verification)
-    summaries = [batch_summary(batch) for batch in batches]
+    return _history_accounting(batches, [batch_summary(batch) for batch in batches])
+
+
+def _history_accounting(batches: list[dict], summaries: list[dict]) -> dict[str, Any]:
     unknown_requests = sum(batch["requested_source_count"] is None for batch in batches)
     denominator = sum(batch["requested_source_count"] or 0 for batch in batches)
     numerator = sum(item["authoritative_reuse_count"] for item in summaries)
@@ -1570,6 +1585,21 @@ def history_accounting(verification: Any) -> dict[str, Any]:
             "executed_source_count", "passed_source_count", "failed_source_count",
             "interrupted_source_count", "not_run_source_count", "pending_source_count",
         )},
+    }
+
+
+def history_projection(verification: Any, *, now: int | None = None) -> dict[str, Any]:
+    """Derive one detached display view; never retain it across state changes."""
+    batches = batch_history(verification, now=now)
+    selected = verification.get(CURRENT_BATCH_FIELD) if isinstance(verification, dict) else None
+    current = next((item for item in reversed(batches) if item["batch_id"] == selected), None)
+    summaries = {item["batch_id"]: batch_summary(item) for item in batches}
+    return {
+        "batches": batches,
+        "current": current,
+        "summaries": summaries,
+        "accounting": _history_accounting(batches, list(summaries.values())),
+        "totals": _history_totals(batches, summaries),
     }
 
 
@@ -2517,16 +2547,22 @@ def prune_history(
         raise ValueError("invalid incremental history bounds")
     cutoff = max(1, now - max_age_seconds)
     retained = sorted(
-        (
-            json.loads(json.dumps(event))
-            for event in events
-            if _history_event_is_valid(event) and event["timestamp"] >= cutoff
-        ),
+        (event for event in events
+         if _history_event_is_valid(event) and event["timestamp"] >= cutoff),
         key=lambda event: event["timestamp"],
     )[-max_events:]
-    while retained and len(_canonical_bytes(retained)) > max_bytes:
-        retained.pop(0)
-    return retained
+    # JSON list size is brackets + records + separating commas. Encode each
+    # retained candidate once, then discard oldest records in linear time.
+    # Key order does not affect encoded size; preserving it also keeps the
+    # existing detached-copy behavior for callers that mutate returned records.
+    encoded = [json.dumps(event, separators=(",", ":"), ensure_ascii=True).encode()
+               for event in retained]
+    size = 2 + sum(map(len, encoded)) + max(0, len(encoded) - 1)
+    start = 0
+    while start < len(encoded) and size > max_bytes:
+        size -= len(encoded[start]) + (1 if start + 1 < len(encoded) else 0)
+        start += 1
+    return [json.loads(record) for record in encoded[start:]]
 
 
 def append_plan_history(

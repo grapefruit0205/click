@@ -35,9 +35,9 @@ else:  # Executed beside the bundled hook modules.
     import click_shadow_intelligence
 
 
-PROJECTION_VERSION = 8
+PROJECTION_VERSION = 9
 LEGACY_PROJECTION_VERSION = 4
-LEGACY_PROJECTION_VERSIONS = frozenset({4, 5, 6, 7})
+LEGACY_PROJECTION_VERSIONS = frozenset({4, 5, 6, 7, 8})
 PROJECTION_MODE = "incremental-verification"
 MAX_SOURCES = click_shadow_intelligence.MAX_STATE_SOURCES
 MAX_INPUTS = click_shadow_intelligence.MAX_PROJECTION_INPUTS
@@ -62,7 +62,8 @@ _V4_FIELDS = frozenset(
 _V5_FIELDS = _V4_FIELDS | {"batch_summaries"}
 _V6_FIELDS = _V5_FIELDS | {"setup"}
 _V7_FIELDS = _V6_FIELDS | {"retained_impact"}
-_FIELDS = _V7_FIELDS | {"task_efficiency"}
+_V8_FIELDS = _V7_FIELDS | {"task_efficiency"}
+_FIELDS = _V8_FIELDS
 _TASK_EFFICIENCY_FIELDS = frozenset(
     {"kind", "version", "generated_at", "measurement_status", "measurement_reason", "presentations"}
 )
@@ -79,7 +80,7 @@ _TASK_FIELDS = frozenset(
 _LEGACY_SUMMARY_FIELDS = frozenset({"incremental", "shadow"})
 _SUMMARY_FIELDS = _LEGACY_SUMMARY_FIELDS | {"revalidation_savings"}
 _BATCH_SUMMARY_FIELDS = frozenset({"incremental", "revalidation_savings"})
-_SETUP_FIELDS = frozenset(
+_LEGACY_SETUP_FIELDS = frozenset(
     {
         "version",
         "status",
@@ -93,6 +94,16 @@ _SETUP_FIELDS = frozenset(
         "bootstrap_shards_ms",
         "comparison_net_ms",
         "comparison_scope",
+    }
+)
+_SETUP_FIELDS = _LEGACY_SETUP_FIELDS | frozenset(
+    {
+        "command_status",
+        "inventory_status",
+        "exact_reuse_status",
+        "policy_reuse_status",
+        "authoritative_reuse_status",
+        "next_action_code",
     }
 )
 _INCREMENTAL_FIELDS = frozenset(click_incremental.SUMMARY_FIELDS) | {"current_source_count"}
@@ -309,9 +320,10 @@ def dashboard_projection(
     decisions = {
         item["source_key"]: item for item in plan["decisions"]
     } if plan is not None else {}
-    batch = click_incremental.current_batch(verification)
+    history_view = click_incremental.history_projection(verification, now=generated_at)
+    batch = history_view["current"]
     actual = {item["source_key"]: item for item in (batch or {}).get("sources", [])}
-    history = click_incremental.batch_history(verification, now=generated_at)
+    history = history_view["batches"]
 
     source_keys = sorted(
         {key for key, source in evidence_sources.items() if _is_digest(key)
@@ -490,7 +502,10 @@ def dashboard_projection(
             }
         )
 
-    incremental = click_incremental.summary(verification)
+    incremental = (
+        dict(history_view["summaries"][batch["batch_id"]])
+        if batch is not None else click_incremental.summary(verification)
+    )
     plan_keys = set(decisions)
     incremental["current_source_count"] = sum(
         _source_status(evidence_sources.get(key)) == "passed" for key in plan_keys
@@ -498,7 +513,7 @@ def dashboard_projection(
     visible_batches = history[-MAX_RECENT_BATCHES:]
     batch_summaries = {
         item["batch_id"]: {
-            "incremental": click_incremental.batch_summary(item),
+            "incremental": history_view["summaries"][item["batch_id"]],
             "revalidation_savings": click_incremental.revalidation_savings(item),
         }
         for item in visible_batches
@@ -544,7 +559,7 @@ def dashboard_projection(
                                    and raw_state.get("approved_turn_id")
                                    and raw_state.get("approved_turn_id") != raw_state.get("staged_turn_id")),
         },
-        "accounting": click_incremental.history_accounting(verification),
+        "accounting": history_view["accounting"],
         "retained_impact": click_incremental.retained_impact(history),
         "controls": click_incremental.control_events(raw_state),
         "engine": engine_identity(),
@@ -568,7 +583,7 @@ def dashboard_projection(
             "presentations": [],
         },
         "history": {
-            "totals": click_incremental.history_totals(verification),
+            "totals": history_view["totals"],
             "retained_batch_count": len(history),
             "visible_batch_count": min(len(history), MAX_RECENT_BATCHES),
             "current_batch_id": batch["batch_id"] if batch is not None else None,
@@ -738,18 +753,19 @@ def projection_is_valid(value: Any) -> bool:
                 if incremental[field] != selected["incremental"][field]:
                     return False
 
-    if version in {7, PROJECTION_VERSION} and not click_incremental.retained_impact_is_valid(value.get("retained_impact")):
+    if version in {7, 8, PROJECTION_VERSION} and not click_incremental.retained_impact_is_valid(value.get("retained_impact")):
         return False
-    if version in {7, PROJECTION_VERSION} and (
+    if version in {7, 8, PROJECTION_VERSION} and (
         value["retained_impact"]["completed_request_count"] > history["retained_batch_count"]
         or value["retained_impact"]["reused_group_request_count"] > value["accounting"]["reuse_numerator"]
     ):
         return False
-    if version in {6, 7, PROJECTION_VERSION}:
+    if version in {6, 7, 8, PROJECTION_VERSION}:
         setup = value.get("setup")
         if (
             not isinstance(setup, dict)
-            or set(setup) != _SETUP_FIELDS
+            or set(setup)
+            != (_SETUP_FIELDS if version == PROJECTION_VERSION else _LEGACY_SETUP_FIELDS)
             or setup.get("version") != click_sharding_setup.VERSION
             or not isinstance(setup.get("status"), str)
             or re.fullmatch(r"[a-z0-9-]{1,64}", setup["status"]) is None
@@ -781,7 +797,7 @@ def projection_is_valid(value: Any) -> bool:
         ):
             return False
 
-    if version == PROJECTION_VERSION:
+    if version in {8, PROJECTION_VERSION}:
         task_efficiency = value.get("task_efficiency")
         if (
             not isinstance(task_efficiency, dict)

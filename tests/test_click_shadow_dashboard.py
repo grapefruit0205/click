@@ -187,6 +187,34 @@ class ClickShadowDashboardTests(ClickGateTestCase):
         self.assertIn('id="setupNet"', html)
         self.assertIn("signedDuration(setup.comparison_net_ms)", CLICK_SHADOW_DASHBOARD.JS)
         self.assertIn("Observer: authoritative", CLICK_SHADOW_DASHBOARD.JS)
+        for readiness_id in (
+            "commandReadiness",
+            "inventoryReadiness",
+            "exactReadiness",
+            "policyReadiness",
+            "authoritativeReadiness",
+            "readinessNext",
+        ):
+            self.assertIn(f'id="{readiness_id}"', html)
+
+    def test_dashboard_locale_keys_match_for_korean_english_and_chinese(self) -> None:
+        locale_root = Path(CLICK_SHADOW_DASHBOARD.__file__).parent / "dashboard" / "locales"
+        locales = {
+            name: json.loads((locale_root / f"{name}.json").read_text(encoding="utf-8"))
+            for name in ("ko", "en", "zh-CN")
+        }
+        self.assertEqual(set(locales["ko"]), set(locales["en"]))
+        self.assertEqual(set(locales["ko"]), set(locales["zh-CN"]))
+        self.assertEqual(len(locales["ko"]), len(set(locales["ko"])))
+        for key in (
+            "사용하던 검증 도구는 그대로. 반복 검증은 근거 있게.",
+            "명령 실행",
+            "자동 목록·분할",
+            "같은 상태 재사용",
+            "커밋 정책 재사용",
+            "관찰 기반 재사용",
+        ):
+            self.assertTrue(all(locales[name][key] for name in locales))
 
     def test_guarded_contract_transition_keeps_viewer_history_without_authority(self) -> None:
         self.set_default("guarded", "turn-0")

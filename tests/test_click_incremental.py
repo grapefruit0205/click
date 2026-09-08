@@ -2,12 +2,57 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest import mock
 
 from hooks import click_incremental
 from click_gate_test_support import ClickGateTestCase
 
 
 class ClickIncrementalPlanTests(unittest.TestCase):
+    def test_history_size_boundary_preserves_order_and_detachment(self) -> None:
+        plan = click_incremental.build_plan([
+            self.item("a", "run", "no-passing-evidence", "runner"),
+        ], current_revision=12, planned_at=100)
+        batch = click_incremental.new_batch(plan, batch_id="a" * 32, revision=12, prepared_ms=1)
+        batches = []
+        for number in range(8):
+            item = json.loads(json.dumps(batch))
+            item.update(batch_id=f"{number:032x}", timestamp=100 + number)
+            batches.append(item)
+        encoded_size = len(click_incremental._canonical_bytes(batches[-3:]))
+        for limit, expected in ((1, []), (encoded_size - 1, batches[-2:]),
+                                (encoded_size, batches[-3:]), (encoded_size + 1, batches[-3:])):
+            with self.subTest(limit=limit):
+                result = click_incremental.prune_history(
+                    reversed(batches), now=107, max_bytes=limit,
+                )
+                self.assertEqual(result, expected)
+                if result:
+                    result[-1]["sources"][0]["label"] = "detached"
+                    self.assertNotEqual(batches[-1]["sources"][0]["label"], "detached")
+
+    def test_history_projection_uses_one_retention_window_without_sharing_state(self) -> None:
+        plan = click_incremental.build_plan([
+            self.item("a", "run", "no-passing-evidence", "runner"),
+        ], current_revision=12)
+        verification = {}
+        click_incremental.store_batch(verification, click_incremental.new_batch(
+            plan, batch_id="a" * 32, revision=12, prepared_ms=1,
+        ))
+        click_incremental.mark_started(verification, "a" * 64)
+        click_incremental.mark_completed(verification, "a" * 64, status="passed",
+                                         reason="command-passed", duration_ms=2)
+        before = json.dumps(verification)
+        expected = (click_incremental.current_batch(verification),
+                    click_incremental.history_accounting(verification),
+                    click_incremental.history_totals(verification))
+        with mock.patch.object(click_incremental, "prune_history", wraps=click_incremental.prune_history) as prune:
+            view = click_incremental.history_projection(verification)
+        self.assertEqual(prune.call_count, 1)
+        self.assertEqual((view["current"], view["accounting"], view["totals"]), expected)
+        view["current"]["sources"][0]["label"] = "display only"
+        self.assertEqual(json.dumps(verification), before)
+
     def test_cancellation_retains_finished_failure_and_never_counts_unstarted_as_run(self) -> None:
         plan = click_incremental.build_plan([
             self.item("a", "run", "observed-input-changed", "runner"),

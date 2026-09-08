@@ -1,0 +1,11 @@
+{
+  "name": "click-vitest-v5-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:once": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "5.0.0"
+  }
+}

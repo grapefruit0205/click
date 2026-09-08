@@ -11,8 +11,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import secrets
-from typing import Any
 
 
 HOST_COVERAGE_VERSION = 1
@@ -85,7 +83,7 @@ ANTIGRAVITY_MUTATION_TOOL_NAMES = frozenset(
 ANTIGRAVITY_PLAN_TOOL_NAMES = frozenset({"update_plan", "create_plan"})
 
 
-_HOST_SPECS: dict[str, dict[str, Any]] = {
+_HOST_SPECS: dict[str, dict[str, object]] = {
     "codex": {
         "assurance": KNOWN_SURFACES_ASSURANCE,
         "limitations": (HOST_EVENT_OMISSION_LIMITATION,),
@@ -119,7 +117,7 @@ _HOST_SPECS: dict[str, dict[str, Any]] = {
 }
 
 
-def host_id_from_event(event: dict[str, Any]) -> str:
+def host_id_from_event(event: dict[str, object]) -> str:
     """Resolve Click's canonical host id, defaulting legacy Codex events."""
     value = event.get("platform")
     if value is None or value == "":
@@ -130,7 +128,7 @@ def host_id_from_event(event: dict[str, Any]) -> str:
     return normalized if normalized in _HOST_SPECS else ""
 
 
-def spec(host_id: str) -> dict[str, Any] | None:
+def spec(host_id: str) -> dict[str, object] | None:
     """Return a detached JSON-compatible copy of one registered host surface."""
     registered = _HOST_SPECS.get(host_id)
     if registered is None:
@@ -152,7 +150,7 @@ def coverage_digest(host_id: str) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def receipt(host_id: str) -> dict[str, Any] | None:
+def receipt(host_id: str) -> dict[str, object] | None:
     """Return the compact coverage identity bound to verification evidence."""
     registered = _HOST_SPECS.get(host_id)
     if registered is None:
@@ -165,12 +163,12 @@ def receipt(host_id: str) -> dict[str, Any] | None:
     }
 
 
-def receipt_for_event(event: dict[str, Any]) -> dict[str, Any] | None:
+def receipt_for_event(event: dict[str, object]) -> dict[str, object] | None:
     host_id = host_id_from_event(event)
     return receipt(host_id) if host_id else None
 
 
-def receipt_is_valid(value: Any) -> bool:
+def receipt_is_valid(value: object) -> bool:
     """Validate a receipt's shape without requiring its digest to be current."""
     if not isinstance(value, dict) or set(value) != {
         "version",
@@ -190,8 +188,10 @@ def receipt_is_valid(value: Any) -> bool:
     )
 
 
-def receipt_is_current(value: Any) -> bool:
+def receipt_is_current(value: object) -> bool:
     """Require a valid receipt to match the installed registry exactly."""
+    import secrets
+
     if not receipt_is_valid(value):
         return False
     expected = receipt(str(value["host"]))

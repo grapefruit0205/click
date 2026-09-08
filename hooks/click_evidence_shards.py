@@ -10,19 +10,24 @@ decision so the caller runs the original parent suite.
 from __future__ import annotations
 
 from collections.abc import Callable
-import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import stat
 from typing import Any
 
 if __package__:
-    from . import click_dependency_cache
-else:  # Executed directly from the bundled hooks directory.
-    import click_dependency_cache
+    from . import click_import_bootstrap
+else:
+    import click_import_bootstrap
+
+(click_dependency_cache, click_verification_adapters) = (
+    click_import_bootstrap.load_siblings(
+        __package__, "click_dependency_cache", "click_verification_adapters"
+    )
+)
 
 
 CONFIG_RELATIVE_PATH = ".click/evidence-shards.json"
@@ -190,189 +195,15 @@ def _matched_paths(patterns: tuple[str, ...], paths: list[str]) -> list[str]:
     ]
 
 
-def _unittest_discovery_spec(
-    parent_checks: list[list[str]],
-) -> tuple[tuple[str, tuple[str, ...]] | None, str]:
-    """Return ``(start directory, patterns)`` for one unittest discover check."""
-    if len(parent_checks) != 1:
-        return None, ""
-    argv = parent_checks[0]
-    if not argv:
-        return None, ""
-    executable = Path(argv[0]).name.lower()
-    index = 1
-    if executable in {"py", "py.exe"} and index < len(argv) and re.fullmatch(
-        r"-\d+(?:\.\d+)?(?:-\d+)?", argv[index]
-    ):
-        index += 1
-    if executable not in {
-        "python",
-        "python.exe",
-        "python3",
-        "python3.exe",
-        "pypy",
-        "pypy.exe",
-        "pypy3",
-        "pypy3.exe",
-        "py",
-        "py.exe",
-    }:
-        return None, ""
-    if argv[index : index + 3] != ["-m", "unittest", "discover"]:
-        return None, ""
-
-    arguments = argv[index + 3 :]
-    start: str | None = None
-    pattern: str | None = None
-    positionals: list[str] = []
-    cursor = 0
-    while cursor < len(arguments):
-        argument = arguments[cursor]
-        if argument in {"-s", "--start-directory", "-p", "--pattern"}:
-            if cursor + 1 >= len(arguments):
-                return None, "parent-discovery-arguments-unsupported"
-            value = arguments[cursor + 1]
-            if argument in {"-s", "--start-directory"}:
-                if start is not None:
-                    return None, "parent-discovery-arguments-unsupported"
-                start = value
-            else:
-                if pattern is not None:
-                    return None, "parent-discovery-arguments-unsupported"
-                pattern = value
-            cursor += 2
-            continue
-        if argument.startswith("--start-directory="):
-            if start is not None:
-                return None, "parent-discovery-arguments-unsupported"
-            start = argument.split("=", 1)[1]
-        elif argument.startswith("--pattern="):
-            if pattern is not None:
-                return None, "parent-discovery-arguments-unsupported"
-            pattern = argument.split("=", 1)[1]
-        elif argument in {"-t", "--top-level-directory", "-k"}:
-            if cursor + 1 >= len(arguments):
-                return None, "parent-discovery-arguments-unsupported"
-            cursor += 2
-            continue
-        elif argument.startswith("-"):
-            pass
-        else:
-            positionals.append(argument)
-        cursor += 1
-
-    if len(positionals) > 3:
-        return None, "parent-discovery-arguments-unsupported"
-    if start is None and positionals:
-        start = positionals[0]
-    if pattern is None and len(positionals) > 1:
-        pattern = positionals[1]
-    start = start or "."
-    pattern = pattern or "test*.py"
-    if os.name == "nt":
-        start = start.replace("\\", "/")
-    if (
-        not start
-        or not pattern
-        or "\x00" in start
-        or "\x00" in pattern
-        or "\\" in start
-        or PurePosixPath(start).is_absolute()
-        or any(part in {"", ".."} for part in PurePosixPath(start).parts)
-        or "/" in pattern
-        or "\\" in pattern
-    ):
-        return None, "parent-discovery-arguments-unsupported"
-    return (start, (pattern,)), ""
-
-
-def _pytest_discovery_spec(
-    parent_checks: list[list[str]],
-) -> tuple[tuple[str, tuple[str, ...]] | None, str]:
-    if len(parent_checks) != 1 or not parent_checks[0]:
-        return None, ""
-    argv = parent_checks[0]
-    executable = Path(argv[0]).name.lower()
-    index = 1
-    if executable in {"py", "py.exe"} and index < len(argv) and re.fullmatch(
-        r"-3(?:\.\d+)?", argv[index]
-    ):
-        index += 1
-    if not re.fullmatch(r"python(?:3(?:\.\d+)?)?(?:\.exe)?", executable) and executable not in {"py", "py.exe"}:
-        return None, ""
-    if argv[index : index + 2] != ["-m", "pytest"]:
-        return None, ""
-    arguments = argv[index + 2 :]
-    flags = {
-        "-q", "--quiet", "-v", "--verbose", "--strict-markers",
-        "--strict-config", "--disable-warnings",
-    }
-    value_options = {"-k", "-m", "--maxfail", "--tb"}
-    positionals: list[str] = []
-    cursor = 0
-    while cursor < len(arguments):
-        value = arguments[cursor]
-        if value in flags:
-            cursor += 1
-            continue
-        if value in value_options:
-            if cursor + 1 >= len(arguments) or not arguments[cursor + 1]:
-                return None, "parent-discovery-arguments-unsupported"
-            cursor += 2
-            continue
-        if value.startswith(("--maxfail=", "--tb=")) and value.partition("=")[2]:
-            cursor += 1
-            continue
-        if value.startswith("-") or "::" in value:
-            return None, "parent-discovery-arguments-unsupported"
-        positionals.append(value)
-        cursor += 1
-    if len(positionals) > 1:
-        return None, "parent-discovery-arguments-unsupported"
-    start = positionals[0] if positionals else "."
-    if os.name == "nt":
-        start = start.replace("\\", "/")
-    if (
-        not start
-        or "\x00" in start
-        or "\\" in start
-        or PurePosixPath(start).is_absolute()
-        or any(part in {"", ".."} for part in PurePosixPath(start).parts)
-    ):
-        return None, "parent-discovery-arguments-unsupported"
-    return (start, ("test_*.py", "*_test.py")), ""
-
-
 def _parent_discovery_paths(
     parent_checks: list[list[str]],
     repository_paths: list[str],
     *,
     working_prefix: str,
 ) -> tuple[set[str] | None, str]:
-    spec, error = _unittest_discovery_spec(parent_checks)
-    if not error and spec is None:
-        spec, error = _pytest_discovery_spec(parent_checks)
-    if error or spec is None:
-        return None, error
-    start, patterns = spec
-    start_parts = [] if start == "." else list(PurePosixPath(start).parts)
-    prefix_parts = (
-        [] if not working_prefix else list(PurePosixPath(working_prefix).parts)
+    return click_verification_adapters.parent_discovery_paths(
+        parent_checks, repository_paths, working_prefix=working_prefix
     )
-    discovery_root = PurePosixPath(*prefix_parts, *start_parts).as_posix()
-    if discovery_root == ".":
-        discovery_root = ""
-    prefix = f"{discovery_root}/" if discovery_root else ""
-    return {
-        relative
-        for relative in repository_paths
-        if (not prefix or relative.startswith(prefix))
-        and relative.endswith(".py")
-        and any(
-            fnmatch.fnmatchcase(PurePosixPath(relative).name, pattern)
-            for pattern in patterns
-        )
-    }, ""
 
 
 def _normalize_entry(

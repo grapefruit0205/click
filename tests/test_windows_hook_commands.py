@@ -104,7 +104,7 @@ class WindowsHookCommandTests(unittest.TestCase):
                 self.assertNotIn("powershell", commands[event_name].lower())
                 self.assertNotIn("py -3", commands[event_name].lower())
                 command = hooks[event_name][0]["hooks"][0]["command"]
-                self.assertIn("click_gate.py", command)
+                self.assertIn("click_hook.py", command)
 
         matchers = [
             re.compile(entry["matcher"])
@@ -124,6 +124,12 @@ class WindowsHookCommandTests(unittest.TestCase):
                 )
         desktop_handler = hooks["PreToolUse"][1]["hooks"][0]
         self.assertIn("click_hook.py", desktop_handler["command"])
+
+        launcher = (ROOT / "hooks" / "click_windows.cmd").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn('-c "import sys', launcher)
+        self.assertEqual(launcher.count('click_windows.py" %*'), 3)
 
     @unittest.skipUnless(os.name == "nt", "Windows cmd integration test")
     def test_hooks_execute_via_cmd_and_exec_aliases_rewrite(self) -> None:
@@ -324,7 +330,7 @@ class WindowsHookCommandTests(unittest.TestCase):
                 0,
                 f"fallback hook failed:\n{result.stderr}\n{result.stdout}",
             )
-            self.assertNotIn("No installed Python found", result.stderr)
+            self.assertIn("No installed Python found", result.stderr)
             payload = json.loads(result.stdout)
             self.assertIn(
                 "Click default mode:",

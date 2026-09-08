@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 5,
+  "inherits": "CAPABILITY_PHASE4.json",
+  "capabilities": [
+    {
+      "id": "vitest-5-default-one-shot",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "automatic_inventory_tested": "passed",
+      "exact_file_split_tested": "passed",
+      "setup_init_status_refresh_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "parent_fallback_tested": "passed",
+      "config_runtime_invalidation_tested": "passed",
+      "dependency_candidates": "conservative-all-paths",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-linux-macos-windows"
+    },
+    {
+      "id": "vitest-custom-config-workspace-browser-watch-coverage",
+      "command_recognized": "profile-excluded",
+      "actual_execution_tested": "not-tested",
+      "automatic_inventory_tested": "not-tested",
+      "parent_fallback_tested": "passed",
+      "tested_hosts": []
+    }
+  ],
+  "authority": false
+}

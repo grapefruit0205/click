@@ -29,14 +29,14 @@ codex plugin add click@click
 
 重启 Codex 并新建任务，让已安装的 Hook 和技能重新加载。在依赖 Hook 之前，先通过 CLI 的 `/hooks` 页面审阅待确认的 Click Hook；详见 [Hook 故障排查](#hook-故障排查)。
 
-当前版本：**v0.93.0**。更新命令：
+当前版本：**v0.94.0**。更新命令：
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.93.0 会拒绝格式错误的证据修订值，把 safe-change 与 successor 复用绑定到当前的精确输入，并在复用前再次确认输入；同时加强显式进程终止和临时报告清理。自动分片和经授权的分片复用保持不变。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)和[代码加固记录](docs/review-hardening/reports/phase-6.md)。
+更新后请重启，并使用新任务。v0.94.0 为固定版本的 Vitest 5 和 Jest 30 配置增加了有界自动 inventory 与精确文件分片，将精确运行时和输入绑定扩展到 Node、npm、Go 与内容验证，并通过常驻 Hook worker 减少重复的 Python 启动开销。仪表板以韩语、英语和简体中文分别显示执行、自动分片、同状态精确复用、仓库所有者策略复用和权威观察。遇到不支持或不明确的发现过程时仍执行原始 parent 命令；自动分片 `init/status/refresh` 与经授权的分片复用仍是必须满足的回归标准。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)和[多语言扩展记录](docs/multilang-expansion/FINAL_REPORT.md)。
 
 ## 从日常工作开始
 
@@ -113,11 +113,24 @@ click-gate sharding refresh
 1. 审阅提案；`refresh` 在 Evidence 模式下，或在单独批准的 Guarded 范围内，应用符合条件的策略。
 2. 到达 `commit-required` 后，通过正常 Git 流程提交提案要求的精确策略内容。设置控制器不会执行 `git add`、`commit` 或 `push`。
 3. `refresh` 执行父项与子项的初始化校验（bootstrap），然后报告 `baseline-required`。Bootstrap 属于设置成本。
-4. `refresh` 为当前修订获取基准验证。所有子项通过后可以达到 `sharding-ready`，但复用准备状态仍可能不可用；达到 `reuse-ready` 还要求每个子项都具有完整的权威观测。
+4. `refresh` 为当前修订获取基准验证。所有子项通过后会达到 `sharding-ready`；即使 Observer 关闭，未发生变更的重复请求也可以使用精确凭据。已提交策略与权威观测的准备状态会分别显示。
 
-每一步之间查看 `status` 并按其下一步提示操作。自动设置的复用准备状态，与上文普通的精确凭据和安全变更复用路径是分开的。后续测试发现结果发生变化时，会生成限定范围的 diff；刷新只更新与 Click 先前已提交内容谱系一致的策略，不覆盖用户拥有或修改过的策略。
+每一步之间查看 `status` 并按其下一步提示操作。状态会分别显示命令执行、自动清单与拆分、精确复用、已提交策略复用和权威观测复用；其中一条路径就绪不代表其他路径也已就绪。后续测试发现结果发生变化时，会生成限定范围的 diff；刷新只更新与 Click 先前已提交内容谱系一致的策略，不覆盖用户拥有或修改过的策略。
 
-收集器支持 CPython 3.10–3.14 上有限定范围的 unittest 发现，以及保守的 pytest collect-only 配置。不支持或存在歧义的收集会保留父命令。详见[自动分片指南](skills/click/references/automatic-sharding-setup.md)及[两个项目的端到端记录](docs/auto-sharding-e2e.md)。
+自动清单与精确拆分已在有限定范围的 unittest、固定版本的 Vitest 5 和 Jest 30 配置中通过本地验证。保守的 pytest collect-only 配置已经实现并分配给固定版本的 pytest CI，但此 checkout 的最终本地运行没有 pytest。Vitest 与 Jest 仅支持受限的静态配置；不支持或存在歧义的收集会保留父命令。详见[自动分片指南](skills/click/references/automatic-sharding-setup.md)及[两个项目的端到端记录](docs/auto-sharding-e2e.md)。
+
+支持范围按验证工具配置管理，而不是只按编程语言名称管理。
+
+| 工具/配置 | 实际本地执行 | 自动清单与拆分 |
+| --- | --- | --- |
+| CPython unittest | 已验证 | 受限配置 |
+| pytest | 收集器与配置已实现；已分配固定版本 CI；最终本地运行不可用 | 受限配置 |
+| Vitest 5 / Jest 30 | 已使用固定 fixture 验证 | 受限配置、精确文件子项 |
+| Node test/check、npm test、Go test | 已验证 | 仅父命令执行 |
+| JSON/YAML/Markdown/SVG 项目验证器、jq | 已验证 fixture | 仅父命令执行 |
+| Cargo、Gradle/Maven、.NET、TypeScript/CMake/CTest、直接 SQL/XML linter | 仅识别命令与运行时配置；此 checkout 尚未验证原生执行 | 无 |
+
+“仅识别”不代表相应原生工具链已经通过。各 Phase 的运行时与 CI 依据记录在 [`docs/multilang-expansion/`](docs/multilang-expansion/)。
 
 ## Observer 可以一直关闭吗？
 
@@ -143,7 +156,7 @@ click-gate dashboard status
 click-gate dashboard stop
 ```
 
-打开控制命令返回的本地 URL。仪表板展示当前任务、验证组状态、复用依据和工作历史。后续组运行期间，已完成组的结果会持续保留。同一宿主会话及工作区内，查看器可以在连续的 Evidence 任务之间保持连接。
+打开控制命令返回的本地 URL。首屏会分别展示命令、自动清单、精确复用、已提交策略和观测的准备状态，并提示下一步操作；同时展示当前任务、验证组状态、复用依据和工作历史。后续组运行期间，已完成组的结果会持续保留。同一宿主会话及工作区内，查看器可以在连续的 Evidence 任务之间保持连接。
 
 **右上角的语言选择器**提供 **한국어 · English · 简体中文**。默认语言为韩语；本地存储可用时，浏览器会记住同一来源的语言偏好。报告跟随所选语言，用户编写的任务名称和检查名称则保留原文。
 

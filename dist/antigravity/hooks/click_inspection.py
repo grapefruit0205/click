@@ -160,7 +160,7 @@ def sanitized_executable_path(
         if path_is_within(lexical, root):
             continue
         try:
-            resolved = Path(normalized_entry).resolve()
+            resolved = Path(normalized_entry).resolve(strict=True)
         except (OSError, RuntimeError):
             continue
         if path_is_within(resolved, root):

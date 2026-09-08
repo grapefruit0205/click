@@ -1,0 +1,129 @@
+.....Click verification runner was already claimed; replay is blocked.
+...........................[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click] Verification was interrupted. The active check was stopped and recorded as non-passing.
+[Click 결과] 1개 샤드 요청 미완료 · 실제 실행 0개 · 재사용 적용 0개; 재사용으로 생략한 테스트 실행시간: 요청 미완료; 동일 샤드 전체 순차 실행 예상: 측정 정보 없음; 이번 테스트 실행: 측정 정보 없음; 테스트 실행시간 감소: 측정 정보 없음; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+............[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 3.34 ms; 이번 테스트 실행: 3.34 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+Click verification runner is no longer authorized to execute.
+...[Click verification 1/2:E_ALPHA:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 2/2:E_BETA:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 2개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 12.8 ms; 이번 테스트 실행: 12.8 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.[Click verification 1/3:E_CHAIN:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 2/3:E_CHAIN:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_fail
+[Click 결과] 1개 샤드 요청 미완료 · 실제 실행 1개 · 재사용 적용 0개; 재사용으로 생략한 테스트 실행시간: 요청 미완료; 동일 샤드 전체 순차 실행 예상: 측정 정보 없음; 이번 테스트 실행: 23.42 ms; 테스트 실행시간 감소: 측정 정보 없음; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+....[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 7.6 ms; 이번 테스트 실행: 7.6 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click shadow] complete: inputs=1 external=0 unresolved=0 overhead=1ms
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 5.9 ms; 이번 테스트 실행: 5.9 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click shadow] complete: inputs=1 external=0 unresolved=0 overhead=2ms
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 5.94 ms; 이번 테스트 실행: 5.94 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click shadow] complete: inputs=1 external=0 unresolved=0 overhead=2ms
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 10.04 ms; 이번 테스트 실행: 10.04 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+..........Click verification runner token did not match active state.
+...............[Click] Verification runner environment changed after preparation; rebound to the current canonical environment.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 6.64 ms; 이번 테스트 실행: 6.64 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.[Click] Verification could not establish a protected Git workspace snapshot. No check was executed.
+[Click 결과] 1개 샤드 요청 미완료 · 실제 실행 0개 · 재사용 적용 0개; 재사용으로 생략한 테스트 실행시간: 요청 미완료; 동일 샤드 전체 순차 실행 예상: 측정 정보 없음; 이번 테스트 실행: 측정 정보 없음; 테스트 실행시간 감소: 측정 정보 없음; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.........Click verification executable changed before execution.
+.Click verification runner workdir did not match the prepared capability.
+.Click verification runner authorization expired before execution.
+Click verification runner authorization expired before execution.
+..Click verification runner source reservation did not match.
+...................[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+.Click verification runner is no longer authorized to execute.
+Click verification runner is no longer authorized to execute.
+Click verification runner is no longer authorized to execute.
+Click verification runner is no longer authorized to execute.
+.[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 3.6 ms; 이번 테스트 실행: 3.6 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.Click verification runner was already claimed; replay is blocked.
+..[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+.Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+.[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 3.43 ms; 이번 테스트 실행: 3.43 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 3.49 ms; 이번 테스트 실행: 3.49 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+.[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click verification runner was already claimed; replay is blocked.
+.[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+[Click verification 1/1:E1:targeted] /usr/bin/python3 -m unittest verification_fixture.VerificationFixture.test_pass
+Click could not record the verification result safely.
+...................................................
+----------------------------------------------------------------------
+Ran 172 tests in 302.446s
+
+OK

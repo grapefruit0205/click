@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "authority": false,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "implementation_branch": "feature/multilang-expansion",
+  "prerequisites": [
+    {"id": "global-runtime", "status": "complete", "report": "reports/global-runtime.md"}
+  ],
+  "phases": [
+    {
+      "id": 0,
+      "status": "complete",
+      "report": "reports/phase-0.md"
+    },
+    {
+      "id": 1,
+      "status": "complete",
+      "report": "reports/phase-1.md"
+    },
+    {
+      "id": 2,
+      "status": "complete",
+      "report": "reports/phase-2.md"
+    },
+    {
+      "id": 3,
+      "status": "complete",
+      "report": "reports/phase-3.md"
+    },
+    {
+      "id": 4,
+      "status": "complete",
+      "report": "reports/phase-4.md"
+    },
+    {
+      "id": 5,
+      "status": "complete",
+      "report": "reports/phase-5.md"
+    },
+    {"id": 6, "status": "complete", "report": "reports/phase-6.md"},
+    {"id": 7, "status": "complete", "report": "reports/phase-7.md"},
+    {"id": 8, "status": "complete", "report": "reports/phase-8.md"},
+    {"id": 9, "status": "complete", "report": "reports/phase-9.md", "release_ready": false}
+  ]
+}

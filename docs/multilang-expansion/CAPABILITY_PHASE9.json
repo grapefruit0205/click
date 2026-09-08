@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 9,
+  "inherits": "CAPABILITY_PHASE8.json",
+  "official_inventory": {
+    "tests": 1030,
+    "partitions": [207, 251, 253, 319],
+    "passed": 1023,
+    "skipped": 7,
+    "failed": 0,
+    "missing_ids": 0,
+    "duplicate_ids": 0
+  },
+  "local_actual_execution": [
+    "cpython-unittest",
+    "node-test",
+    "node-check",
+    "npm-test",
+    "go-test",
+    "vitest-5",
+    "jest-30",
+    "json-yaml-markdown-svg-project-validation",
+    "jq-json"
+  ],
+  "ci_assigned_not_locally_executed": [
+    "linux-macos-windows-deterministic",
+    "linux-macos-windows-vitest",
+    "linux-macos-windows-jest",
+    "linux-macos-windows-node-npm-go",
+    "linux-macos-windows-authoritative-observer",
+    "python-3.10-through-3.14",
+    "pytest-9.1.1",
+    "rust-cargo-offline",
+    "jvm-gradle-offline",
+    "dotnet-no-restore",
+    "typescript-no-emit",
+    "cmake-ctest",
+    "jq-xmllint-identify"
+  ],
+  "distribution": {
+    "antigravity_rebuilt": "passed",
+    "validation": "passed",
+    "python_compileall": "passed",
+    "diff_check": "passed"
+  },
+  "release_ready": false,
+  "release_blockers": [
+    "new native and cross-platform CI jobs have not run remotely",
+    "local final inventory skipped pytest and native non-Linux host tests",
+    "recognized-only native profiles have no local Hook-to-runner result"
+  ],
+  "authority": false
+}

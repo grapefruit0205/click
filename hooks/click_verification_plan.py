@@ -16,48 +16,29 @@ if __package__:
 else:  # Installed launchers execute hooks directly.
     import click_import_bootstrap
 
-(click_capability, click_diagnostics, click_evidence, click_inspection, click_verification_meter,) = click_import_bootstrap.load_siblings(
-    __package__, "click_capability", "click_diagnostics", "click_evidence", "click_inspection", "click_verification_meter"
+(click_capability, click_diagnostics, click_evidence, click_inspection, click_verification_adapters, click_verification_inputs, click_verification_meter,) = click_import_bootstrap.load_siblings(
+    __package__, "click_capability", "click_diagnostics", "click_evidence", "click_inspection", "click_verification_adapters", "click_verification_inputs", "click_verification_meter"
 )
 
-PROTOCOL_VERSION = 2
+LEGACY_PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
+SUPPORTED_PROTOCOL_VERSIONS = frozenset({LEGACY_PROTOCOL_VERSION, PROTOCOL_VERSION})
 BATCH_FIELDS = {
     "version", "checks", "workdir", "reporting", "failure_collection"
 }
-CHECK_FIELDS = {"evidence_id", "argv", "class"}
+LEGACY_CHECK_FIELDS = {"evidence_id", "argv", "class"}
+CHECK_FIELDS = LEGACY_CHECK_FIELDS | {"reuse", "inputs", "outputs_required"}
 VERIFICATION_CLASSES = click_verification_meter.VERIFICATION_CLASSES
-PYTHON_VERIFICATION_MODULES = {"coverage", "pytest", "unittest"}
-PYTHON_VERIFICATION_EXECUTABLES = {"python", "python3", "py", "pypy", "pypy3"}
-VERSIONED_PYTHON_EXECUTABLE = re.compile(r"^python3[.][0-9]+$")
-DEEP_VERIFICATION_EXECUTABLES = {
-    "bandit", "cargo-audit", "cypress", "k6", "locust", "nox", "playwright",
-    "semgrep", "snyk", "tox", "trivy",
-}
-DEEP_VERIFICATION_MARKERS = {
-    "audit", "bench", "coverage", "e2e", "end-to-end", "end_to_end",
-    "integration", "load-test", "load_test", "security",
-}
-VERIFICATION_EXECUTABLES = {
-    "bandit", "bats", "cargo-audit", "cypress", "jest", "k6", "locust",
-    "nox", "playwright", "phpunit", "pytest", "rspec", "semgrep", "snyk",
-    "tox", "trivy", "vitest",
-}
-VERIFICATION_NAME_MARKERS = (
-    "audit", "bench", "coverage", "e2e", "integration-test", "integration_test",
-    "security", "spec", "test", "validate", "verification", "verify",
-)
-TEST_TARGET_SUFFIXES = {
-    ".go", ".js", ".jsx", ".php", ".py", ".rb", ".rs", ".ts", ".tsx",
-}
-TEST_FILTER_OPTIONS = {
-    "-k", "-m", "-run", "-t", "--filter", "--test-name-pattern",
-    "--tests-regex",
-}
-TEST_OPTIONS_WITH_VALUES = TEST_FILTER_OPTIONS | {
-    "-p", "-r", "-s", "--basetemp", "--confcutdir", "--cov", "--cov-report",
-    "--deselect", "--ignore", "--junitxml", "--maxfail", "--package",
-    "--project", "--rootdir", "--test",
-}
+PYTHON_VERIFICATION_MODULES = click_verification_adapters.PYTHON_VERIFICATION_MODULES
+PYTHON_VERIFICATION_EXECUTABLES = click_verification_adapters.PYTHON_VERIFICATION_EXECUTABLES
+VERSIONED_PYTHON_EXECUTABLE = click_verification_adapters.VERSIONED_PYTHON_EXECUTABLE
+DEEP_VERIFICATION_EXECUTABLES = click_verification_adapters.DEEP_VERIFICATION_EXECUTABLES
+DEEP_VERIFICATION_MARKERS = click_verification_adapters.DEEP_VERIFICATION_MARKERS
+VERIFICATION_EXECUTABLES = click_verification_adapters.VERIFICATION_EXECUTABLES
+VERIFICATION_NAME_MARKERS = click_verification_adapters.VERIFICATION_NAME_MARKERS
+TEST_TARGET_SUFFIXES = click_verification_adapters.TEST_TARGET_SUFFIXES
+TEST_FILTER_OPTIONS = click_verification_adapters.TEST_FILTER_OPTIONS
+TEST_OPTIONS_WITH_VALUES = click_verification_adapters.TEST_OPTIONS_WITH_VALUES
 NEW_SOURCE_PATH_SEGMENTS = {
     "app", "config", "configs", "lib", "migration", "migrations", "src",
 }
@@ -197,14 +178,22 @@ def validate_verification_batch(
     scale: str,
     evidence_sources: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, int, str]:
+    try:
+        preview = json.loads(raw)
+    except json.JSONDecodeError:
+        return None, 0, "Verification batch request must be valid JSON."
+    if not isinstance(preview, dict):
+        return None, 0, "Verification batch request must be a JSON object."
+    request_version = preview.get("version")
+    if request_version not in SUPPORTED_PROTOCOL_VERSIONS or isinstance(
+        request_version, bool
+    ):
+        return None, 0, "Verification batch request `version` must be 2 or 3."
     value, error = click_capability.decode_request(
-        raw,
-        "Verification batch",
-        version=VERIFICATION_PROTOCOL_VERSION,
+        raw, "Verification batch", version=int(request_version)
     )
-    if error:
+    if error or value is None:
         return None, 0, error
-    assert value is not None
     if "commands" in value:
         return (
             None,
@@ -242,7 +231,12 @@ def validate_verification_batch(
     for index, check in enumerate(checks, start=1):
         if not isinstance(check, dict):
             return None, 0, f"Verification check {index} must be an object."
-        unknown_check = sorted(set(check) - VERIFICATION_CHECK_FIELDS)
+        allowed_check_fields = (
+            LEGACY_CHECK_FIELDS
+            if request_version == LEGACY_PROTOCOL_VERSION
+            else VERIFICATION_CHECK_FIELDS
+        )
+        unknown_check = sorted(set(check) - allowed_check_fields)
         if unknown_check:
             rendered = ", ".join(f"`{field}`" for field in unknown_check)
             return None, 0, f"Verification check {index} has unsupported field(s): {rendered}."
@@ -306,6 +300,35 @@ def validate_verification_batch(
             "argv": argv,
             "class": effective_class,
         }
+        reuse_policy = check.get("reuse", "conditional")
+        if reuse_policy not in click_verification_inputs.REUSE_POLICIES:
+            return (
+                None,
+                0,
+                f"Verification check {index} `reuse` must be conditional, rerun, or always-run.",
+            )
+        input_patterns, input_error = click_verification_inputs.normalize_patterns(
+            check.get("inputs", [])
+        )
+        if input_error or input_patterns is None:
+            return (
+                None,
+                0,
+                f"Verification check {index} inputs are invalid: {input_error}.",
+            )
+        outputs_required = check.get("outputs_required", False)
+        if not isinstance(outputs_required, bool):
+            return (
+                None,
+                0,
+                f"Verification check {index} `outputs_required` must be boolean.",
+            )
+        if reuse_policy != "conditional":
+            normalized_check["reuse"] = reuse_policy
+        if input_patterns:
+            normalized_check["inputs"] = list(input_patterns)
+        if outputs_required:
+            normalized_check["outputs_required"] = True
         if isinstance(evidence_id, str):
             normalized_check["evidence_id"] = evidence_id
         normalized.append(normalized_check)
@@ -324,6 +347,32 @@ def validate_verification_batch(
     if isinstance(workdir, str):
         normalized_batch["workdir"] = workdir
     return normalized_batch, units, ""
+
+
+def verification_group_policy(
+    checks: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str]:
+    """Return one conservative policy shared by an evidence check group."""
+
+    values = {
+        (
+            str(check.get("reuse", "conditional")),
+            tuple(check.get("inputs", [])),
+            bool(check.get("outputs_required", False)),
+        )
+        for check in checks
+    }
+    if len(values) != 1:
+        return None, (
+            "Checks for one argv evidence id must use the same reuse, inputs, "
+            "and outputs_required policy."
+        )
+    reuse_policy, inputs, outputs_required = next(iter(values))
+    return {
+        "reuse": reuse_policy,
+        "inputs": list(inputs),
+        "outputs_required": outputs_required,
+    }, ""
 
 
 def verification_groups(
@@ -392,228 +441,14 @@ def verification_group_units(checks: list[dict[str, Any]]) -> int:
 
 
 
-def contains_deep_verification_marker(values: list[str]) -> bool:
-    joined = " ".join(values)
-    return any(marker in joined for marker in DEEP_VERIFICATION_MARKERS)
-
-
-def arguments_have_filter(arguments: list[str]) -> bool:
-    return any(
-        argument in TEST_FILTER_OPTIONS
-        or any(argument.startswith(f"{option}=") for option in TEST_FILTER_OPTIONS)
-        for argument in arguments
-    )
-
-
-def verification_targets(
-    arguments: list[str], *, skip_words: set[str] | None = None
-) -> list[str]:
-    skip_words = skip_words or set()
-    targets: list[str] = []
-    index = 0
-    while index < len(arguments):
-        argument = arguments[index]
-        if argument == "--":
-            targets.extend(
-                item for item in arguments[index + 1 :] if item not in skip_words
-            )
-            break
-        if argument in TEST_OPTIONS_WITH_VALUES:
-            index += 2
-            continue
-        if argument.startswith("-") or argument in skip_words:
-            index += 1
-            continue
-        targets.append(argument)
-        index += 1
-    return targets
-
-
-def scope_with_kind_floor(scope: str, values: list[str]) -> str:
-    if not contains_deep_verification_marker(values):
-        return scope
-    return "broad" if scope == "targeted" else "deep"
-
-
-def minimum_test_runner_class(runner: str, arguments: list[str]) -> str:
-    if runner == "unittest" and "discover" in arguments:
-        return scope_with_kind_floor("broad", [runner, *arguments])
-    if arguments_have_filter(arguments):
-        return scope_with_kind_floor("broad", [runner, *arguments])
-    broad_targets = {".", "./", "...", "./...", "all", "test", "tests", "spec"}
-    targets = verification_targets(arguments, skip_words={"run", "exec", "x"})
-    scope = "broad"
-    if len(targets) == 1:
-        target = targets[0]
-        normalized = target.rstrip("/\\")
-        if normalized not in broad_targets and (
-            "::" in target
-            or Path(normalized).suffix.lower() in TEST_TARGET_SUFFIXES
-            or (runner == "unittest" and "." in normalized)
-        ):
-            scope = "targeted"
-    return scope_with_kind_floor(scope, [runner, *arguments])
-
-
-def minimum_verification_class(
-    tokens: list[str], *, wrapper_depth: int = 0
-) -> str | None:
-    executable, arguments = click_capability.command_parts(tokens)
-    if not executable:
-        return None
-    if executable in DEEP_VERIFICATION_EXECUTABLES:
-        return "deep"
-    if (
-        executable in PYTHON_VERIFICATION_EXECUTABLES
-        or VERSIONED_PYTHON_EXECUTABLE.fullmatch(executable)
-    ):
-        if executable == "py" and arguments and re.fullmatch(
-            r"-\d+(?:\.\d+)?(?:-\d+)?", arguments[0]
-        ):
-            arguments = arguments[1:]
-        if len(arguments) < 2 or arguments[0] != "-m":
-            return None
-        module = arguments[1]
-        if module not in PYTHON_VERIFICATION_MODULES:
-            return None
-        if module == "coverage":
-            return "deep"
-        return minimum_test_runner_class(module, arguments[2:])
-    if executable == "uv":
-        if wrapper_depth >= 2 or not arguments or arguments[0] != "run":
-            return None
-        nested = arguments[1:]
-        while nested and nested[0].startswith("-"):
-            nested = nested[1:]
-        return minimum_verification_class(nested, wrapper_depth=wrapper_depth + 1)
-    if executable in VERIFICATION_EXECUTABLES:
-        if executable in {"bats", "jest", "phpunit", "pytest", "rspec", "vitest"}:
-            return minimum_test_runner_class(executable, arguments)
-        return "broad"
-    if executable == "node":
-        if any(
-            argument in {"-e", "--eval", "-p", "--print"}
-            or argument.startswith(("--eval=", "--print="))
-            for argument in arguments
-        ):
-            return None
-        if arguments[:1] == ["--check"]:
-            targets = [argument for argument in arguments[1:] if not argument.startswith("-")]
-            return (
-                "targeted"
-                if len(targets) == 1
-                and Path(targets[0]).suffix.lower() in {".cjs", ".js", ".mjs"}
-                else None
-            )
-        if "--test" in arguments:
-            test_arguments = [argument for argument in arguments if argument != "--test"]
-            return minimum_test_runner_class("node", test_arguments)
-        return None
-    if executable in {"npm", "pnpm", "yarn", "bun"}:
-        meaningful = [item for item in arguments if item not in {"run", "exec", "x"}]
-        target = meaningful[0] if meaningful else ""
-        if not (
-            any(marker in target for marker in VERIFICATION_NAME_MARKERS)
-            or target in {"build", "check", "lint", "typecheck", "type-check"}
-        ):
-            return None
-        return "deep" if contains_deep_verification_marker(meaningful) else "broad"
-    if executable in {"npx", "pnpx", "bunx"}:
-        target_index = next(
-            (index for index, argument in enumerate(arguments) if not argument.startswith("-")),
-            -1,
-        )
-        if target_index < 0:
-            return None
-        target = arguments[target_index]
-        nested_arguments = arguments[target_index + 1 :]
-        if target in DEEP_VERIFICATION_EXECUTABLES:
-            return "deep"
-        if target in {"jest", "pytest", "vitest"}:
-            return minimum_test_runner_class(target, nested_arguments)
-        if target in VERIFICATION_EXECUTABLES:
-            return "broad"
-        if any(marker in target for marker in VERIFICATION_NAME_MARKERS):
-            return "deep"
-        return None
-    if executable == "cargo":
-        if not arguments or arguments[0] not in {
-            "audit",
-            "bench",
-            "check",
-            "clippy",
-            "nextest",
-            "test",
-        }:
-            return None
-        if arguments[0] in {"audit", "bench"}:
-            return "deep"
-        if arguments[0] in {"check", "clippy", "nextest"}:
-            return "broad"
-        test_targets = [
-            argument
-            for argument in arguments[1:]
-            if not argument.startswith("-") and argument not in {"all", "workspace"}
-        ]
-        return "targeted" if len(test_targets) == 1 else "broad"
-    if executable == "go":
-        if not arguments or arguments[0] not in {"test", "vet"}:
-            return None
-        if arguments[0] == "vet":
-            return "broad"
-        if arguments_have_filter(arguments[1:]):
-            return "broad"
-        targets = [argument for argument in arguments[1:] if not argument.startswith("-")]
-        recursive = any(target == "./..." or target.endswith("/...") for target in targets)
-        return "targeted" if len(targets) == 1 and not recursive else "broad"
-    if executable == "ruff":
-        if not arguments or arguments[0] != "check":
-            return None
-        targets = verification_targets(arguments[1:])
-        return (
-            "targeted"
-            if len(targets) == 1
-            and Path(targets[0].rstrip("/\\")).suffix.lower() in TEST_TARGET_SUFFIXES
-            else "broad"
-        )
-    if executable == "mypy":
-        targets = verification_targets(arguments)
-        return (
-            "targeted"
-            if len(targets) == 1 and Path(targets[0]).suffix.lower() == ".py"
-            else "broad"
-        )
-    if executable == "tsc":
-        return "broad" if "--noemit" in arguments else None
-    if executable in {"dotnet", "gradle", "gradlew", "gradlew.bat", "mvn", "mvnw", "mvnw.cmd"}:
-        if not any(
-            any(marker in argument for marker in VERIFICATION_NAME_MARKERS)
-            for argument in arguments
-        ):
-            return None
-        if contains_deep_verification_marker(arguments):
-            return "deep"
-        return "targeted" if any("filter" in item for item in arguments) else "broad"
-    if executable in {"make", "gmake", "cmake", "ctest", "pre-commit"}:
-        recognized = executable in {"ctest", "pre-commit"} or any(
-            any(marker in argument for marker in VERIFICATION_NAME_MARKERS)
-            for argument in arguments
-        )
-        if not recognized:
-            return None
-        if contains_deep_verification_marker(arguments):
-            return "deep"
-        if executable == "ctest" and any(item in {"-r", "--tests-regex"} for item in arguments):
-            return scope_with_kind_floor("broad", arguments)
-        if executable == "pre-commit" and "--files" in arguments:
-            file_index = arguments.index("--files") + 1
-            files = [item for item in arguments[file_index:] if not item.startswith("-")]
-            return "targeted" if len(files) == 1 else "broad"
-        return "broad"
-    stem = Path(executable).stem.lower()
-    if any(marker in stem for marker in VERIFICATION_NAME_MARKERS):
-        return "deep"
-    return None
+contains_deep_verification_marker = (
+    click_verification_adapters.contains_deep_verification_marker
+)
+arguments_have_filter = click_verification_adapters.arguments_have_filter
+verification_targets = click_verification_adapters.verification_targets
+scope_with_kind_floor = click_verification_adapters.scope_with_kind_floor
+minimum_test_runner_class = click_verification_adapters.minimum_test_runner_class
+minimum_verification_class = click_verification_adapters.minimum_verification_class
 
 
 def is_recognized_verification_tokens(tokens: list[str]) -> bool:

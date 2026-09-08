@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -95,6 +95,20 @@ jobs:
           python-version: "3.12.3"
       - name: Create isolated native-observer Python
         run: python -m venv --without-pip "${{ runner.temp }}/click-native-authority"
+      - name: Install Linux authoritative observer prerequisite
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y strace
+      - name: Run authoritative Linux contract
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/click-native-authority/bin/python" -B \
+            -m hooks.click_observer_runtime prepare --project "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/click-native-authority/bin/python" -B -m unittest \
+            tests.test_click_authoritative_reuse.AuthoritativeObserverRuntimeTests \
+            tests.test_click_authoritative_reuse.AuthoritativeCrossContractReuseTests -v
       - name: Verify non-privileged macOS preparation is unavailable
         if: runner.os == 'macOS'
         shell: bash
@@ -135,7 +149,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -153,6 +167,9 @@ jobs:
             tests.test_click_sharding_setup.ShardingSetupStateMachineTests \
             tests.test_click_sharding_setup.ShardingGateIntegrationTests.test_evidence_mode_runs_setup_through_baseline_without_guarded_contract \
             tests.test_click_authoritative_observer.PortableObserverRuntimeContractTests \
+            tests.test_click_gate_inspection.ClickGateInspectionTests.test_sanitized_path_fails_closed_on_a_symlink_loop \
+            tests.test_click_gate_inspection.ClickGateInspectionTests.test_sanitized_path_fails_closed_on_a_broken_symlink \
+            tests.test_click_gate_inspection.ClickGateInspectionTests.test_sanitized_path_drops_a_missing_absolute_entry \
             -v
 
   pytest-integration:
@@ -167,3 +184,207 @@ jobs:
         run: python -m pip install --disable-pip-version-check pytest==9.1.1
       - name: Run real pytest collection and proposal integration
         run: python -m unittest tests.test_click_auto_sharding tests.test_click_shard_proposal -v
+
+  vitest-sharding-integration:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/fixtures/vitest-v5/package-lock.json
+      - name: Provision the pinned Vitest fixture
+        working-directory: tests/fixtures/vitest-v5
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run Vitest inventory, proposal, and parent-fallback integration
+        run: >-
+          python -B -m unittest
+          tests.test_click_auto_sharding.RealCollectionTests.test_vitest_collection_is_repeatable_and_exact_file_selectors_are_safe
+          tests.test_click_shard_proposal.ProposalTests.test_vitest_same_basenames_generate_exact_file_children
+          tests.test_click_evidence_shards.ClickEvidenceShardsTests.test_vitest_new_file_and_ambiguous_command_fall_back_to_parent
+          tests.test_click_sharding_setup.VitestShardingSetupTests
+          tests.test_click_multilang_execution.MultilangExecutionHookTests.test_vitest_no_install_runner_executes_and_reuses_exact_identity
+          -v
+
+  jest-sharding-integration:
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/fixtures/jest-v30/package-lock.json
+      - name: Provision the pinned Jest fixture
+        working-directory: tests/fixtures/jest-v30
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run Jest inventory, proposal, fallback, setup, and Gate integration
+        run: >-
+          python -B -m unittest
+          tests.test_click_auto_sharding.CommandParsingTests.test_jest_parser_rejects_network_mutating_dynamic_and_ambiguous_shapes
+          tests.test_click_auto_sharding.RealCollectionTests.test_jest_file_inventory_is_repeatable_and_run_by_path_is_exact
+          tests.test_click_shard_proposal.ProposalTests.test_jest_children_use_exact_run_tests_by_path_selectors
+          tests.test_click_evidence_shards.ClickEvidenceShardsTests.test_jest_new_file_and_ambiguous_options_fall_back_to_parent
+          tests.test_click_sharding_setup.JestShardingSetupTests
+          tests.test_click_multilang_execution.MultilangExecutionHookTests.test_jest_no_install_runner_executes_and_reuses_exact_identity
+          -v
+
+  multilang-execution:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.25.x"
+      - name: Require provisioned Node, npm, npx, and Go runtimes
+        shell: bash
+        run: |
+          node --version
+          npm --version
+          npx --version
+          go version
+      - name: Run runtime identity and real Hook-to-runner fixtures
+        env:
+          GOTOOLCHAIN: local
+          GOPROXY: "off"
+        run: >-
+          python -B -m unittest
+          tests.test_click_runtime_identity
+          tests.test_click_multilang_execution -v
+
+  mixed-project-integration:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/fixtures/mixed-project/package-lock.json
+      - name: Provision the pinned mixed fixture
+        working-directory: tests/fixtures/mixed-project
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Require the local Go toolchain
+        run: go version
+      - name: Run mixed-project partial verification
+        env:
+          GOTOOLCHAIN: local
+          GOPROXY: "off"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -B -m unittest tests.test_click_mixed_project -v
+
+  native-toolchain-profile-smoke:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Require native verification toolchains
+        shell: bash
+        run: |
+          cargo --version
+          gradle --version
+          dotnet --info
+          cmake --version
+          ctest --version
+      - name: Install pinned TypeScript compiler
+        run: npm install --global --ignore-scripts --no-audit --no-fund typescript@5.9.3
+      - name: Run TypeScript no-emit fixture
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/click-typescript"
+          printf '{"compilerOptions":{"strict":true,"noEmit":true},"files":["index.ts"]}\n' > "$RUNNER_TEMP/click-typescript/tsconfig.json"
+          printf 'const value: number = 4; void value;\n' > "$RUNNER_TEMP/click-typescript/index.ts"
+          tsc --noEmit -p "$RUNNER_TEMP/click-typescript/tsconfig.json"
+      - name: Run offline Rust fixture
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/click-rust/src"
+          printf '[package]\nname="click_fixture"\nversion="0.1.0"\nedition="2021"\n' > "$RUNNER_TEMP/click-rust/Cargo.toml"
+          printf '#[cfg(test)] mod tests { #[test] fn adds() { assert_eq!(2 + 2, 4); } }\n' > "$RUNNER_TEMP/click-rust/src/lib.rs"
+          cargo test --offline --manifest-path "$RUNNER_TEMP/click-rust/Cargo.toml"
+      - name: Run offline Gradle fixture
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/click-gradle"
+          printf "tasks.register('test') { doLast { assert 2 + 2 == 4 } }\n" > "$RUNNER_TEMP/click-gradle/build.gradle"
+          gradle -p "$RUNNER_TEMP/click-gradle" test --offline --no-daemon
+      - name: Run no-restore .NET fixture
+        shell: bash
+        run: |
+          dotnet new classlib --no-restore --output "$RUNNER_TEMP/click-dotnet"
+          dotnet restore "$RUNNER_TEMP/click-dotnet" --ignore-failed-sources
+          dotnet test "$RUNNER_TEMP/click-dotnet" --no-restore
+      - name: Run CMake and CTest fixture
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/click-cmake"
+          printf 'cmake_minimum_required(VERSION 3.16)\nproject(click_fixture NONE)\nenable_testing()\nadd_test(NAME pass COMMAND "${CMAKE_COMMAND}" -E true)\n' > "$RUNNER_TEMP/click-cmake/CMakeLists.txt"
+          cmake -S "$RUNNER_TEMP/click-cmake" -B "$RUNNER_TEMP/click-cmake/build"
+          ctest --test-dir "$RUNNER_TEMP/click-cmake/build" --output-on-failure
+      - name: Run profile and runtime identity regressions
+        run: >-
+          python -B -m unittest
+          tests.test_click_verification_adapters
+          tests.test_click_runtime_identity -v
+
+  content-validation-profile-smoke:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install bounded content tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq libxml2-utils imagemagick
+      - name: Require and exercise direct read-only tools
+        shell: bash
+        run: |
+          printf '{"ok":true}\n' > "$RUNNER_TEMP/click.json"
+          printf '<root/>\n' > "$RUNNER_TEMP/click.xml"
+          printf '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>\n' > "$RUNNER_TEMP/click.svg"
+          jq empty "$RUNNER_TEMP/click.json"
+          xmllint --noout --nonet "$RUNNER_TEMP/click.xml"
+          identify -ping "$RUNNER_TEMP/click.svg"
+      - name: Run content adapter Hook-to-runner fixtures
+        run: python -B -m unittest tests.test_click_content_validation -v

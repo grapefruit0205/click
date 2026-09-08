@@ -10,6 +10,8 @@ import sys
 import tempfile
 import textwrap
 import unittest
+import venv
+from unittest import mock
 
 from hooks import click_auto_sharding as cli
 from hooks import click_test_inventory as inventory
@@ -22,6 +24,18 @@ SUPPORTED = (
     )
 )
 PYTEST_AVAILABLE = importlib.util.find_spec("pytest") is not None
+VITEST_SOURCE = ROOT / "tests" / "fixtures" / "vitest-v5"
+VITEST_AVAILABLE = bool(
+    shutil.which("node")
+    and shutil.which("npx")
+    and (VITEST_SOURCE / "node_modules" / "vitest" / "package.json").is_file()
+)
+JEST_SOURCE = ROOT / "tests" / "fixtures" / "jest-v30"
+JEST_AVAILABLE = bool(
+    shutil.which("node")
+    and shutil.which("npx")
+    and (JEST_SOURCE / "node_modules" / "jest" / "package.json").is_file()
+)
 
 
 def write(root: Path, name: str, content: str) -> None:
@@ -108,7 +122,95 @@ def pytest_project(root: Path) -> list[str]:
     return [sys.executable, "-m", "pytest", "-q", "tests"]
 
 
+def hardlink_or_copy(source: str, target: str) -> str:
+    try:
+        os.link(source, target)
+        return target
+    except OSError:
+        return shutil.copy2(source, target)
+
+
+def vitest_project(root: Path) -> list[str]:
+    shutil.copytree(
+        VITEST_SOURCE,
+        root,
+        dirs_exist_ok=True,
+        symlinks=True,
+        copy_function=hardlink_or_copy,
+    )
+    git_fixture(root)
+    return ["npx", "--no-install", "vitest", "run"]
+
+
+def jest_project(root: Path) -> list[str]:
+    shutil.copytree(
+        JEST_SOURCE,
+        root,
+        dirs_exist_ok=True,
+        symlinks=True,
+        ignore=shutil.ignore_patterns("node_modules"),
+    )
+    shutil.copytree(
+        JEST_SOURCE / "node_modules",
+        root / "node_modules",
+        symlinks=True,
+        copy_function=hardlink_or_copy,
+    )
+    git_fixture(root)
+    return ["npx", "--no-install", "jest", "--runInBand"]
+
+
 class CommandParsingTests(unittest.TestCase):
+    def test_workspace_snapshot_batches_git_paths_and_preserves_metadata_content(self):
+        with tempfile.TemporaryDirectory(prefix="click snapshot ") as directory:
+            root = Path(directory)
+            git_fixture(root)
+            names = ("index", "HEAD", "config", "config.worktree", "packed-refs")
+            expected = {}
+            for name in names:
+                path = Path(os.fsdecode(inventory.git_read(root, ["rev-parse", "--git-path", name])).strip())
+                path = path if path.is_absolute() else root / path
+                expected[".git/" + name] = inventory.hashlib.sha256(
+                    path.read_bytes() if path.exists() else b"").hexdigest()
+            with mock.patch.object(inventory, "git_read", wraps=inventory.git_read) as read:
+                first = inventory.workspace_snapshot(root, inventory.Limits())
+            self.assertEqual(read.call_count, 2)
+            self.assertEqual({key: first[key] for key in expected}, expected)
+            write(root, "new.txt", "new content")
+            self.assertNotEqual(first, inventory.workspace_snapshot(root, inventory.Limits()))
+
+    def test_workspace_snapshot_resolves_project_alias_before_symlink_boundary(self):
+        with tempfile.TemporaryDirectory(prefix="click-snapshot-alias-") as directory:
+            base = Path(directory)
+            physical = base / "physical"
+            physical.mkdir()
+            write(physical, "value.txt", "value")
+            (physical / "linked.txt").symlink_to("value.txt")
+            alias = base / "alias"
+            try:
+                alias.symlink_to(physical, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                self.skipTest("directory symlinks are unavailable on this host")
+            git_fixture(physical)
+
+            snapshot = inventory.workspace_snapshot(alias, inventory.Limits())
+
+            self.assertIn("linked.txt", snapshot)
+
+    def test_workspace_snapshot_skips_the_separately_bound_install_tree(self):
+        with tempfile.TemporaryDirectory(prefix="click-snapshot-install-") as directory:
+            root = Path(directory)
+            git_fixture(root)
+            write(root, "package.json", '{"private": true}\n')
+            write(root, "node_modules/dependency/index.js", "export default true\n")
+
+            snapshot = inventory.workspace_snapshot(root, inventory.Limits())
+
+            self.assertIn("package.json", snapshot)
+            self.assertFalse(
+                any(path == "node_modules" or path.startswith("node_modules/") for path in snapshot)
+            )
+
     def test_missing_command_requires_selection_without_importing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -220,6 +322,122 @@ class CommandParsingTests(unittest.TestCase):
             )
             self.assertEqual(child["start"], "tests/nested/test_case.py")
 
+    def test_vitest_parser_rejects_network_and_interactive_or_ambiguous_shapes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shutil.copy2(VITEST_SOURCE / "package.json", root / "package.json")
+            shutil.copy2(
+                VITEST_SOURCE / "package-lock.json", root / "package-lock.json"
+            )
+            write(root, "tests/case.test.js", "// collection fixture\n")
+            accepted = inventory.parse_command(
+                [
+                    "npx",
+                    "--no-install",
+                    "vitest",
+                    "run",
+                    "tests/case.test.js",
+                ],
+                root,
+                root,
+            )
+            self.assertEqual(accepted["selected_file"], "tests/case.test.js")
+
+            rejected = (
+                ["npx", "vitest", "run"],
+                ["vitest", "run"],
+                ["npx", "--no-install", "vitest"],
+                ["npx", "--no-install", "vitest", "run", "--watch"],
+                ["npx", "--no-install", "vitest", "run", "--update"],
+                ["npx", "--no-install", "vitest", "run", "--browser"],
+                ["npx", "--no-install", "vitest", "run", "tests"],
+            )
+            for command in rejected:
+                with self.subTest(command=command), self.assertRaises(
+                    inventory.AnalysisError
+                ):
+                    inventory.parse_command(command, root, root)
+
+    def test_vitest_collection_output_and_timeout_fail_closed(self) -> None:
+        spec = {
+            "adapter": inventory.VITEST_ADAPTER,
+            "version_prefix": ["npx", "--no-install", "vitest"],
+            "collector_prefix": ["npx", "--no-install", "vitest", "list"],
+            "selected_file": "",
+        }
+        version = b"vitest/5.0.0 linux-x64 node-v22.23.2\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = Path("/external/npx")
+            polluted = mock.patch.object(
+                inventory,
+                "_capture_bounded_command",
+                side_effect=[(version, b""), (b"[]", b"warning")],
+            )
+            with polluted, self.assertRaisesRegex(
+                inventory.AnalysisError, "vitest-collection-output-polluted"
+            ):
+                inventory._vitest_collection(
+                    root, root, spec, executable, inventory.Limits()
+                )
+
+            invalid = mock.patch.object(
+                inventory,
+                "_capture_bounded_command",
+                side_effect=[(version, b""), (b"not-json", b"")],
+            )
+            with invalid, self.assertRaisesRegex(
+                inventory.AnalysisError, "invalid-collector-result"
+            ):
+                inventory._vitest_collection(
+                    root, root, spec, executable, inventory.Limits()
+                )
+
+            timeout = mock.patch.object(
+                inventory,
+                "_capture_bounded_command",
+                side_effect=inventory.AnalysisError("collection-timeout"),
+            )
+            with timeout, self.assertRaisesRegex(
+                inventory.AnalysisError, "collection-timeout"
+            ):
+                inventory._vitest_collection(
+                    root, root, spec, executable, inventory.Limits()
+                )
+
+    @unittest.skipUnless(JEST_AVAILABLE, "pinned Jest fixture is unavailable")
+    def test_jest_parser_rejects_network_mutating_dynamic_and_ambiguous_shapes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            command = jest_project(root)
+            accepted = inventory.parse_command(
+                [*command, "--runTestsByPath", "tests/regex+meta/value.test.js"],
+                root,
+                root,
+            )
+            self.assertEqual(
+                accepted["selected_file"], "tests/regex+meta/value.test.js"
+            )
+            rejected = (
+                ["npx", "jest", "--runInBand"],
+                ["jest", "--runInBand"],
+                ["npx", "--no-install", "jest"],
+                [*command, "--watch"],
+                [*command, "--watchAll"],
+                [*command, "--updateSnapshot"],
+                [*command, "tests"],
+                [*command, "--findRelatedTests", "src/math.cjs"],
+            )
+            for argv in rejected:
+                with self.subTest(argv=argv), self.assertRaises(inventory.AnalysisError):
+                    inventory.parse_command(argv, root, root)
+            package = json.loads((root / "package.json").read_text())
+            package["jest"]["projects"] = ["<rootDir>"]
+            (root / "package.json").write_text(json.dumps(package))
+            with self.assertRaisesRegex(
+                inventory.AnalysisError, "unsupported-jest-multi-project"
+            ):
+                inventory.parse_command(command, root, root)
 
 @unittest.skipUnless(SUPPORTED, "positive collection profile requires CPython 3.10-3.14")
 class RealCollectionTests(unittest.TestCase):
@@ -269,11 +487,108 @@ class RealCollectionTests(unittest.TestCase):
         self.assertFalse(result["authority"])
         self.assertFalse(result["reuse_ready"])
 
+    @unittest.skipUnless(VITEST_AVAILABLE, "pinned Vitest fixture is unavailable")
+    def test_vitest_collection_is_repeatable_and_exact_file_selectors_are_safe(self):
+        command = vitest_project(self.root)
+        result = self.analyze(command)
+        self.assertEqual(result["status"], "analysis-complete", result)
+        self.assertEqual(result["adapter"], inventory.VITEST_ADAPTER)
+        self.assertEqual(result["collection"]["loader"], "vitest.list-json")
+        self.assertEqual(result["runtime"]["framework_version"], "5.0.0")
+        self.assertEqual(
+            sorted({item["file"] for item in result["inventory"]}),
+            [
+                "tests/integration/shared.test.js",
+                "tests/types/value.test.ts",
+                "tests/unit/shared.test.js",
+            ],
+        )
+
+        child = self.analyze([*command, "tests/integration/shared.test.js"])
+        self.assertEqual(child["status"], "analysis-complete", child)
+        self.assertEqual(
+            {item["file"] for item in child["inventory"]},
+            {"tests/integration/shared.test.js"},
+        )
+        self.assertNotEqual(result["inventory_digest"], child["inventory_digest"])
+
+        nested = self.analyze(
+            [*command, "integration/shared.test.js"],
+            cwd=self.root / "tests",
+        )
+        self.assertEqual(nested["status"], "analysis-complete", nested)
+        self.assertEqual(
+            {item["file"] for item in nested["inventory"]},
+            {"tests/integration/shared.test.js"},
+        )
+
+        write(self.root, "vitest.config.js", "export default {}\n")
+        unsupported = self.analyze(command)
+        self.assertEqual(unsupported["status"], "unsupported", unsupported)
+        self.assertEqual(unsupported["reasons"], ["unsupported-vitest-config"])
+
+    @unittest.skipUnless(JEST_AVAILABLE, "pinned Jest fixture is unavailable")
+    def test_jest_file_inventory_is_repeatable_and_run_by_path_is_exact(self):
+        command = jest_project(self.root)
+        result = self.analyze(command)
+        self.assertEqual(result["status"], "analysis-complete", result)
+        self.assertEqual(result["adapter"], inventory.JEST_ADAPTER)
+        self.assertEqual(result["collection"]["loader"], "jest.list-tests-json")
+        self.assertEqual(result["runtime"]["framework_version"], "30.5.1")
+        self.assertEqual(len(result["inventory"]), 5)
+        self.assertEqual(
+            sorted(item["id"] for item in result["inventory"]),
+            [
+                "tests/integration/shared.test.js::file",
+                "tests/regex+meta/value.test.js::file",
+                "tests/snapshot/label.test.js::file",
+                "tests/types/value.test.ts::file",
+                "tests/unit/shared.test.cjs::file",
+            ],
+        )
+        child = self.analyze(
+            [
+                *command,
+                "--runTestsByPath",
+                "tests/regex+meta/value.test.js",
+            ]
+        )
+        self.assertEqual(child["status"], "analysis-complete", child)
+        self.assertEqual(
+            [item["file"] for item in child["inventory"]],
+            ["tests/regex+meta/value.test.js"],
+        )
+        package = json.loads((self.root / "package.json").read_text())
+        package["type"] = "module"
+        (self.root / "package.json").write_text(json.dumps(package))
+        unsupported = self.analyze(command)
+        self.assertEqual(unsupported["status"], "unsupported", unsupported)
+        self.assertEqual(unsupported["reasons"], ["unsupported-jest-esm"])
+
     @unittest.skipIf(PYTEST_AVAILABLE, "local pytest integration is covered above")
     def test_missing_pytest_is_an_explicit_safe_unsupported_result(self):
         git_fixture(self.root)
         (self.root / "tests").mkdir()
         result = self.analyze(["python3", "-m", "pytest", "-q", "tests"])
+        self.assertEqual(result["status"], "unsupported", result)
+        self.assertEqual(result["reasons"], ["pytest-unavailable"])
+        self.assertEqual(result["inventory"], [])
+        self.assertFalse(result["authority"])
+        self.assertFalse(result["reuse_ready"])
+
+    def test_pytest_availability_uses_the_selected_interpreter(self):
+        git_fixture(self.root)
+        (self.root / "tests").mkdir()
+        isolated = Path(self.temp.name) / "python-without-pytest"
+        venv.EnvBuilder(with_pip=False).create(isolated)
+        executable = isolated / (
+            "Scripts/python.exe" if os.name == "nt" else "bin/python"
+        )
+
+        result = self.analyze(
+            [str(executable), "-m", "pytest", "-q", "tests"]
+        )
+
         self.assertEqual(result["status"], "unsupported", result)
         self.assertEqual(result["reasons"], ["pytest-unavailable"])
         self.assertEqual(result["inventory"], [])

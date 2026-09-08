@@ -76,14 +76,14 @@ codex plugin add click@click
 
 Codex를 재시작하고 새 작업을 시작해 설치된 Hook과 스킬을 다시 불러옵니다. CLI의 `/hooks`에서 검토 대기 중인 Click Hook을 확인한 뒤 사용하세요. 자세한 내용은 [Hook 문제 확인](#hook-문제-확인)을 참고하세요.
 
-현재 릴리스는 **v0.93.0**입니다. 업데이트 명령은 다음과 같습니다.
+현재 릴리스는 **v0.94.0**입니다. 업데이트 명령은 다음과 같습니다.
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.93.0은 잘못된 증거 revision을 거부하고, safe-change와 successor 재사용을 현재의 정확한 입력에 연결하며, 재사용 직전에 입력을 다시 확인합니다. 명시적 프로세스 종료와 임시 리포트 정리도 보강했고, 자동 샤딩과 권한 있는 샤드 재사용은 유지합니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md)와 [코드 보강 기록](docs/review-hardening/reports/phase-6.md)에 있습니다.
+업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.94.0은 고정된 Vitest 5와 Jest 30 프로필에 제한된 자동 inventory와 정확한 파일 샤딩을 추가하고, Node·npm·Go·콘텐츠 검증까지 정확한 런타임 및 입력 결합을 확장합니다. 상주 Hook worker는 반복되는 Python 시작 비용을 줄입니다. 대시보드는 실행, 자동 샤딩, 같은 상태의 정확 재사용, 저장소 소유자 정책 재사용, 권위 있는 관찰을 한국어·영어·중국어 간체로 구분합니다. 지원하지 않거나 불명확한 탐색은 원래 parent 명령을 실행하며, 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준으로 유지합니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md)와 [다국어 확장 기록](docs/multilang-expansion/FINAL_REPORT.md)에 있습니다.
 
 설치와 재사용 준비 상태는 서로 다릅니다.
 
@@ -174,11 +174,24 @@ click-gate sharding refresh
 1. 제안을 확인합니다. `refresh`는 Evidence 또는 별도로 승인된 Guarded 범위에서 적용 가능한 정책을 반영합니다.
 2. `commit-required`이면 제안된 정확한 정책을 평소 Git 작업 흐름으로 커밋합니다. 설정 컨트롤러는 `git add`, `commit`, `push`를 실행하지 않습니다.
 3. `refresh`로 상위·하위 명령의 bootstrap을 진행하면 `baseline-required`가 됩니다. Bootstrap은 설정 비용입니다.
-4. `refresh`로 현재 리비전의 기준 검증을 수행합니다. 하위 묶음이 통과하면 재사용 불가 상태의 `sharding-ready`가 될 수 있고, `reuse-ready`에는 모든 하위 묶음의 완전한 권위 관찰이 추가로 필요합니다.
+4. `refresh`로 현재 리비전의 기준 검증을 수행합니다. 하위 묶음이 통과하면 `sharding-ready`가 되며, Observer가 꺼져 있어도 변경 없는 재요청은 exact 영수증을 사용할 수 있습니다. 커밋 정책과 권위 관찰의 준비 상태는 따로 표시합니다.
 
-단계 사이에 `status`를 확인하고 표시된 다음 동작을 따릅니다. 자동 설정의 재사용 준비 상태는 앞서 설명한 정확한 영수증·안전 변경 정책 경로와 별개입니다. 이후 테스트 목록이 바뀌면 제한된 변경 내역을 제시하며, `refresh`는 Click이 이전에 커밋한 이력과 일치하는 정책만 갱신합니다. 사용자가 소유하거나 수정한 정책을 덮어쓰지 않습니다.
+단계 사이에 `status`를 확인하고 표시된 다음 동작을 따릅니다. 상태는 명령 실행, 자동 목록·분할, exact 재사용, 커밋 정책 재사용, 권위 관찰 재사용을 분리하므로 한 경로가 준비되어도 다른 경로까지 준비된 것은 아닙니다. 이후 테스트 목록이 바뀌면 제한된 변경 내역을 제시하며, `refresh`는 Click이 이전에 커밋한 이력과 일치하는 정책만 갱신합니다. 사용자가 소유하거나 수정한 정책을 덮어쓰지 않습니다.
 
-수집기는 CPython 3.10–3.14에서 제한된 unittest discovery와 보수적인 pytest collect-only 프로필을 지원합니다. 미지원 또는 불명확한 수집에서는 상위 명령을 유지합니다. [자동 샤딩 안내](skills/click/references/automatic-sharding-setup.md)와 [두 프로젝트 E2E 기록](docs/auto-sharding-e2e.md)을 참고하세요.
+자동 목록과 정확한 분할은 제한된 unittest, 고정된 Vitest 5, 고정된 Jest 30 프로필에서 로컬 검증했습니다. 보수적인 pytest collect-only 프로필은 구현되어 고정 버전 pytest CI에 배정했지만 이 checkout의 최종 로컬 실행에는 pytest가 없습니다. Vitest와 Jest는 제한된 정적 설정만 지원하며, 미지원 또는 불명확한 수집에서는 상위 명령을 유지합니다. [자동 샤딩 안내](skills/click/references/automatic-sharding-setup.md)와 [두 프로젝트 E2E 기록](docs/auto-sharding-e2e.md)을 참고하세요.
+
+지원 범위는 언어 이름 하나가 아니라 검증 도구 프로필별로 관리합니다.
+
+| 도구/프로필 | 실제 로컬 실행 | 자동 목록·분할 |
+| --- | --- | --- |
+| CPython unittest | 검증함 | 제한된 프로필 |
+| pytest | 수집기·프로필 구현, 고정 버전 CI 배정, 최종 로컬 실행에서는 사용 불가 | 제한된 프로필 |
+| Vitest 5 / Jest 30 | 고정 fixture로 검증함 | 제한된 프로필, 정확한 파일 child |
+| Node test/check, npm test, Go test | 검증함 | parent 실행만 |
+| JSON/YAML/Markdown/SVG 프로젝트 validator, jq | fixture 검증함 | parent 실행만 |
+| Cargo, Gradle/Maven, .NET, TypeScript/CMake/CTest, 직접 SQL/XML linter | 명령·런타임 프로필만 인식하며 이 checkout의 네이티브 실행은 미검증 | 없음 |
+
+`인식만 함`은 해당 네이티브 도구가 통과했다는 뜻이 아닙니다. Phase별 런타임과 CI 근거는 [`docs/multilang-expansion/`](docs/multilang-expansion/)에 기록합니다.
 
 ## Observer는 꺼져 있어도 되나요?
 
@@ -206,7 +219,7 @@ click-gate dashboard status
 click-gate dashboard stop
 ```
 
-명령이 알려주는 로컬 URL을 엽니다. 현재 작업, 검증 묶음의 상태, 재사용 근거, 작업 이력을 확인할 수 있습니다. 각 묶음은 끝나는 즉시 저장되므로 다음 묶음이 실행되는 동안에도 결과가 보입니다. 같은 호스트 세션과 작업 공간에서는 다음 Evidence 작업에도 뷰어 연결을 유지할 수 있습니다.
+명령이 알려주는 로컬 URL을 엽니다. 첫 화면에서 명령, 자동 목록, exact 재사용, 커밋 정책, 관찰 준비 상태와 다음 행동을 구분해 볼 수 있습니다. 현재 작업, 검증 묶음의 상태, 재사용 근거, 작업 이력도 함께 확인할 수 있습니다. 각 묶음은 끝나는 즉시 저장되므로 다음 묶음이 실행되는 동안에도 결과가 보입니다. 같은 호스트 세션과 작업 공간에서는 다음 Evidence 작업에도 뷰어 연결을 유지할 수 있습니다.
 
 **오른쪽 상단 언어 선택기**에서 **한국어 · English · 简体中文**을 선택합니다. 기본값은 한국어이며, 로컬 저장소를 사용할 수 있으면 브라우저가 같은 origin의 언어 설정을 기억합니다. 리포트도 선택한 언어를 따르고, 사용자가 작성한 작업명과 검사명은 원문을 유지합니다.
 

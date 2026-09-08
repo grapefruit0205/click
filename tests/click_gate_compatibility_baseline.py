@@ -16,6 +16,7 @@ HOST_ADAPTER_SURFACE: dict[str, frozenset[str]] = {
         }
     ),
     "hooks/click_hook.py": frozenset({"main"}),
+    "hooks/click_hook_worker.py": frozenset({"main"}),
 }
 
 PRIVATE_FORWARDERS: dict[str, str] = {

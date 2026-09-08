@@ -220,6 +220,114 @@ class ClickEvidenceShardsTests(unittest.TestCase):
         self.assertEqual(changed["status"], "fallback")
         self.assertEqual(changed["reason"], "inventory-narrower-than-parent-discovery")
 
+    def test_vitest_new_file_and_ambiguous_command_fall_back_to_parent(self) -> None:
+        self.parent_argv = ["npx", "--no-install", "vitest", "run"]
+        value = self.manifest()
+        value["entries"][0]["inventory"] = [
+            "tests/alpha.test.js",
+            "tests/nested/alpha.test.js",
+        ]
+        value["entries"][0]["shards"] = [
+            {
+                "id": "alpha",
+                "checks": [[*self.parent_argv, "tests/alpha.test.js"]],
+                "covers": ["tests/alpha.test.js"],
+            },
+            {
+                "id": "nested-alpha",
+                "checks": [[*self.parent_argv, "tests/nested/alpha.test.js"]],
+                "covers": ["tests/nested/alpha.test.js"],
+            },
+        ]
+        (self.root / "tests" / "test_alpha.py").unlink()
+        (self.root / "tests" / "test_beta.py").unlink()
+        (self.root / "tests" / "nested").mkdir()
+        (self.root / "tests" / "alpha.test.js").write_text("// alpha\n")
+        (self.root / "tests" / "nested" / "alpha.test.js").write_text(
+            "// nested alpha\n"
+        )
+        self.write_manifest(value)
+        self.commit()
+
+        self.assertEqual(self.resolve()["status"], "sharded")
+        (self.root / "tests" / "new.test.ts").write_text("// new\n")
+        changed = self.resolve()
+        self.assertEqual(changed["status"], "fallback")
+        self.assertEqual(
+            changed["reason"], "inventory-narrower-than-parent-discovery"
+        )
+
+        self.parent_argv = [
+            "npx", "--no-install", "vitest", "run", "tests", "nested"
+        ]
+        (self.root / "tests" / "new.test.ts").unlink()
+        value["entries"][0]["checks"] = [self.parent_argv]
+        self.write_manifest(value)
+        self.commit()
+        ambiguous = self.resolve()
+        self.assertEqual(ambiguous["status"], "fallback")
+        self.assertEqual(
+            ambiguous["reason"], "parent-discovery-arguments-unsupported"
+        )
+
+    def test_jest_new_file_and_ambiguous_options_fall_back_to_parent(self) -> None:
+        self.parent_argv = ["npx", "--no-install", "jest", "--runInBand"]
+        value = self.manifest()
+        value["entries"][0]["inventory"] = [
+            "tests/alpha.test.js",
+            "tests/regex+meta/alpha.test.js",
+        ]
+        value["entries"][0]["shards"] = [
+            {
+                "id": "alpha",
+                "checks": [[
+                    *self.parent_argv,
+                    "--runTestsByPath",
+                    "tests/alpha.test.js",
+                ]],
+                "covers": ["tests/alpha.test.js"],
+            },
+            {
+                "id": "regex-alpha",
+                "checks": [[
+                    *self.parent_argv,
+                    "--runTestsByPath",
+                    "tests/regex+meta/alpha.test.js",
+                ]],
+                "covers": ["tests/regex+meta/alpha.test.js"],
+            },
+        ]
+        (self.root / "tests" / "test_alpha.py").unlink()
+        (self.root / "tests" / "test_beta.py").unlink()
+        (self.root / "tests" / "regex+meta").mkdir()
+        (self.root / "tests" / "alpha.test.js").write_text("// alpha\n")
+        (self.root / "tests" / "regex+meta" / "alpha.test.js").write_text(
+            "// exact metacharacter path\n"
+        )
+        self.write_manifest(value)
+        self.commit()
+        self.assertEqual(self.resolve()["status"], "sharded")
+
+        (self.root / "tests" / "new.test.ts").write_text("// new\n")
+        changed = self.resolve()
+        self.assertEqual(changed["status"], "fallback")
+        self.assertEqual(
+            changed["reason"], "inventory-narrower-than-parent-discovery"
+        )
+
+        (self.root / "tests" / "new.test.ts").unlink()
+        self.parent_argv = [
+            "npx", "--no-install", "jest", "--runInBand", "--watchAll"
+        ]
+        value["entries"][0]["checks"] = [self.parent_argv]
+        self.write_manifest(value)
+        self.commit()
+        ambiguous = self.resolve()
+        self.assertEqual(ambiguous["status"], "fallback")
+        self.assertEqual(
+            ambiguous["reason"], "parent-discovery-arguments-unsupported"
+        )
+
     def test_ignored_parent_discovery_member_also_forces_fallback(self) -> None:
         (self.root / ".gitignore").write_text(
             "tests/testignored.py\n", encoding="utf-8"

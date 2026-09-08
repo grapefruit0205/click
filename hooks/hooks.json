@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_gate.py\" prompt-submit",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_hook.py\" prompt-submit",
             "commandWindows": "\"${PLUGIN_ROOT}\\hooks\\click_windows.cmd\" prompt-submit",
             "timeout": 7,
             "additionalContextLimit": 1400
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_gate.py\" pre-tool",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_hook.py\" pre-tool",
             "commandWindows": "\"${PLUGIN_ROOT}\\hooks\\click_windows.cmd\" pre-tool",
             "timeout": 7
           }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_gate.py\" post-tool",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_hook.py\" post-tool",
             "commandWindows": "\"${PLUGIN_ROOT}\\hooks\\click_windows.cmd\" post-tool",
             "timeout": 7
           }
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_gate.py\" post-tool",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_hook.py\" post-tool",
             "commandWindows": "\"${PLUGIN_ROOT}\\hooks\\click_windows.cmd\" post-tool",
             "timeout": 7
           }
@@ -78,7 +78,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_gate.py\" session-end",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/click_hook.py\" session-end",
             "commandWindows": "\"${PLUGIN_ROOT}\\hooks\\click_windows.cmd\" session-end",
             "timeout": 3
           }
