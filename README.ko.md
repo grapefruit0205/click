@@ -83,7 +83,7 @@ codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.94.0은 고정된 Vitest 5와 Jest 30 프로필에 제한된 자동 inventory와 정확한 파일 샤딩을 추가하고, Node·npm·Go·콘텐츠 검증까지 정확한 런타임 및 입력 결합을 확장합니다. 상주 Hook worker는 반복되는 Python 시작 비용을 줄입니다. 대시보드는 실행, 자동 샤딩, 같은 상태의 정확 재사용, 저장소 소유자 정책 재사용, 권위 있는 관찰을 한국어·영어·중국어 간체로 구분합니다. 지원하지 않거나 불명확한 탐색은 원래 parent 명령을 실행하며, 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준으로 유지합니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md)와 [다국어 확장 기록](docs/multilang-expansion/FINAL_REPORT.md)에 있습니다.
+업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.94.0은 고정된 Vitest 5와 Jest 30 프로필에 제한된 자동 inventory와 정확한 파일 샤딩을 추가하고, Node·npm·Go·콘텐츠 검증까지 정확한 런타임 및 입력 결합을 확장합니다. 상주 Hook worker는 반복되는 Python 시작 비용을 줄입니다. 대시보드는 실행, 자동 샤딩, 같은 상태의 정확 재사용, 저장소 소유자 정책 재사용, 권위 있는 관찰을 한국어·영어·중국어 간체로 구분합니다. 지원하지 않거나 불명확한 탐색은 원래 parent 명령을 실행하며, 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준으로 유지합니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md)와 [다국어 확장 기록](docs/history/multilang-expansion/FINAL_REPORT.md)에 있습니다.
 
 설치와 재사용 준비 상태는 서로 다릅니다.
 
@@ -178,7 +178,7 @@ click-gate sharding refresh
 
 단계 사이에 `status`를 확인하고 표시된 다음 동작을 따릅니다. 상태는 명령 실행, 자동 목록·분할, exact 재사용, 커밋 정책 재사용, 권위 관찰 재사용을 분리하므로 한 경로가 준비되어도 다른 경로까지 준비된 것은 아닙니다. 이후 테스트 목록이 바뀌면 제한된 변경 내역을 제시하며, `refresh`는 Click이 이전에 커밋한 이력과 일치하는 정책만 갱신합니다. 사용자가 소유하거나 수정한 정책을 덮어쓰지 않습니다.
 
-자동 목록과 정확한 분할은 제한된 unittest, 고정된 Vitest 5, 고정된 Jest 30 프로필에서 로컬 검증했습니다. 보수적인 pytest collect-only 프로필은 구현되어 고정 버전 pytest CI에 배정했지만 이 checkout의 최종 로컬 실행에는 pytest가 없습니다. Vitest와 Jest는 제한된 정적 설정만 지원하며, 미지원 또는 불명확한 수집에서는 상위 명령을 유지합니다. [자동 샤딩 안내](skills/click/references/automatic-sharding-setup.md)와 [두 프로젝트 E2E 기록](docs/auto-sharding-e2e.md)을 참고하세요.
+자동 목록과 정확한 분할은 제한된 unittest, 고정된 Vitest 5, 고정된 Jest 30 프로필에서 로컬 검증했습니다. 보수적인 pytest collect-only 프로필은 구현되어 고정 버전 pytest CI에 배정했지만 이 checkout의 최종 로컬 실행에는 pytest가 없습니다. Vitest와 Jest는 제한된 정적 설정만 지원하며, 미지원 또는 불명확한 수집에서는 상위 명령을 유지합니다. [자동 샤딩 안내](skills/click/references/automatic-sharding-setup.md)와 [두 프로젝트 E2E 기록](docs/history/auto-sharding/e2e.md)을 참고하세요.
 
 지원 범위는 언어 이름 하나가 아니라 검증 도구 프로필별로 관리합니다.
 
@@ -191,7 +191,7 @@ click-gate sharding refresh
 | JSON/YAML/Markdown/SVG 프로젝트 validator, jq | fixture 검증함 | parent 실행만 |
 | Cargo, Gradle/Maven, .NET, TypeScript/CMake/CTest, 직접 SQL/XML linter | 명령·런타임 프로필만 인식하며 이 checkout의 네이티브 실행은 미검증 | 없음 |
 
-`인식만 함`은 해당 네이티브 도구가 통과했다는 뜻이 아닙니다. Phase별 런타임과 CI 근거는 [`docs/multilang-expansion/`](docs/multilang-expansion/)에 기록합니다.
+`인식만 함`은 해당 네이티브 도구가 통과했다는 뜻이 아닙니다. Phase별 런타임과 CI 근거는 [다국어 확장 이력](docs/history/multilang-expansion/README.md)에 기록합니다.
 
 ## Observer는 꺼져 있어도 되나요?
 
@@ -329,7 +329,7 @@ Click은 작업 흐름의 가드레일이며 운영체제 샌드박스가 아닙
 - [검증 프로필](skills/click/references/verification-profiles.md), [실행 기능 프로토콜](skills/click/references/capability-protocol.md)
 - [자동 샤딩 설정](skills/click/references/automatic-sharding-setup.md), [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)
-- [검증 효율](skills/click/references/verification-efficiency.md), [반복 방지 정책](skills/click/references/anti-loop-policy.md), [런타임 구조와 최적화](docs/runtime-optimization.md)
+- [문서 지도](docs/README.md), [검증 효율](skills/click/references/verification-efficiency.md), [반복 방지 정책](skills/click/references/anti-loop-policy.md), [런타임 구조와 최적화](docs/architecture/runtime-optimization.md)
 
 ## 설계 원칙
 

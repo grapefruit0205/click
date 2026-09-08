@@ -36,7 +36,7 @@
 - Existing component measurements are retained without new samples: warmed
   resident Hook median fell from 104.192ms to 60.921ms, while the first worker
   event was 253.484ms. These figures do not establish whole-task duration or
-  token savings. See the [multilingual expansion report](docs/multilang-expansion/FINAL_REPORT.md)
+  token savings. See the [multilingual expansion report](docs/history/multilang-expansion/FINAL_REPORT.md)
   for evidence boundaries and remaining limits.
 
 ## v0.93.0 — 2026-09-08
@@ -79,7 +79,7 @@
   sample per workload. Whole-benchmark times were nearly unchanged in those
   samples, while prepared reuse requests showed additional confirmation cost.
   No stable speedup, whole-task duration, or token saving is claimed. See the
-  [review-hardening record](docs/review-hardening/reports/phase-6.md) for raw
+  [review-hardening record](docs/history/review-hardening/reports/phase-6.md) for raw
   evidence, exact boundaries, classifications, and remaining platform limits.
 
 ## v0.92.0 — 2026-09-08
@@ -114,7 +114,7 @@
 - Automatic sharding `init/status/refresh`, conservative parent-suite fallback,
   and authoritative shard reuse remain required regression criteria. Existing
   reuse policy and receipt authority are unchanged.
-- See [runtime optimization details](docs/runtime-optimization.md) for the
+- See [runtime optimization details](docs/architecture/runtime-optimization.md) for the
   architecture, local test results, raw measurements, and platform limitations.
 
 ## v0.91.0 — 2026-09-08

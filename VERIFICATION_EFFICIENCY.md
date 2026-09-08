@@ -154,7 +154,7 @@ presentation은 별도 allowlist를 통과하며 알 수 없는 필드나 원시
 
 별도 workflow 비교에서는 각 경로의 중앙값과 쌍별 차이의 중앙값을 구분하고, 워밍업·제외 사유·실패·음수·초기 준비·변경·추가 감사 비용을 보존합니다. `same-shards`는 source-command 구간, `parent-suite`는 Click 요청 구간 비교입니다. legacy paired v2의 wall time 비교는 별도로 표시합니다. fixture에서 Click 구간이 더 길었던 사실은 해당 fixture에 귀속하며 현재 요청이 느려졌다고 표시하지 않습니다. 가져오기·제거·공유·새로고침은 검증을 실행하지 않습니다.
 
-참고 이미지와 합성 화면 캡처, 실제 Hook/runner 검증은 [구현 기록](docs/dashboard-impact/PLAN.md)에서 구분합니다. Observer는 기본값인 off 상태에서도 검증·정확 일치/정책 재사용·계측·대시보드가 동작합니다.
+참고 이미지와 합성 화면 캡처, 실제 Hook/runner 검증은 [구현 기록](docs/history/dashboard-impact/prompts/PLAN.md)에서 구분합니다. Observer는 기본값인 off 상태에서도 검증·정확 일치/정책 재사용·계측·대시보드가 동작합니다.
 
 상단 언어 선택에서 **한국어 / English / 简体中文(중국어 간체)**를 고를 수 있습니다. 선택은 같은 viewer origin의 브라우저 저장소에 보관하며, 저장소 접근이 제한돼도 현재 페이지의 전환은 가능합니다. 상태·이유·날짜·시간 표현과 복사 문구·공유 리포트가 함께 바뀝니다. 작업명과 사용자가 작성한 검증 묶음 이름, canonical ID·판정·측정값은 원문을 유지합니다.
 

@@ -51,5 +51,5 @@ child, and reuses one of two or two of three unaffected children with complete
 origin and timing provenance. A same-final-code parent audit and the shipped
 controller path also pass. The short fixtures retain negative whole-request
 comparisons rather than claiming a speedup. See
-[`auto-sharding-e2e.md`](auto-sharding-e2e.md) for measurements, scopes, support
+[`e2e.md`](e2e.md) for measurements, scopes, support
 limits, and the safety regression map.

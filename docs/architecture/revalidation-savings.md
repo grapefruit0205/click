@@ -392,7 +392,7 @@ Phase 1은 기존 `duration_baseline`, verification receipt source, successor re
 - `dist/antigravity/hooks/click_incremental.py`, `dist/antigravity/hooks/click_verification.py`: source hook의 배포 파생본을 재생성했다.
 - `tests/test_click_incremental.py`: v2 strict validation, revision 독립성, Observer/source mismatch, legacy 호환성을 검증한다.
 - `tests/test_click_gate_verification.py`: 별도 승인된 A→B→C 통합 경로, 원본 출처 연결, 반복 재사용 표본 불변, 누락·legacy·부적합 시간 근거, 실패·취소 표본 배제를 검증한다.
-- `docs/revalidation-savings-plan.md`: Phase 1 구현 결과와 검증·한계를 기록했다.
+- `docs/architecture/revalidation-savings.md`: Phase 1 구현 결과와 검증·한계를 기록했다.
 
 ### 검증
 

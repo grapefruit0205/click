@@ -1,6 +1,6 @@
 # Click 코드 보강 실행 기록
 
-[첨부 실행 명세](ALL_PROMPTS.md)의 Phase 0~6을 순서대로 수행한 기록입니다. [공통 규칙](COMMON.md)을 적용하며, automatic sharding `init/status/refresh`와 정상 shard reuse 보존을 필수 기준으로 삼았습니다.
+[첨부 실행 명세](prompts/PROMPT.md)의 Phase 0~6을 순서대로 수행한 기록입니다. [공통 규칙](prompts/COMMON.md)을 적용하며, automatic sharding `init/status/refresh`와 정상 shard reuse 보존을 필수 기준으로 삼았습니다.
 
 | 단계 | 실행 내용 | 보고서 |
 |---|---|---|

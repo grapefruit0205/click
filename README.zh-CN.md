@@ -36,7 +36,7 @@ codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.94.0 为固定版本的 Vitest 5 和 Jest 30 配置增加了有界自动 inventory 与精确文件分片，将精确运行时和输入绑定扩展到 Node、npm、Go 与内容验证，并通过常驻 Hook worker 减少重复的 Python 启动开销。仪表板以韩语、英语和简体中文分别显示执行、自动分片、同状态精确复用、仓库所有者策略复用和权威观察。遇到不支持或不明确的发现过程时仍执行原始 parent 命令；自动分片 `init/status/refresh` 与经授权的分片复用仍是必须满足的回归标准。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)和[多语言扩展记录](docs/multilang-expansion/FINAL_REPORT.md)。
+更新后请重启，并使用新任务。v0.94.0 为固定版本的 Vitest 5 和 Jest 30 配置增加了有界自动 inventory 与精确文件分片，将精确运行时和输入绑定扩展到 Node、npm、Go 与内容验证，并通过常驻 Hook worker 减少重复的 Python 启动开销。仪表板以韩语、英语和简体中文分别显示执行、自动分片、同状态精确复用、仓库所有者策略复用和权威观察。遇到不支持或不明确的发现过程时仍执行原始 parent 命令；自动分片 `init/status/refresh` 与经授权的分片复用仍是必须满足的回归标准。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)和[多语言扩展记录](docs/history/multilang-expansion/FINAL_REPORT.md)。
 
 ## 从日常工作开始
 
@@ -117,7 +117,7 @@ click-gate sharding refresh
 
 每一步之间查看 `status` 并按其下一步提示操作。状态会分别显示命令执行、自动清单与拆分、精确复用、已提交策略复用和权威观测复用；其中一条路径就绪不代表其他路径也已就绪。后续测试发现结果发生变化时，会生成限定范围的 diff；刷新只更新与 Click 先前已提交内容谱系一致的策略，不覆盖用户拥有或修改过的策略。
 
-自动清单与精确拆分已在有限定范围的 unittest、固定版本的 Vitest 5 和 Jest 30 配置中通过本地验证。保守的 pytest collect-only 配置已经实现并分配给固定版本的 pytest CI，但此 checkout 的最终本地运行没有 pytest。Vitest 与 Jest 仅支持受限的静态配置；不支持或存在歧义的收集会保留父命令。详见[自动分片指南](skills/click/references/automatic-sharding-setup.md)及[两个项目的端到端记录](docs/auto-sharding-e2e.md)。
+自动清单与精确拆分已在有限定范围的 unittest、固定版本的 Vitest 5 和 Jest 30 配置中通过本地验证。保守的 pytest collect-only 配置已经实现并分配给固定版本 pytest CI，但此 checkout 的最终本地运行没有 pytest。Vitest 与 Jest 仅支持受限的静态配置；不支持或存在歧义的收集会保留父命令。详见[自动分片指南](skills/click/references/automatic-sharding-setup.md)及[两个项目的端到端记录](docs/history/auto-sharding/e2e.md)。
 
 支持范围按验证工具配置管理，而不是只按编程语言名称管理。
 
@@ -130,7 +130,7 @@ click-gate sharding refresh
 | JSON/YAML/Markdown/SVG 项目验证器、jq | 已验证 fixture | 仅父命令执行 |
 | Cargo、Gradle/Maven、.NET、TypeScript/CMake/CTest、直接 SQL/XML linter | 仅识别命令与运行时配置；此 checkout 尚未验证原生执行 | 无 |
 
-“仅识别”不代表相应原生工具链已经通过。各 Phase 的运行时与 CI 依据记录在 [`docs/multilang-expansion/`](docs/multilang-expansion/)。
+“仅识别”不代表相应原生工具链已经通过。各 Phase 的运行时与 CI 依据记录在[多语言扩展历史](docs/history/multilang-expansion/README.md)。
 
 ## Observer 可以一直关闭吗？
 
@@ -248,7 +248,7 @@ Click 是工作流护栏，不是操作系统沙箱。它不能证明隐藏推�
 - [验证配置](skills/click/references/verification-profiles.md)与[能力协议](skills/click/references/capability-protocol.md)
 - [自动分片设置](skills/click/references/automatic-sharding-setup.md)与 [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)、[Shadow Observer v1](skills/click/references/observer-v1.md)与 [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)
-- [验证效率](skills/click/references/verification-efficiency.md)、[反重复策略](skills/click/references/anti-loop-policy.md)与[运行时架构及优化](docs/runtime-optimization.md)
+- [文档地图](docs/README.md)、[验证效率](skills/click/references/verification-efficiency.md)、[反重复策略](skills/click/references/anti-loop-policy.md)与[运行时架构及优化](docs/architecture/runtime-optimization.md)
 
 ## 许可证
 
