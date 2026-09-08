@@ -1,11 +1,13 @@
 # Automatic sharding setup
 
-Click exposes one JSON-free setup surface for supported unittest and pytest profiles:
+Click exposes one JSON-free setup surface for supported unittest, pytest, Vitest 5, and Jest 30 profiles:
 
 ```text
 click-gate sharding init
 click-gate sharding init -- python3 -m unittest discover -s tests -q
 click-gate sharding init -- python3 -m pytest -q tests
+click-gate sharding init -- npx --no-install vitest run
+click-gate sharding init -- npx --no-install jest --runInBand
 click-gate sharding status
 click-gate sharding refresh
 ```
@@ -26,7 +28,11 @@ selection/reporting options. It runs `--collect-only` twice, disables ambient
 plugin autoload, and binds the recorded proposal to the interpreter and
 framework version. Missing pytest, custom discovery patterns, required external
 plugins, unstable IDs, fixture ambiguity, or unsupported options leave the
-parent command unchanged.
+parent command unchanged. Vitest and Jest require pinned, locally installed
+runners and limited static configuration. They collect machine-readable file
+inventories and generate exact file children; custom workspaces/projects,
+dynamic configuration, watch/update modes, and ambiguous selection preserve
+the parent command.
 
 ## Runtime ownership and public boundaries
 
@@ -64,8 +70,8 @@ selection-required
   -> application-ready (Evidence) / approval-required (Guarded)
   -> commit-required
   -> baseline-required
-  -> sharding-ready / reuse-unavailable
-  -> reuse-ready
+  -> sharding-ready (exact reuse available for unchanged bindings)
+  -> reuse-ready (complete authoritative observation also available)
 ```
 
 The first authorized `init -- ...` performs bounded collection and stores a
@@ -119,12 +125,14 @@ through the ordinary Click verification runner. The committed shard map may
 expand it into children, but all usual runner, receipt, and fallback checks
 still apply.
 
-A successful baseline without complete authoritative observations reports
-`sharding-ready` and `reuse-unavailable`. With explicitly enabled
-[Authoritative Observer v2](authoritative-observer-v2.md), every child must
-produce a complete, current, runner-signed observation before setup reports
-`reuse-ready`. Shadow data, caller JSON, the setup artifact, and the dashboard
-never create that authority.
+A successful baseline reports `sharding-ready` and makes same-revision exact
+receipts available for unchanged bindings. Status reports exact,
+owner-committed safe-change, and authoritative-observation routes separately.
+With explicitly enabled [Authoritative Observer v2](authoritative-observer-v2.md),
+every child must produce a complete, current, runner-signed observation before
+setup reports observation-backed `reuse-ready`. Observer can remain off for
+exact or committed-policy reuse. Shadow data, caller JSON, the setup artifact,
+and the dashboard never create authority.
 
 ## Refresh and recovery
 

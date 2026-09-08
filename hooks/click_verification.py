@@ -49,6 +49,7 @@ else:  # Installed launchers execute hooks directly.
     click_state,
     click_verification_policy,
     click_verification_bindings,
+    click_verification_inputs,
     click_verification_plan,
     click_verification_reuse,
     click_observer_common,
@@ -75,6 +76,7 @@ else:  # Installed launchers execute hooks directly.
     "click_state",
     "click_verification_policy",
     "click_verification_bindings",
+    "click_verification_inputs",
     "click_verification_plan",
     "click_verification_reuse",
     "click_observer_common",
@@ -177,6 +179,7 @@ def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
 
 _validate_verification_batch = click_verification_plan.validate_verification_batch
 _verification_groups = click_verification_plan.verification_groups
+_verification_group_policy = click_verification_plan.verification_group_policy
 _verification_group_digest = click_verification_plan.verification_group_digest
 _verification_command_digest = click_verification_plan.verification_command_digest
 _verification_command_plans = click_verification_plan.verification_command_plans
@@ -330,6 +333,64 @@ _read_contract_state = click_contract_state.read_contract_state
 _save_contract_state = click_contract_state.save_contract_state
 
 
+def _set_group_policy(
+    checks: list[dict[str, Any]], policy: dict[str, Any]
+) -> None:
+    """Apply one normalized policy without changing executable identity."""
+    for check in checks:
+        check.pop("reuse", None)
+        check.pop("inputs", None)
+        check.pop("outputs_required", None)
+        if policy["reuse"] != "conditional":
+            check["reuse"] = policy["reuse"]
+        if policy["inputs"]:
+            check["inputs"] = list(policy["inputs"])
+        if policy["outputs_required"]:
+            check["outputs_required"] = True
+
+
+def _merge_source_policy(
+    source: dict[str, Any], requested: dict[str, Any]
+) -> dict[str, Any]:
+    """Persist owner restrictions and return this request's effective policy."""
+    stored_reuse = str(source.get("reuse_policy", "conditional"))
+    requested_reuse = str(requested.get("reuse", "conditional"))
+    persistent_reuse = (
+        "always-run"
+        if "always-run" in {stored_reuse, requested_reuse}
+        else "conditional"
+    )
+    effective_reuse = (
+        "always-run" if persistent_reuse == "always-run" else requested_reuse
+    )
+    stored_inputs, _ = click_verification_inputs.normalize_patterns(
+        source.get("input_patterns", [])
+    )
+    requested_inputs, _ = click_verification_inputs.normalize_patterns(
+        requested.get("inputs", [])
+    )
+    combined_inputs, combined_error = click_verification_inputs.normalize_patterns(
+        sorted(set(stored_inputs or ()) | set(requested_inputs or ()))
+    )
+    if combined_error or combined_inputs is None:
+        raise ValueError("verification input policy could not be normalized")
+    if list(combined_inputs) != list(stored_inputs or ()):
+        source["verified_input_digest"] = ""
+    outputs_required = bool(
+        source.get("outputs_required", False)
+        or requested.get("outputs_required", False)
+    )
+    source["reuse_policy"] = persistent_reuse
+    source["input_patterns"] = list(combined_inputs)
+    source["outputs_required"] = outputs_required
+    source.setdefault("verified_input_digest", "")
+    return {
+        "reuse": effective_reuse,
+        "inputs": list(combined_inputs),
+        "outputs_required": outputs_required,
+    }
+
+
 def _evidence_sources(state: dict[str, Any]) -> dict[str, Any] | None:
     return click_evidence.sources_from_state(
         state,
@@ -466,6 +527,14 @@ def _expand_evidence_shards(
                 decision, scale=scale
             )
             plan_current = shard_checks is not None and not validation_error
+            if plan_current:
+                parent_policy, validation_error = _verification_group_policy(
+                    parent_checks
+                )
+                plan_current = parent_policy is not None and not validation_error
+                if plan_current:
+                    assert shard_checks is not None and parent_policy is not None
+                    _set_group_policy(shard_checks, parent_policy)
 
         if active is not None and not plan_current:
             sources, collapse_error = click_evidence.collapse_shard_plan(
@@ -880,6 +949,13 @@ def _prepare_verification_impl(
             "",
         )
 
+    requested_policies: dict[str, dict[str, Any]] = {}
+    for source_key, checks in grouped_checks.items():
+        policy, policy_error = _verification_group_policy(checks)
+        if policy_error or policy is None:
+            return "", policy_error or "Verification reuse policy is malformed.", ""
+        requested_policies[source_key] = policy
+
     group_digests: dict[str, str] = {}
     group_units: dict[str, int] = {}
     for source_key, checks in grouped_checks.items():
@@ -938,6 +1014,33 @@ def _prepare_verification_impl(
             )
             if candidate is not None:
                 successor_candidates[source_key] = candidate
+                previous, _ = candidate
+                _merge_source_policy(
+                    sources[source_key],
+                    {
+                        "reuse": previous.get("reuse_policy", "conditional"),
+                        "inputs": previous.get("input_patterns", []),
+                        "outputs_required": previous.get("outputs_required", False),
+                    },
+                )
+                if (
+                    sources[source_key].get("input_patterns")
+                    == previous.get("input_patterns", [])
+                ):
+                    sources[source_key]["verified_input_digest"] = str(
+                        previous.get("verified_input_digest", "")
+                    )
+
+    effective_policies: dict[str, dict[str, Any]] = {}
+    try:
+        for source_key, requested_policy in requested_policies.items():
+            effective = _merge_source_policy(
+                sources[source_key], requested_policy
+            )
+            effective_policies[source_key] = effective
+            _set_group_policy(grouped_checks[source_key], effective)
+    except ValueError:
+        return "", "Click could not normalize the verification reuse policy.", ""
 
     previous_revisions: dict[str, int] = {}
     reason_codes: dict[str, str] = {}
@@ -960,8 +1063,12 @@ def _prepare_verification_impl(
     prepared_environment = _observer_environment(
         _verification_environment(cwd=workspace), verification
     )
+    current_input_bindings: dict[str, dict[str, Any]] = {}
+    current_runtime_bindings: dict[str, dict[str, Any]] = {}
     current_bindings = click_verification_bindings.collect_group_bindings(
         grouped_checks, requested_keys, cwd=workspace, environment=prepared_environment,
+        input_bindings=current_input_bindings,
+        runtime_bindings=current_runtime_bindings,
     )
     if current_bindings is None:
         return (
@@ -971,6 +1078,50 @@ def _prepare_verification_impl(
             "",
         )
     current_environment_digests, current_executable_digests = current_bindings
+    unsafe_runtime = {
+        source_key: binding
+        for source_key, binding in current_runtime_bindings.items()
+        if binding.get("status") == "unsafe"
+    }
+    if unsafe_runtime:
+        reasons = sorted({
+            str(reason)
+            for binding in unsafe_runtime.values()
+            for reason in binding.get("reason_codes", [])
+            if isinstance(reason, str) and reason
+        })
+        detail = ", ".join(reasons) or "runtime-download-unapproved"
+        return (
+            "",
+            "Click blocked a verification launcher that could download an "
+            f"unprovisioned runtime or package ({detail}).",
+            "",
+        )
+
+    force_run_reasons: dict[str, str] = {}
+    for source_key, policy in effective_policies.items():
+        source = sources[source_key]
+        binding = current_input_bindings.get(source_key, {})
+        if policy["reuse"] == "always-run":
+            force_run_reasons[source_key] = "always-run-policy"
+        elif policy["reuse"] == "rerun":
+            force_run_reasons[source_key] = "explicit-rerun-requested"
+        elif policy["outputs_required"]:
+            force_run_reasons[source_key] = "required-output-not-guaranteed"
+        elif policy["inputs"] and binding.get("status") != "complete":
+            force_run_reasons[source_key] = "explicit-input-unavailable"
+            not_evaluable_keys.add(source_key)
+        elif policy["inputs"] and not source.get("verified_input_digest"):
+            force_run_reasons[source_key] = "explicit-input-receipt-missing"
+        elif policy["inputs"] and not secrets.compare_digest(
+            str(source.get("verified_input_digest", "")),
+            str(binding.get("digest", "")),
+        ):
+            force_run_reasons[source_key] = "explicit-input-changed"
+        elif current_runtime_bindings.get(source_key, {}).get("status") != "complete":
+            force_run_reasons[source_key] = "runtime-identity-incomplete"
+            not_evaluable_keys.add(source_key)
+    reason_codes.update(force_run_reasons)
 
     current_requested = {
         source_key
@@ -1003,6 +1154,12 @@ def _prepare_verification_impl(
         # declaration. Never let the declaration override an observed input.
         and not sources[source_key].get("verified_dependency_observation")
     }
+    forced_keys = set(force_run_reasons)
+    current_requested.difference_update(forced_keys)
+    dependency_candidates.difference_update(forced_keys)
+    safe_change_candidates.difference_update(forced_keys)
+    for source_key in forced_keys:
+        successor_candidates.pop(source_key, None)
     reused_keys: set[str] = set()
     dependency_reused_keys: set[str] = set()
     safe_change_reused_keys: set[str] = set()
@@ -1451,6 +1608,9 @@ def _prepare_verification_impl(
     unresolved_keys = {
         key for key in argv_keys if not _evidence_is_current(sources.get(key), revision)
     }
+    # A fresh/always/output-bound request intentionally supersedes an otherwise
+    # current receipt. Treat it as unresolved for this one runner reservation.
+    unresolved_keys.update(forced_keys)
     try:
         incremental_plan = _canonical_incremental_plan(
             sources,
@@ -1702,6 +1862,7 @@ class VerificationRunResult:
     workspace_root: str = ""
     workspace_digest: str = ""
     environment_digests: dict[str, str] | None = None
+    explicit_input_digests: dict[str, str] | None = None
     source_durations_ms: dict[str, int | float] | None = None
     dependency_observations: dict[str, dict[str, Any]] | None = None
     authoritative_observations: dict[str, dict[str, Any]] | None = None
@@ -1772,6 +1933,7 @@ def _record_verification_result(
     workspace_root: str = "",
     workspace_digest: str = "",
     environment_digests: dict[str, str] | None = None,
+    explicit_input_digests: dict[str, str] | None = None,
     source_durations_ms: dict[str, int | float] | None = None,
     dependency_observations: dict[str, dict[str, Any]] | None = None,
     authoritative_observations: dict[str, dict[str, Any]] | None = None,
@@ -1922,6 +2084,21 @@ def _record_verification_result(
         return False
     grouped_checks, grouping_error = _verification_groups(batch)
     if grouping_error or set(grouped_checks) != running_keys:
+        return False
+    observed_input_digests = (
+        {source_key: "" for source_key in running_keys}
+        if explicit_input_digests is None
+        else explicit_input_digests
+    )
+    if (
+        not isinstance(observed_input_digests, dict)
+        or set(observed_input_digests) != running_keys
+        or any(
+            not isinstance(value, str)
+            or value and re.fullmatch(r"[0-9a-f]{64}", value) is None
+            for value in observed_input_digests.values()
+        )
+    ):
         return False
     command_plans_by_source = _verification_command_plans(batch)
     precise_required = click_incremental.current_command_plans(
@@ -2159,6 +2336,9 @@ def _record_verification_result(
                     source["verified_root"] = os.path.normcase(workspace_root)
                     source["verified_tree_digest"] = workspace_digest
                     source["verified_environment_digest"] = environment_digest
+                    source["verified_input_digest"] = str(
+                        observed_input_digests.get(source_key, "")
+                    )
                     source["verified_executable_digest"] = str(
                         prepared_executable_digests.get(source_key, "")
                     )
@@ -2205,6 +2385,7 @@ def _record_verification_result(
                     source["verified_root"] = ""
                     source["verified_tree_digest"] = ""
                     source["verified_environment_digest"] = ""
+                    source["verified_input_digest"] = ""
                     source["verified_executable_digest"] = ""
                     source["verified_host_coverage"] = {}
                     source["verified_at"] = 0
@@ -2474,6 +2655,7 @@ def _claim_verification_run(
         git_capture=git_capture,
     )
     shadow_bindings: dict[str, str] = {}
+    claim_input_bindings: dict[str, dict[str, Any]] = {}
     claim_file_digests = click_verification_bindings.FileDigestStage(file_content_digest)
     for source_key, checks in grouped_checks.items():
         source = sources.get(source_key)
@@ -2498,11 +2680,17 @@ def _claim_verification_run(
                 )
             }
         )
-        current_environment_digest = _verification_environment_digest_from_records(
+        base_environment_digest = _verification_environment_digest_from_records(
             executable_records,
             cwd=Path.cwd(),
             environment=verification_environment,
         )
+        current_environment_digest, input_binding = (
+            click_verification_inputs.context_digest(
+                base_environment_digest, checks, cwd=Path.cwd()
+            )
+        )
+        claim_input_bindings[source_key] = input_binding
         if not secrets.compare_digest(
             str(prepared_executable_digests.get(source_key, "")),
             current_executable_digest,
@@ -2554,6 +2742,7 @@ def _claim_verification_run(
         else ""
     )
     batch["_click_shadow_bindings"] = shadow_bindings
+    batch["_click_explicit_input_bindings"] = claim_input_bindings
     batch["_click_shadow_contexts"] = {
         source_key: {
             "environment_digest": str(prepared_environment_digests[source_key]),
@@ -2854,10 +3043,13 @@ def _collection_boundary_check(
         executable_digest = _capability_digest(
             {"executables": _verification_executable_payload(executable_records)}
         )
-        environment_digest = _verification_environment_digest_from_records(
+        base_environment_digest = _verification_environment_digest_from_records(
             executable_records,
             cwd=Path.cwd(),
             environment=verification_environment,
+        )
+        environment_digest, _ = click_verification_inputs.context_digest(
+            base_environment_digest, checks, cwd=Path.cwd()
         )
         if not secrets.compare_digest(
             str(expected_executables.get(next_source_key, "")), executable_digest
@@ -2975,6 +3167,15 @@ def _run_verification(
     environment_rebound = batch.pop(
         "_click_verification_environment_rebound", False
     )
+    claim_input_bindings = batch.pop("_click_explicit_input_bindings", None)
+    if (
+        not isinstance(claim_input_bindings, dict)
+        or set(claim_input_bindings) != set(grouped_checks)
+    ):
+        sys.stderr.write(
+            "Click verification runner lost its explicit input binding.\n"
+        )
+        return 2
     shadow_bindings = batch.pop("_click_shadow_bindings", {})
     shadow_contexts = batch.pop("_click_shadow_contexts", {})
     authoritative_runtime = batch.pop("_click_authoritative_runtime", None)
@@ -3608,6 +3809,32 @@ def _run_verification(
             if exit_code == 0:
                 exit_code = 3
 
+    final_input_digests: dict[str, str] = {}
+    explicit_input_changed = False
+    for input_source_key, input_checks in grouped_checks.items():
+        final_binding = click_verification_inputs.group_binding(
+            input_checks, cwd=Path.cwd()
+        )
+        expected_binding = claim_input_bindings.get(input_source_key)
+        if not isinstance(expected_binding, dict) or any(
+            final_binding.get(field) != expected_binding.get(field)
+            for field in ("version", "status", "digest", "reason", "match_count")
+        ):
+            explicit_input_changed = True
+        final_input_digests[input_source_key] = (
+            str(final_binding.get("digest", ""))
+            if final_binding.get("status") == "complete"
+            else ""
+        )
+    if explicit_input_changed:
+        workspace_changed = True
+        sys.stderr.write(
+            "[Click] An explicit verification input changed during execution. "
+            "The batch is stale and no reusable PASS will be recorded.\n"
+        )
+        if exit_code == 0:
+            exit_code = 3
+
     combined_shadow_records: dict[str, dict[str, Any]] = {}
     if shadow_enabled and isinstance(shadow_bindings, dict):
         for source_key, records in per_source_shadow_records.items():
@@ -3674,6 +3901,7 @@ def _run_verification(
                 workspace_changed=workspace_changed,
                 workspace_root=workspace_root if not workspace_changed else "",
                 workspace_digest=workspace_digest if not workspace_changed else "",
+                explicit_input_digests=final_input_digests,
                 source_durations_ms=source_durations_ms,
                 source_results=source_results,
                 runner_started_ns=runner_started_ns,

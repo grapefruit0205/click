@@ -10,6 +10,36 @@ Click v0.92.0 follows v0.91.0 with the runtime and CI changes described here. Th
 - Shadow root lookup no longer computes an entire Git snapshot just to retrieve the root. Workspace snapshots used for admission, reuse and execution drift remain intact.
 - Normal Hook startup does not import the dashboard HTTP server, projection, sharding setup, receipt runtime, or native OS collectors. Each is loaded when its functionality is needed.
 
+## Session-scoped Hook dispatch
+
+Codex lifecycle Hooks now enter through `click_hook.py`. A small command client
+still starts for each host Hook event, then sends bounded JSON over an
+authenticated loopback connection to one worker for the current session,
+canonical working directory, plugin source identity, interpreter, and relevant
+configuration environment. The worker keeps the heavy Click imports resident
+and rebinds the event process environment and working directory before every
+dispatch.
+
+The worker stops on `SessionEnd`, plugin/project/interpreter identity change, or
+five minutes of inactivity. `CLICK_HOOK_WORKER_IDLE_SECONDS` accepts 30 through
+3600 seconds. `CLICK_HOOK_WORKER=0` selects the existing one-shot behavior. If a
+worker cannot start or connect before any request byte is written, the client
+uses that one-shot path. It never replays an event after uncertain delivery.
+
+Verification, mutation, inspection, service, dashboard, and automatic sharding
+runner actions remain fresh processes. The change only reuses imports for
+`prompt-submit`, `pre-tool`, `post-tool`, and `session-end` dispatch. On Windows,
+the batch launcher also avoids the old Python probe process and invokes the
+selected interpreter once per client event.
+
+On the local Linux host, an alternating 15-sample read-only Hook check measured
+104.192 ms median through the one-shot compatibility path and 60.921 ms after a
+worker was warm, a 41.5% reduction. The first worker-backed event took 253.484
+ms. Import-only maximum RSS measured 22,600 KiB for the full gate and 16,100 KiB
+for the client; the resident worker reported 23,800 KiB RSS. This trades a
+bounded resident process for less repeated import work. It does not establish
+that a Codex GPU-process crash has the same cause or is fully resolved.
+
 ## Dashboard
 
 `click_shadow_dashboard.py` owns lifecycle/control. `click_dashboard_server.py` owns HTTP serving. HTML, CSS, JavaScript and ko/en/zh-CN locales live under `hooks/dashboard/` and are loaded when the viewer requests them. The existing Python asset API is retained for callers.

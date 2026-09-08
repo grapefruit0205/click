@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 3,
+  "status_values": [
+    "passed",
+    "recognized-only",
+    "assigned-to-ci",
+    "not-tested",
+    "not-implemented"
+  ],
+  "local_environment": {
+    "os": "Linux 7.0.0-31-generic x86_64",
+    "python": "3.12.3",
+    "node": "22.23.2",
+    "npm": "10.9.8",
+    "npx": "10.9.8",
+    "go": "1.26.7"
+  },
+  "capabilities": [
+    {
+      "id": "node-test",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "runtime_identity_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "node-check",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "runtime_identity_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "npm-test",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "runtime_identity_tested": "passed",
+      "download_guard_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "go-test",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "runtime_identity_tested": "passed",
+      "download_guard_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "required_environment": ["GOTOOLCHAIN=local", "GOPROXY=off"],
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "cargo-test-check",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "runtime_identity_tested": "passed",
+      "download_guard_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "required_execution_option": "--offline",
+      "toolchain": "unavailable-local"
+    },
+    {
+      "id": "jvm-gradle-maven",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "runtime_identity_tested": "passed",
+      "download_guard_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "toolchain": "unavailable-local"
+    },
+    {
+      "id": "dotnet-test",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "runtime_identity_tested": "passed",
+      "download_guard_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "required_execution_option": "--no-restore",
+      "toolchain": "unavailable-local"
+    },
+    {
+      "id": "typescript-cmake-ctest",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "runtime_identity_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "toolchain": "unavailable-local"
+    }
+  ],
+  "authority": false
+}

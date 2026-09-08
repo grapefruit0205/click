@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import replace
-import fnmatch
 import json
-import posixpath
 from pathlib import Path
 import subprocess
 import time
@@ -15,8 +13,9 @@ if __package__:
 else:
     import click_import_bootstrap
 
-(inventory, dependencies, shards, verification) = click_import_bootstrap.load_siblings(
-    __package__, "click_test_inventory", "click_dependency_cache",
+(adapters, inventory, dependencies, shards, verification) = click_import_bootstrap.load_siblings(
+    __package__, "click_verification_adapters",
+    "click_test_inventory", "click_dependency_cache",
     "click_evidence_shards", "click_verification"
 )
 
@@ -27,17 +26,10 @@ POLICY_NAMES = ("evidence-shards.json", "evidence-dependencies.json", "evidence-
 
 
 def child_command(parent: dict, filename: str) -> list[str]:
-    """Keep runner filters and import roots; never split a module by test ID."""
-    command = parent["command"]
-    if parent.get("adapter") == inventory.PYTEST_ADAPTER:
-        relative = posixpath.relpath(filename, command.get("cwd", "."))
-        return [*command["runner_prefix"], *command["child_options"], relative]
-    argv = [*command["runner_prefix"], "-s", command["start"], "-t", command["top"],
-            "-p", filename]
-    for pattern in command["filters"]:
-        argv.extend(("-k", pattern))
-    if command["verbosity"]:
-        argv.append(command["verbosity"])
+    """Delegate exact child selection to the statically registered adapter."""
+    argv = adapters.split_child_command(parent, filename)
+    if argv is None:
+        raise inventory.AnalysisError("adapter-split-unsupported")
     return argv
 
 
@@ -53,8 +45,11 @@ def validate_command(argv: list[str], root: Path, cwd: Path) -> None:
 
 
 def equivalence(parent: dict, children: list[dict]) -> dict:
+    adapter_id = str(parent.get("adapter", ""))
     expected = Counter(item["id"] for item in parent["inventory"])
     observed = Counter(item["id"] for child in children for item in child["inventory"])
+    if observed != expected:
+        raise inventory.AnalysisError("child-inventory-mismatch")
     # IDs alone do not bind source/import identity or whole-module ownership.
     records = {item["id"]: item for item in parent["inventory"]}
     owners: dict[str, int] = {}
@@ -62,11 +57,12 @@ def equivalence(parent: dict, children: list[dict]) -> dict:
         for item in child["inventory"]:
             if records.get(item["id"]) != item:
                 raise inventory.AnalysisError("child-source-mismatch")
-            if item["module"] in owners and owners[item["module"]] != index:
+            owner = adapters.inventory_owner(adapter_id, item)
+            if owner is None:
+                raise inventory.AnalysisError("inventory-owner-unavailable")
+            if owner in owners and owners[owner] != index:
                 raise inventory.AnalysisError("module-split-or-duplicated")
-            owners[item["module"]] = index
-    if observed != expected:
-        raise inventory.AnalysisError("child-inventory-mismatch")
+            owners[owner] = index
     return {"parent_count": sum(expected.values()), "child_count": sum(observed.values()),
             "multiset_equal": True, "module_indivisible": True,
             "semantic_equivalence_proven": False}
@@ -155,25 +151,28 @@ def propose(project: Path, argv: list[str] | None, *, cwd: Path | None = None,
             raise inventory.AnalysisError("split-independence-needs-review")
         command = parent["command"]
         validate_command(command["argv"], root, execution_cwd)
-        start = (execution_cwd / command["start"]).resolve()
-        patterns = command.get("patterns", [command["pattern"]])
-        selected = sorted(p for p in before if not p.startswith(".git/")
-                          and inventory.inside(start, root / p) and p.endswith(".py")
-                          and any(fnmatch.fnmatchcase(Path(p).name, pattern)
-                                  for pattern in patterns))
-        discovered = {item["file"] for item in parent["collection"]["module_files"]}
+        selected = adapters.discovery_files(
+            parent, list(before), root=root, cwd=execution_cwd
+        )
+        if selected is None:
+            raise inventory.AnalysisError("adapter-inventory-unsupported")
+        discovered = adapters.discovered_files(parent)
+        if discovered is None:
+            raise inventory.AnalysisError("adapter-inventory-unsupported")
         if set(selected) - discovered:
             raise inventory.AnalysisError("undiscovered-file-matches-policy-inventory")
         groups: dict[str, list[str]] = {}
         for path in selected:
-            # Pattern metacharacters cannot stand for an exact filename.
-            if any(character in path for character in "*?[]"):
+            # Pattern-based adapters cannot safely treat metacharacters as an
+            # exact filename. Jest children use --runTestsByPath instead.
+            if (
+                parent.get("adapter") != adapters.JEST_ADAPTER
+                and any(character in path for character in "*?[]")
+            ):
                 raise inventory.AnalysisError("unsupported-selector-path")
-            key = (
-                path
-                if command.get("adapter") == inventory.PYTEST_ADAPTER
-                else Path(path).name
-            )
+            key = adapters.split_group_key(str(parent.get("adapter", "")), path)
+            if key is None:
+                raise inventory.AnalysisError("adapter-split-unsupported")
             groups.setdefault(key, []).append(path)
         if len(groups) < 2:
             raise inventory.AnalysisError("no-useful-module-split")
@@ -205,14 +204,25 @@ def propose(project: Path, argv: list[str] | None, *, cwd: Path | None = None,
                 raise inventory.AnalysisError("child-independence-needs-review")
             shard_id = "module-" + inventory.digest(files)[:20]
             definitions.append({"id": shard_id, "checks": [child_argv], "covers": files})
-            paths = set(files) | inherited
-            for group in child["dependencies"]["by_module"].values():
-                paths.update(group["paths"])
+            child_dependency_paths = adapters.dependency_paths(child["dependencies"])
+            if child_dependency_paths is None:
+                raise inventory.AnalysisError("adapter-dependencies-unsupported")
+            # A whole-workspace candidate already covers the exact owner file,
+            # including names that cannot be represented as glob literals.
+            paths = set(inherited)
+            if "**" in child_dependency_paths:
+                paths.add("**")
+            else:
+                paths.update(files)
+                paths.update(child_dependency_paths)
             normalized, error = dependencies.normalize_patterns(sorted(paths))
             if error:
                 raise inventory.AnalysisError("dependency-path-not-representable")
             dependency_entries.append({"checks": [child_argv], "paths": list(normalized)})
-            explanations.append({"id": shard_id, "modules": sorted({t["module"] for t in child["inventory"]}),
+            labels = adapters.inventory_labels(str(parent.get("adapter", "")), child["inventory"])
+            if labels is None:
+                raise inventory.AnalysisError("inventory-owner-unavailable")
+            explanations.append({"id": shard_id, "modules": labels,
                                  "files": files, "dependency_candidates": list(normalized),
                                  "common_paths": candidates["common_paths"],
                                  "fixtures": child["collection"]["fixtures"]})

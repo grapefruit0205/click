@@ -1,0 +1,11 @@
+{
+  "name": "click-mixed-project-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:frontend": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "5.0.0"
+  }
+}

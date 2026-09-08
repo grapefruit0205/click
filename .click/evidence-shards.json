@@ -65,6 +65,7 @@
               "tests.test_click_mutation",
               "tests.test_click_observation_cache",
               "tests.test_click_process",
+              "tests.test_click_runtime_identity",
               "tests.test_click_service",
               "tests.test_click_verification_policy",
               "-q"
@@ -81,6 +82,7 @@
             "tests/test_click_mutation.py",
             "tests/test_click_observation_cache.py",
             "tests/test_click_process.py",
+            "tests/test_click_runtime_identity.py",
             "tests/test_click_service.py",
             "tests/test_click_verification_policy.py"
           ]
@@ -122,6 +124,7 @@
               "-m",
               "unittest",
               "tests.test_click_change_policy",
+              "tests.test_click_content_validation",
               "tests.test_click_dependency_cache",
               "tests.test_click_diagnostics",
               "tests.test_click_evidence_shards",
@@ -129,15 +132,20 @@
               "tests.test_click_failure_collection",
               "tests.test_click_gate_verification",
               "tests.test_click_incremental",
+              "tests.test_click_mixed_project",
+              "tests.test_click_multilang_execution",
               "tests.test_click_receipt",
               "tests.test_click_receipt_runtime",
               "tests.test_click_verification",
               "tests.test_click_verification_bindings",
+              "tests.test_click_verification_freshness",
+              "tests.test_click_verification_inputs",
               "-q"
             ]
           ],
           "covers": [
             "tests/test_click_change_policy.py",
+            "tests/test_click_content_validation.py",
             "tests/test_click_dependency_cache.py",
             "tests/test_click_diagnostics.py",
             "tests/test_click_evidence_shards.py",
@@ -145,10 +153,14 @@
             "tests/test_click_failure_collection.py",
             "tests/test_click_gate_verification.py",
             "tests/test_click_incremental.py",
+            "tests/test_click_mixed_project.py",
+            "tests/test_click_multilang_execution.py",
             "tests/test_click_receipt.py",
             "tests/test_click_receipt_runtime.py",
             "tests/test_click_verification.py",
-            "tests/test_click_verification_bindings.py"
+            "tests/test_click_verification_bindings.py",
+            "tests/test_click_verification_freshness.py",
+            "tests/test_click_verification_inputs.py"
           ]
         },
         {
@@ -164,6 +176,7 @@
               "tests.test_click_dependency_trace",
               "tests.test_click_dashboard_projection",
               "tests.test_click_hook",
+              "tests.test_click_hook_worker",
               "tests.test_click_host_coverage",
               "tests.test_click_host_router",
               "tests.test_click_observer_backend",
@@ -183,6 +196,7 @@
             "tests/test_click_dependency_trace.py",
             "tests/test_click_dashboard_projection.py",
             "tests/test_click_hook.py",
+            "tests/test_click_hook_worker.py",
             "tests/test_click_host_coverage.py",
             "tests/test_click_host_router.py",
             "tests/test_click_observer_backend.py",
@@ -203,12 +217,14 @@
               "unittest",
               "tests.test_click_auto_sharding",
               "tests.test_click_shard_proposal",
+              "tests.test_click_verification_adapters",
               "-q"
             ]
           ],
           "covers": [
             "tests/test_click_auto_sharding.py",
-            "tests/test_click_shard_proposal.py"
+            "tests/test_click_shard_proposal.py",
+            "tests/test_click_verification_adapters.py"
           ]
         },
         {

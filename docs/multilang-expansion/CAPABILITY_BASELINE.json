@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 0,
+  "status_values": [
+    "passed",
+    "collector-only",
+    "recognized-only",
+    "not-tested",
+    "not-implemented",
+    "unsupported"
+  ],
+  "dimensions": [
+    "command_recognized",
+    "actual_execution_tested",
+    "exact_reuse_tested",
+    "auto_discovery_tested",
+    "auto_sharding_tested",
+    "cross_revision_authority_tested"
+  ],
+  "capabilities": [
+    {
+      "id": "python-unittest",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "auto_discovery_tested": "passed",
+      "auto_sharding_tested": "passed",
+      "cross_revision_authority_tested": "passed",
+      "evidence": [
+        "reports/phase-0.md",
+        "../review-hardening/reports/phase-6.md"
+      ]
+    },
+    {
+      "id": "python-pytest",
+      "command_recognized": "passed",
+      "actual_execution_tested": "collector-only",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "passed",
+      "auto_sharding_tested": "passed",
+      "cross_revision_authority_tested": "not-tested",
+      "evidence": [
+        "selected interpreter without pytest returns pytest-unavailable",
+        "v0.93.0 pytest-integration CI"
+      ]
+    },
+    {
+      "id": "node-test",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested",
+      "evidence": [
+        "uploaded reviewer Node Hook-to-runner smoke on the same source revision"
+      ]
+    },
+    {
+      "id": "node-check",
+      "command_recognized": "passed",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "vitest",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "jest",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "npm-test",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "go-test",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "cargo-test",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "jvm-gradle-maven",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "dotnet-test",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "ctest",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    },
+    {
+      "id": "direct-yamllint-markdownlint-ajv",
+      "command_recognized": "unsupported",
+      "actual_execution_tested": "not-tested",
+      "exact_reuse_tested": "not-tested",
+      "auto_discovery_tested": "not-implemented",
+      "auto_sharding_tested": "not-implemented",
+      "cross_revision_authority_tested": "not-tested"
+    }
+  ],
+  "host_gaps": {
+    "macos_native": "not-tested",
+    "windows_native": "not-tested",
+    "python_3_13_3_14": "assigned-to-ci",
+    "rust_java_dotnet_cmake": "toolchain-unavailable"
+  },
+  "authority": false
+}

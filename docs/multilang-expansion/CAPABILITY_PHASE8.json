@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 8,
+  "inherits": "CAPABILITY_PHASE7.json",
+  "capabilities": [
+    {
+      "id": "separate-readiness-status",
+      "command-execution": "passed",
+      "automatic-inventory-split": "passed",
+      "exact-reuse-with-observer-off": "passed",
+      "committed-policy-reuse": "separate-status",
+      "authoritative-observation-reuse": "separate-status",
+      "status-read-only": "passed"
+    },
+    {
+      "id": "dashboard-readiness-v9",
+      "first-screen-next-action": "passed",
+      "korean-english-simplified-chinese": "passed",
+      "translation-key-parity": "passed",
+      "legacy-projection-v4-v8": "passed",
+      "content-free-projection": "passed"
+    },
+    {
+      "id": "documentation-fact-alignment",
+      "readme-en-ko-zh-cn": "updated",
+      "modes": "updated",
+      "automatic-sharding-setup": "updated",
+      "verification-profiles": "updated"
+    }
+  ],
+  "authority": false
+}

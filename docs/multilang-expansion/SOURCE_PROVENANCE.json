@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "prompt_package": {
+    "path": "Click_v0.93.0_multilang_phase_prompts.zip",
+    "sha256": "80a21afdba315250d427ecbf918c8388f3d712aada4ce74a1eacd608484819f8"
+  },
+  "reviewed_source_archive": {
+    "reported_path": "click-main.zip",
+    "sha256": "e21524250f3da8928ee903c4d640065f3ff283d2d0a3f13ff7bdebf300fc9688",
+    "commit_comment": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+    "version": "0.93.0"
+  },
+  "checkout_at_start": {
+    "head": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+    "branch": "main",
+    "dirty": false
+  },
+  "implementation_branch": "feature/multilang-expansion",
+  "authority": false,
+  "note": "The prompt-package digest and reviewed-source archive digest identify different artifacts. Neither is substituted for the other."
+}

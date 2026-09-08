@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import unittest
 
-from hooks import antigravity_gate, click_hook, click_host_coverage
+from hooks import antigravity_gate, click_gate, click_hook, click_host_coverage
 
 
 ROOT = Path(__file__).parents[1]
@@ -155,7 +155,7 @@ class ClickHostCoverageTests(unittest.TestCase):
 
     def test_adapters_derive_their_tool_identity_from_the_registry(self) -> None:
         self.assertIs(
-            click_hook.click_gate.BROWSER_TOOL_NAMES,
+            click_gate.BROWSER_TOOL_NAMES,
             click_host_coverage.CODEX_BROWSER_TOOL_NAMES,
         )
         self.assertIs(

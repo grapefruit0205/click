@@ -96,8 +96,25 @@
     unconfigured:'미설정', 'selection-required':'명령 선택 필요',
     'approval-required':'승인 대기', 'review-required':'검토 필요',
     'commit-required':'커밋 필요', 'baseline-required':'기준 실행 필요',
-    'sharding-ready':'샤딩 준비됨 · 재사용 불가',
+    'sharding-ready':'샤딩 준비됨',
     'reuse-ready':'샤딩·재사용 준비됨', unsupported:'미지원', blocked:'차단됨'
+  });
+  const readinessText = localized({
+    available:'사용 가능', supported:'지원됨', unavailable:'사용 불가',
+    unsupported:'미지원', 'baseline-required':'기준 실행 필요',
+    'partially-available':'일부 묶음 가능'
+  });
+  const readinessNextText = localized({
+    'select-supported-command':'지원되는 검증 명령을 선택한 뒤 sharding init을 실행하세요.',
+    'commit-generated-policy':'생성된 정책 파일을 검토하고 커밋하세요.',
+    'run-baseline':'기준 검증을 한 번 실행해 현재 상태의 PASS 근거를 만드세요.',
+    'refresh-review':'변경된 도구·설정을 검토한 뒤 sharding refresh를 실행하세요.',
+    'approve-guarded-setup':'Guarded 설정 계약을 별도로 승인하세요.',
+    'apply-reviewed-setup':'검토한 설정을 sharding refresh로 적용하세요.',
+    'keep-parent-verification':'현재는 원래 parent 검증을 계속 사용하세요.',
+    'repair-setup':'표시된 설정 오류를 고친 뒤 상태를 다시 확인하세요.',
+    'reuse-unchanged-or-run-changed':'같은 상태는 exact 근거로 재사용하고, 변경된 검사는 실행합니다. Observer는 선택 사항입니다.',
+    'reuse-by-current-authority':'현재 exact·정책·관찰 근거에 맞춰 실행하거나 재사용할 수 있습니다.'
   });
   const outcomeText = localized({
     'request-rejected': '요청이 거부되어 시작하지 않았습니다.',
@@ -1121,6 +1138,17 @@
     $('managementOverhead').textContent = msg('측정 정보 없음');
     const setup=data.setup || {};
     $('setupStatus').textContent = setupStatusText[setup.status] || setup.status || msg('미설정');
+    const readinessFields = {
+      commandReadiness:'command_status', inventoryReadiness:'inventory_status',
+      exactReadiness:'exact_reuse_status', policyReadiness:'policy_reuse_status',
+      authoritativeReadiness:'authoritative_reuse_status'
+    };
+    for (const [id,field] of Object.entries(readinessFields)) {
+      const value=setup[field] || 'unavailable';
+      $(id).textContent=readinessText[value] || value;
+      $(id).className=['available','supported'].includes(value)?'available':value==='baseline-required'?'pending':'';
+    }
+    $('readinessNext').textContent=readinessNextText[setup.next_action_code] || msg('지원되는 검증 명령을 선택하면 준비 상태를 확인할 수 있습니다.');
     $('setupInitial').textContent = fmt(setup.initial_setup_ms);
     $('setupObservation').textContent = fmt(setup.observation_ms);
     $('setupProcessing').textContent = fmt(setup.click_processing_ms);

@@ -17,6 +17,7 @@ ENTRYPOINTS = (
     "click_gate.py",
     "antigravity_gate.py",
     "click_hook.py",
+    "click_hook_worker.py",
     "click_windows.py",
 )
 
@@ -31,6 +32,22 @@ class ClickImportBootstrapTests(unittest.TestCase):
              "'click_observer_windows','click_receipt_runtime'); "
              "assert not [n for n in names if 'hooks.'+n in sys.modules]"],
             cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_hook_client_does_not_import_the_heavy_gate(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-c",
+                "import sys; import hooks.click_hook; "
+                "assert 'hooks.click_gate' not in sys.modules",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 

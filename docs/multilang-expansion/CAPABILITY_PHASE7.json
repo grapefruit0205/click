@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 7,
+  "inherits": "CAPABILITY_PHASE6.json",
+  "capabilities": [
+    {
+      "id": "mixed-project-owner-policy-partial-reverification",
+      "fixture": ["vitest", "python-unittest", "go-test", "node-test", "json", "markdown", "assets"],
+      "no-policy-conservative-rerun": "passed",
+      "unchanged-exact-reuse": "passed",
+      "owner-policy-partial-reuse": "passed",
+      "shared-schema-invalidation": "passed",
+      "lock-runtime-config-invalidation": "passed",
+      "new-test-and-dynamic-import-membership": "passed",
+      "asset-add-delete": "passed",
+      "failure-and-repair": "passed",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-linux"
+    },
+    {
+      "id": "mixed-project-inferred-cross-language-dependency-authority",
+      "status": "unavailable",
+      "fallback": "parent-or-explicit-owner-policy",
+      "tested_hosts": []
+    }
+  ],
+  "authority": false
+}

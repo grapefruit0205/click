@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "source_version": "0.93.0",
+  "source_revision": "9b05f790baaf69220df4c0fe6fa0716d5f458951",
+  "generated_by_phase": 4,
+  "inherits": "CAPABILITY_PHASE3.json",
+  "status_values": [
+    "passed",
+    "fixture-passed",
+    "recognized-only",
+    "assigned-to-ci",
+    "not-tested"
+  ],
+  "capabilities": [
+    {
+      "id": "json-schema-project-validator",
+      "command_recognized": "passed",
+      "actual_execution_tested": "fixture-passed",
+      "exact_reuse_tested": "passed",
+      "reference_change_tested": "passed",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "jq-json-parser",
+      "command_recognized": "passed",
+      "actual_execution_tested": "passed",
+      "exact_reuse_tested": "passed",
+      "oversized_input_nonreuse_tested": "passed",
+      "runtime": "jq-1.7",
+      "tested_hosts": ["linux-local"]
+    },
+    {
+      "id": "yaml-schema-project-validator",
+      "command_recognized": "passed",
+      "actual_execution_tested": "fixture-passed",
+      "exact_reuse_tested": "passed",
+      "missing_schema_tested": "passed",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "markdown-local-link-project-validator",
+      "command_recognized": "passed",
+      "actual_execution_tested": "fixture-passed",
+      "exact_reuse_tested": "passed",
+      "missing_target_tested": "passed",
+      "remote_links": "outside-profile",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "svg-project-validator",
+      "command_recognized": "passed",
+      "actual_execution_tested": "fixture-passed",
+      "exact_reuse_tested": "passed",
+      "ignored_reference_change_tested": "passed",
+      "dimension_failure_tested": "passed",
+      "tested_hosts": ["linux-local"],
+      "native_ci": "assigned-to-ci"
+    },
+    {
+      "id": "direct-yamllint-markdownlint-xmllint-identify",
+      "command_recognized": "passed",
+      "actual_execution_tested": "not-tested",
+      "write_shape_rejection_tested": "passed",
+      "tested_hosts": []
+    },
+    {
+      "id": "sqlfluff-lint",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "write_shape_rejection_tested": "passed",
+      "tested_hosts": []
+    },
+    {
+      "id": "check-jsonschema",
+      "command_recognized": "recognized-only",
+      "actual_execution_tested": "not-tested",
+      "external_fetch_guard_tested": "passed",
+      "status": "blocked-unbounded-schema-refs",
+      "tested_hosts": []
+    }
+  ],
+  "authority": false
+}

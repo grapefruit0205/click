@@ -78,17 +78,34 @@ class ClickDashboardProjectionTests(unittest.TestCase):
             locale.rename(renamed)
             self.assertNotEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], baseline)
 
-    def test_projection_v6_and_v7_remain_readable_and_new_fields_are_validated(self) -> None:
+    def test_projection_v6_through_v8_remain_readable_and_new_fields_are_validated(self) -> None:
         value = click_dashboard_projection.dashboard_projection({})
         self.assertTrue(click_dashboard_projection.projection_is_valid(value))
+        readiness_fields = {
+            "command_status",
+            "inventory_status",
+            "exact_reuse_status",
+            "policy_reuse_status",
+            "authoritative_reuse_status",
+            "next_action_code",
+        }
+        v8 = copy.deepcopy(value)
+        v8["version"] = 8
+        for field in readiness_fields:
+            v8["setup"].pop(field)
+        self.assertTrue(click_dashboard_projection.projection_is_valid(v8))
         v7 = copy.deepcopy(value)
         v7["version"] = 7
         v7.pop("task_efficiency")
+        for field in readiness_fields:
+            v7["setup"].pop(field)
         self.assertTrue(click_dashboard_projection.projection_is_valid(v7))
         previous = copy.deepcopy(value)
         previous["version"] = 6
         previous.pop("retained_impact")
         previous.pop("task_efficiency")
+        for field in readiness_fields:
+            previous["setup"].pop(field)
         self.assertTrue(click_dashboard_projection.projection_is_valid(previous))
         value["retained_impact"]["reused_group_request_count"] = 999
         self.assertFalse(click_dashboard_projection.projection_is_valid(value))
@@ -401,7 +418,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         )
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
-        self.assertEqual(projection["version"], 8)
+        self.assertEqual(projection["version"], 9)
         self.assertEqual(
             projection["task_efficiency"]["measurement_status"], "unmeasured"
         )
@@ -655,6 +672,10 @@ class ClickDashboardProjectionTests(unittest.TestCase):
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
         self.assertEqual(projection["setup"]["comparison_net_ms"], -7.0)
+        self.assertEqual(projection["setup"]["command_status"], "unavailable")
+        self.assertEqual(
+            projection["setup"]["exact_reuse_status"], "unavailable"
+        )
         tampered = copy.deepcopy(projection)
         tampered["setup"]["comparison_net_ms"] = float("nan")
         self.assertFalse(click_dashboard_projection.projection_is_valid(tampered))

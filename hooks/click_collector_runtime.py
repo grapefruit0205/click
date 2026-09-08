@@ -64,7 +64,8 @@ def supervise(
     *,
     timeout: float,
     output_bytes: int,
-) -> None:
+    capture_output: bool = False,
+) -> tuple[bytes, bytes] | None:
     """Run one shell-free child while draining both pipes within a hard bound."""
     if (
         not argv
@@ -88,8 +89,9 @@ def supervise(
     consumed = 0
     overflow = threading.Event()
     reader_failed = threading.Event()
+    captured = [bytearray(), bytearray()]
 
-    def drain(pipe: Any) -> None:
+    def drain(pipe: Any, index: int) -> None:
         nonlocal consumed
         try:
             while True:
@@ -101,12 +103,14 @@ def supervise(
                     if consumed > output_bytes:
                         overflow.set()
                         return
+                    if capture_output:
+                        captured[index].extend(chunk)
         except (OSError, ValueError):
             reader_failed.set()
 
     readers = [
-        threading.Thread(target=drain, args=(pipe,), daemon=True)
-        for pipe in (process.stdout, process.stderr)
+        threading.Thread(target=drain, args=(pipe, index), daemon=True)
+        for index, pipe in enumerate((process.stdout, process.stderr))
     ]
     for reader in readers:
         reader.start()
@@ -152,3 +156,4 @@ def supervise(
         raise CollectorRuntimeError(reason)
     if process.returncode:
         raise CollectorRuntimeError("collector-failed")
+    return (bytes(captured[0]), bytes(captured[1])) if capture_output else None

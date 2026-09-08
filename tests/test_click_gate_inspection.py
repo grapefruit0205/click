@@ -308,14 +308,14 @@ class ClickGateInspectionTests(ClickGateTestCase):
         self.assertIn("UserPromptSubmit", hooks)
         prompt_handler = hooks["UserPromptSubmit"][0]["hooks"][0]
         self.assertTrue(
-            prompt_handler["command"].endswith('click_gate.py" prompt-submit')
+            prompt_handler["command"].endswith('click_hook.py" prompt-submit')
         )
         self.assertEqual(
             hooks["PreToolUse"][0]["matcher"],
             "^(Bash|apply_patch|Edit|Write|update_plan|functions\\.update_plan|mcp__node_repl__js)$",
         )
         pre_tool_handler = hooks["PreToolUse"][0]["hooks"][0]
-        self.assertTrue(pre_tool_handler["command"].endswith('click_gate.py\" pre-tool'))
+        self.assertTrue(pre_tool_handler["command"].endswith('click_hook.py\" pre-tool'))
         self.assertEqual(prompt_handler["timeout"], 7)
         self.assertEqual(pre_tool_handler["timeout"], 7)
         self.assertEqual(
@@ -323,12 +323,12 @@ class ClickGateInspectionTests(ClickGateTestCase):
         )
         post_tool_handler = hooks["PostToolUse"][0]["hooks"][0]
         self.assertTrue(
-            post_tool_handler["command"].endswith('click_gate.py" post-tool')
+            post_tool_handler["command"].endswith('click_hook.py" post-tool')
         )
         self.assertEqual(post_tool_handler["timeout"], 7)
         session_end_handler = hooks["SessionEnd"][0]["hooks"][0]
         self.assertTrue(
-            session_end_handler["command"].endswith('click_gate.py" session-end')
+            session_end_handler["command"].endswith('click_hook.py" session-end')
         )
         self.assertEqual(session_end_handler["timeout"], 3)
 
@@ -827,6 +827,29 @@ class ClickGateInspectionTests(ClickGateTestCase):
         sanitized = CLICK_INSPECTION.sanitized_executable_path(
             str(first), workspace=self.workspace
         )
+        self.assertEqual(sanitized, "")
+
+    def test_sanitized_path_drops_a_missing_absolute_entry(self) -> None:
+        missing = Path(self.temporary.name) / "missing-bin"
+
+        sanitized = CLICK_INSPECTION.sanitized_executable_path(
+            str(missing), workspace=self.workspace
+        )
+
+        self.assertEqual(sanitized, "")
+
+    def test_sanitized_path_fails_closed_on_a_broken_symlink(self) -> None:
+        missing = Path(self.temporary.name) / "missing-target"
+        broken = Path(self.temporary.name) / "broken-bin"
+        try:
+            broken.symlink_to(missing, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+
+        sanitized = CLICK_INSPECTION.sanitized_executable_path(
+            str(broken), workspace=self.workspace
+        )
+
         self.assertEqual(sanitized, "")
 
     def test_workspace_containment_uses_filesystem_identity_for_aliases(self) -> None:

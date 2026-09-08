@@ -521,12 +521,13 @@ class ClickGateTestCase(unittest.TestCase):
         turn_id: str = "turn-2",
         *,
         bind_default: bool = True,
+        version: int = 2,
     ) -> dict:
         normalized = [
             ({"evidence_id": "E1", **check} if bind_default else dict(check))
             for check in checks
         ]
-        batch = {"version": 2, "checks": normalized}
+        batch = {"version": version, "checks": normalized}
         command = f"click-gate verify {shlex.quote(json.dumps(batch))}"
         self.verification_request_sequence = getattr(self, "verification_request_sequence", 0) + 1
         payload = self.pre_tool("Bash", command, turn_id, tool_use_id=f"verification-{self.verification_request_sequence}")

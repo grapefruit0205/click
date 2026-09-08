@@ -24,8 +24,8 @@ if __package__:
 else:  # Installed launchers execute hooks directly.
     import click_import_bootstrap
 
-(click_capability, click_host_coverage, click_inspection, click_observer_control, click_process,) = click_import_bootstrap.load_siblings(
-    __package__, "click_capability", "click_host_coverage", "click_inspection", "click_observer_control", "click_process"
+(click_capability, click_host_coverage, click_inspection, click_observer_control, click_process, click_runtime_identity, click_verification_inputs,) = click_import_bootstrap.load_siblings(
+    __package__, "click_capability", "click_host_coverage", "click_inspection", "click_observer_control", "click_process", "click_runtime_identity", "click_verification_inputs"
 )
 
 def hash_file_content(path: Path) -> str:
@@ -43,7 +43,7 @@ def hash_file_content(path: Path) -> str:
 
 
 class FileDigestStage:
-    """Hash each unchanged executable once within one binding collection stage.
+    """Hash each unchanged file once within one binding collection stage.
 
     Never retain an instance across prepare, issuance, claim, or a subsequent
     source boundary. Stat identity avoids reusing a digest after an ordinary
@@ -266,6 +266,17 @@ def verification_executable_records(
     effective_environment = environment or verification_environment(cwd=cwd)
     digest_file = file_content_digest or FileDigestStage()
     search_path = executable_search_path(effective_environment, cwd=cwd)
+    def resolve_runtime(name: str) -> Path | None:
+        resolved = shutil.which(name, path=search_path)
+        if not resolved:
+            return None
+        try:
+            candidate = Path(resolved)
+            if not candidate.is_absolute():
+                candidate = cwd / candidate
+            return candidate.resolve(strict=True)
+        except (OSError, RuntimeError):
+            return None
     executables: list[dict[str, Any]] = []
     for check in checks:
         argv = check.get("argv")
@@ -297,6 +308,13 @@ def verification_executable_records(
                         "_execution_path": str(execution_path),
                     }
                 )
+                item["runtime_identity"] = click_runtime_identity.collect(
+                    list(argv),
+                    cwd=cwd,
+                    environment=effective_environment,
+                    resolve_executable=resolve_runtime,
+                    digest_file=digest_file,
+                )
             except (OSError, RuntimeError):
                 item["path"] = "unresolved"
         else:
@@ -324,12 +342,7 @@ def verification_executable_payload(
     ]
 
 
-def verification_environment_digest_from_records(
-    executables: list[dict[str, Any]],
-    *,
-    cwd: Path,
-    environment: dict[str, str],
-) -> str:
+def _environment_context(cwd: Path, environment: dict[str, str]) -> dict[str, Any]:
     environment_payload = json.dumps(
         sorted(
             (
@@ -341,14 +354,25 @@ def verification_environment_digest_from_records(
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode()
-    payload = {
+    return {
         "cwd": os.path.normcase(str(cwd.resolve())),
         "os_name": os.name,
         "platform": sys.platform,
         "machine": platform.machine(),
         "python": list(sys.version_info[:3]),
-        "executables": verification_executable_payload(executables),
         "environment_digest": hashlib.sha256(environment_payload).hexdigest(),
+    }
+
+
+def verification_environment_digest_from_records(
+    executables: list[dict[str, Any]],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+) -> str:
+    payload = {
+        **_environment_context(cwd, environment),
+        "executables": verification_executable_payload(executables),
     }
     return click_capability.digest(payload)
 
@@ -362,9 +386,13 @@ def verification_environment_digest(
     )
     if executables is None:
         return ""
-    return verification_environment_digest_from_records(
+    base_digest = verification_environment_digest_from_records(
         executables, cwd=cwd, environment=effective_environment
     )
+    digest, _ = click_verification_inputs.context_digest(
+        base_digest, checks, cwd=cwd
+    )
+    return digest
 
 
 
@@ -375,9 +403,12 @@ def collect_group_bindings(
     cwd: Path,
     environment: dict[str, str],
     digest_file: Callable[[Path], str] = hash_file_content,
+    input_bindings: dict[str, dict[str, Any]] | None = None,
+    runtime_bindings: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, str], dict[str, str]] | None:
     """Collect all source fingerprints with one strictly local digest stage."""
     stage = FileDigestStage(digest_file)
+    context = _environment_context(cwd, environment)
     environments: dict[str, str] = {}
     executables: dict[str, str] = {}
     for source_key in source_keys:
@@ -387,11 +418,20 @@ def collect_group_bindings(
         )
         if records is None:
             return None
-        environments[source_key] = verification_environment_digest_from_records(
-            records, cwd=cwd, environment=environment,
+        executable_payload = verification_executable_payload(records)
+        base_environment_digest = click_capability.digest({
+            **context, "executables": executable_payload,
+        })
+        environments[source_key], input_binding = click_verification_inputs.context_digest(
+            base_environment_digest, groups[source_key], cwd=cwd,
+            file_content_digest=stage,
         )
+        if input_bindings is not None:
+            input_bindings[source_key] = input_binding
+        if runtime_bindings is not None:
+            runtime_bindings[source_key] = click_runtime_identity.group_binding(records)
         executables[source_key] = click_capability.digest(
-            {"executables": verification_executable_payload(records)}
+            {"executables": executable_payload}
         )
     return environments, executables
 
@@ -458,7 +498,12 @@ def git_workspace_snapshot(
     if root_output is None:
         return None
     root = Path(os.fsdecode(root_output.strip()))
-    has_head = git_capture(root, ["rev-parse", "--verify", "HEAD"]) is not None
+    head_tree = git_capture(root, ["rev-parse", "--verify", "HEAD^{tree}"])
+    has_head = head_tree is not None
+    if not has_head and git_capture(root, ["rev-parse", "--verify", "HEAD"]) is not None:
+        # A present but unreadable tree is an unavailable snapshot, not an
+        # unborn repository. Normal committed snapshots need only one probe.
+        return None
     diff_commands = (
         [["diff", "--binary", "--no-ext-diff", "--no-textconv", "HEAD", "--"]]
         if has_head
@@ -469,9 +514,6 @@ def git_workspace_snapshot(
     )
     hasher = hashlib.sha256()
     if has_head:
-        head_tree = git_capture(root, ["rev-parse", "HEAD^{tree}"])
-        if head_tree is None:
-            return None
         hasher.update(len(head_tree).to_bytes(8, "big"))
         hasher.update(head_tree)
     for arguments in diff_commands:

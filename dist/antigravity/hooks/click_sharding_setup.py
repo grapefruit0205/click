@@ -1,4 +1,4 @@
-"""Stateful, approval-aware bootstrap for automatic unittest and pytest sharding.
+"""Stateful bootstrap for supported Python, Vitest, and Jest sharding.
 
 The public gate exposes ``sharding init|status|refresh``.  This module owns the
 project-local setup state outside the project, proposal application without
@@ -43,21 +43,25 @@ else:
 
 (
     auto_sharding,
+    change_policy,
     dependency_cache,
     evidence,
     evidence_shards,
     observer_control,
     state_runtime,
     inventory,
+    verification_adapters,
 ) = click_import_bootstrap.load_siblings(
     __package__,
     "click_auto_sharding",
+    "click_change_policy",
     "click_dependency_cache",
     "click_evidence",
     "click_evidence_shards",
     "click_observer_control",
     "click_state",
     "click_test_inventory",
+    "click_verification_adapters",
 )
 
 
@@ -509,7 +513,7 @@ def _json_artifact(payload: dict[str, bytes], name: str) -> dict[str, Any]:
 
 
 def _test_structure_digest(root: Path, files: list[str]) -> str:
-    """Fingerprint discovery-affecting Python structure, excluding test bodies."""
+    """Fingerprint discovery structure for the adapter's supported test files."""
     records: list[dict[str, Any]] = []
     total = 0
     for relative in files:
@@ -521,6 +525,14 @@ def _test_structure_digest(root: Path, files: list[str]) -> str:
         total += len(content)
         if len(content) > 4 * 1024 * 1024 or total > 16 * 1024 * 1024:
             raise SetupError("test-structure-limit")
+        if path.suffix.lower() != ".py":
+            records.append(
+                {
+                    "file": relative,
+                    "content_digest": _digest_bytes(content),
+                }
+            )
+            continue
         try:
             tree = ast.parse(content, filename=relative)
         except (SyntaxError, ValueError) as exc:
@@ -797,6 +809,20 @@ def _base_report(root: Path, status: str, reasons: list[str]) -> dict[str, Any]:
         "sharding_ready": False,
         "reuse_ready": False,
         "reuse_status": "unavailable",
+        "command_status": "unavailable",
+        "inventory_status": "unsupported",
+        "exact_reuse_status": "unavailable",
+        "policy_reuse_status": "unavailable",
+        "authoritative_reuse_status": "unavailable",
+        "next_action_code": "select-supported-command",
+        "adapter": None,
+        "capabilities": {
+            name: {
+                "implementation": "unsupported",
+                "environment_test": "not-recorded",
+            }
+            for name in verification_adapters.CAPABILITY_NAMES
+        },
     }
 
 
@@ -823,6 +849,32 @@ def _report_from_state(
         lineage_kind=state.get("lineage", {}).get("kind", "unknown"),
         generation=state["generation"],
     )
+    profile = verification_adapters.command_profile(state["parent_argv"])
+    if profile is not None:
+        report["adapter"] = {
+            "id": profile["adapter_id"],
+            "version": profile["adapter_version"],
+            "profile": profile["profile"],
+        }
+        report["capabilities"] = profile["capabilities"]
+        report["command_status"] = "available"
+        report["exact_reuse_status"] = "baseline-required"
+        report["inventory_status"] = (
+            "supported"
+            if profile["capabilities"]["inventory"]["implementation"]
+            != "unsupported"
+            else "unsupported"
+        )
+        report["next_action_code"] = {
+            "commit-required": "commit-generated-policy",
+            "baseline-required": "run-baseline",
+            "review-required": "refresh-review",
+            "approval-required": "approve-guarded-setup",
+            "application-ready": "apply-reviewed-setup",
+            "whole-suite-preferred": "keep-parent-verification",
+            "unsupported": "select-supported-command",
+            "blocked": "repair-setup",
+        }.get(report["status"], "run-baseline")
     return report
 
 
@@ -893,11 +945,14 @@ def _current_discovery_files(root: Path, state: dict[str, Any]) -> list[str]:
     if not inventory.inside(root, start_path):
         raise SetupError("project-boundary")
     files: list[str] = []
+    excluded = set(command.get("exclude_directories", []))
     for directory, directories, names in os.walk(start_path, followlinks=False):
         directories[:] = sorted(
             name
             for name in directories
-            if not (Path(directory) / name).is_symlink() and name != ".git"
+            if not (Path(directory) / name).is_symlink()
+            and name != ".git"
+            and name not in excluded
         )
         for name in sorted(names):
             path = Path(directory) / name
@@ -923,6 +978,28 @@ def _condition_reasons(root: Path, state: dict[str, Any]) -> list[str]:
         executable = inventory.trusted_executable(state["parent_argv"][0], root)
         if _digest_bytes(executable.read_bytes()) != state["runtime"].get("executable_digest"):
             reasons.append("runner-changed")
+        if (
+            state["runtime"].get("adapter_digest")
+            and inventory.adapter_implementation_digest()
+            != state["runtime"].get("adapter_digest")
+        ):
+            reasons.append("adapter-changed")
+        if state["runtime"].get("framework") in {"vitest", "jest"}:
+            node = inventory.trusted_executable("node", root)
+            if (
+                _digest_bytes(node.read_bytes())
+                != state["runtime"].get("node_executable_digest")
+            ):
+                reasons.append("runtime-changed")
+            if (
+                (
+                    inventory.vitest_configuration_digest(root)
+                    if state["runtime"].get("framework") == "vitest"
+                    else inventory.jest_configuration_digest(root)
+                )
+                != state["runtime"].get("project_configuration_digest")
+            ):
+                reasons.append("configuration-changed")
         expected_thresholds = state.get("cost_policy", {}).get("thresholds")
         if isinstance(expected_thresholds, dict) and expected_thresholds != _cost_thresholds():
             reasons.append("cost-policy-changed")
@@ -988,11 +1065,33 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
         return report
     report.update(
         status="sharding-ready",
-        reasons=["observer-incomplete"],
+        reasons=["authoritative-observation-optional"],
         candidate_only=False,
         sharding_ready=True,
-        reuse_status="unavailable",
+        reuse_ready=True,
+        reuse_status="exact",
+        exact_reuse_status="available",
+        next_action_code="reuse-unchanged-or-run-changed",
     )
+    safe_receipts = [
+        source.get("verified_safe_change_receipt")
+        for source in child_sources
+        if isinstance(source, dict)
+    ]
+    valid_safe_receipts = sum(
+        change_policy.receipt_is_valid(item) for item in safe_receipts
+    )
+    if valid_safe_receipts:
+        report["policy_reuse_status"] = (
+            "available"
+            if valid_safe_receipts == len(child_sources)
+            else "partially-available"
+        )
+        report["reuse_status"] = (
+            "exact-and-policy"
+            if valid_safe_receipts == len(child_sources)
+            else "exact-and-partial-policy"
+        )
     observations = [source.get("verified_dependency_observation") for source in child_sources]
     if all(
         dependency_cache.authoritative_dependency_observation_is_complete(item)
@@ -1003,6 +1102,8 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
             reasons=[],
             reuse_ready=True,
             reuse_status="authoritative-v2",
+            authoritative_reuse_status="available",
+            next_action_code="reuse-by-current-authority",
             setup_authority=False,
         )
     return report
@@ -1097,6 +1198,9 @@ def plan(
         "test-discovery-changed",
         "test-inventory-changed",
         "runner-changed",
+        "adapter-changed",
+        "runtime-changed",
+        "configuration-changed",
         "cost-policy-changed",
     }:
         return {"action": "generate", "command": setup["parent_argv"], "refresh": True}
@@ -1380,7 +1484,20 @@ def apply(
 def _run_check(root: Path, argv: list[str]) -> dict[str, Any]:
     inventory.parse_command(argv, root, root)
     executable = inventory.trusted_executable(argv[0], root)
-    command = [str(executable), *argv[1:]]
+    arguments = list(argv[1:])
+    profile = verification_adapters.command_profile(argv)
+    if (
+        profile is not None
+        and profile.get("adapter_id") in {
+            verification_adapters.VITEST_ADAPTER,
+            verification_adapters.JEST_ADAPTER,
+        }
+    ):
+        # Node test runners may write derived result caches during one-shot runs.
+        # Setup probes disable those caches so proposal and baseline validation
+        # remain read-only while preserving selected tests and assertions.
+        arguments.append("--no-cache")
+    command = [str(executable), *arguments]
     environment = dict(os.environ)
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     started = time.perf_counter_ns()
@@ -1433,8 +1550,26 @@ def _run_startup_probe(root: Path, argv: list[str]) -> dict[str, Any]:
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     started = time.perf_counter_ns()
     try:
+        profile = verification_adapters.command_profile(argv)
+        if profile is not None and profile.get("adapter_id") in {
+            verification_adapters.VITEST_ADAPTER,
+            verification_adapters.JEST_ADAPTER,
+        }:
+            target_index = next(
+                (
+                    index
+                    for index, argument in enumerate(argv[1:], 1)
+                    if not argument.startswith("-")
+                ),
+                -1,
+            )
+            if target_index < 0:
+                raise inventory.AnalysisError("unsupported-node-test-command")
+            command = [str(executable), *argv[1 : target_index + 1], "--version"]
+        else:
+            command = [str(executable), "-I", "-B", "-c", "pass"]
         inventory.run_bounded_command(
-            [str(executable), "-I", "-B", "-c", "pass"],
+            command,
             root,
             environment,
             inventory.Limits(timeout=30.0),
@@ -1631,6 +1766,14 @@ def dashboard_setup_projection(report: Any) -> dict[str, Any]:
         "bootstrap_shards_ms",
         "comparison_net_ms",
     }
+    projected_statuses = {
+        "command_status": "unavailable",
+        "inventory_status": "unsupported",
+        "exact_reuse_status": "unavailable",
+        "policy_reuse_status": "unavailable",
+        "authoritative_reuse_status": "unavailable",
+        "next_action_code": "select-supported-command",
+    }
 
     def number(item: Any, *, signed: bool = False) -> float | None:
         if (
@@ -1670,6 +1813,10 @@ def dashboard_setup_projection(report: Any) -> dict[str, Any]:
             "sharding_ready": value.get("sharding_ready") is True,
             "reuse_ready": value.get("reuse_ready") is True,
             "reuse_status": token(value.get("reuse_status"), "unavailable"),
+            **{
+                field: token(value.get(field), fallback)
+                for field, fallback in projected_statuses.items()
+            },
             "initial_setup_ms": number(value.get("initial_setup_ms")),
             "observation_ms": number(value.get("observation_ms")),
             "click_processing_ms": number(value.get("click_processing_ms")),
@@ -1687,6 +1834,10 @@ def dashboard_setup_projection(report: Any) -> dict[str, Any]:
         "sharding_ready": value.get("sharding_ready") is True,
         "reuse_ready": value.get("reuse_ready") is True,
         "reuse_status": token(value.get("reuse_status"), "unavailable"),
+        **{
+            field: token(value.get(field), fallback)
+            for field, fallback in projected_statuses.items()
+        },
         "initial_setup_ms": number(bootstrap_value.get("initial_setup_ms")),
         "observation_ms": None,
         "click_processing_ms": number(bootstrap_value.get("click_processing_ms")),

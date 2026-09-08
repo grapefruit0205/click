@@ -17,21 +17,29 @@ from hooks import click_test_inventory as inventory
 try:
     from .test_click_auto_sharding import (
         PYTEST_AVAILABLE,
+        JEST_AVAILABLE,
         ROOT,
         SUPPORTED,
+        VITEST_AVAILABLE,
         library_project,
         nested_project,
         pytest_project,
+        vitest_project,
+        jest_project,
         write,
     )
 except ImportError:  # unittest discovery with tests/ as the import root.
     from test_click_auto_sharding import (
         PYTEST_AVAILABLE,
+        JEST_AVAILABLE,
         ROOT,
         SUPPORTED,
+        VITEST_AVAILABLE,
         library_project,
         nested_project,
         pytest_project,
+        vitest_project,
+        jest_project,
         write,
     )
 
@@ -143,6 +151,57 @@ class ProposalTests(unittest.TestCase):
         second = self.generate(command)
         self.assert_ready(second, 3)
         self.assertNotEqual(first["inventory_digest"], second["inventory_digest"])
+
+    @unittest.skipUnless(VITEST_AVAILABLE, "pinned Vitest fixture is unavailable")
+    def test_vitest_same_basenames_generate_exact_file_children(self) -> None:
+        command = vitest_project(self.root)
+        value = self.generate(command)
+        self.assert_ready(value, 3)
+        self.assertEqual(value["adapter"], inventory.VITEST_ADAPTER)
+        self.assertEqual(
+            [child["argv"] for child in value["children"]],
+            [
+                [*command, "tests/integration/shared.test.js"],
+                [*command, "tests/types/value.test.ts"],
+                [*command, "tests/unit/shared.test.js"],
+            ],
+        )
+        self.assertEqual(
+            [row["files"] for row in value["layout"]],
+            [
+                ["tests/integration/shared.test.js"],
+                ["tests/types/value.test.ts"],
+                ["tests/unit/shared.test.js"],
+            ],
+        )
+        dependencies = value["proposals"][
+            ".click/evidence-dependencies.json"
+        ]["entries"]
+        self.assertTrue(all("**" in entry["paths"] for entry in dependencies))
+
+    @unittest.skipUnless(JEST_AVAILABLE, "pinned Jest fixture is unavailable")
+    def test_jest_children_use_exact_run_tests_by_path_selectors(self) -> None:
+        command = jest_project(self.root)
+        value = self.generate(command)
+        self.assert_ready(value, 5)
+        self.assertEqual(value["adapter"], inventory.JEST_ADAPTER)
+        argv = [child["argv"] for child in value["children"]]
+        self.assertIn(
+            [*command, "--runTestsByPath", "tests/integration/shared.test.js"],
+            argv,
+        )
+        self.assertIn(
+            [*command, "--runTestsByPath", "tests/unit/shared.test.cjs"],
+            argv,
+        )
+        self.assertIn(
+            [*command, "--runTestsByPath", "tests/regex+meta/value.test.js"],
+            argv,
+        )
+        self.assertEqual(
+            {item for row in value["layout"] for item in row["files"]},
+            {child["inventory"][0]["file"] for child in value["children"]},
+        )
 
     def test_pytest_child_command_keeps_the_full_nested_module_path(self):
         parent = {

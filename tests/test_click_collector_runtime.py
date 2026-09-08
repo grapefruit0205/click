@@ -62,6 +62,23 @@ class ClickCollectorRuntimeTests(unittest.TestCase):
                     output_bytes=1024,
                 )
 
+    def test_supervisor_can_return_bounded_stdout_and_stderr(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            captured = runtime.supervise(
+                [
+                    sys.executable,
+                    "-c",
+                    "import os; os.write(1, b'out'); os.write(2, b'err')",
+                ],
+                Path(temporary),
+                dict(os.environ),
+                timeout=2,
+                output_bytes=1024,
+                capture_output=True,
+            )
+
+        self.assertEqual(captured, (b"out", b"err"))
+
     def test_pytest_worker_canonicalizes_collected_items_without_running_them(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

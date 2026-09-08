@@ -70,15 +70,25 @@ HOOK_FILES = (
     "click_shadow_dashboard.py",
     "click_shadow_intelligence.py",
     "click_state.py",
+    "click_runtime_identity.py",
     "click_verification.py",
+    "click_verification_adapters.py",
     "click_verification_bindings.py",
+    "click_verification_inputs.py",
     "click_verification_plan.py",
     "click_verification_reuse.py",
     "click_gate.py",
     "platform_protocol.py",
     "antigravity_gate.py",
 )
-ANTIGRAVITY_HOOK_EXCLUDES = frozenset({"click_hook.py", "click_windows.py"})
+ANTIGRAVITY_HOOK_EXCLUDES = frozenset(
+    {
+        "click_hook.py",
+        "click_hook_transport.py",
+        "click_hook_worker.py",
+        "click_windows.py",
+    }
+)
 ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c"})
 DASHBOARD_ASSETS = (
     "index.html", "styles.css", "app.js",

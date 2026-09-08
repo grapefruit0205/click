@@ -22,12 +22,14 @@ if __package__:
         click_dependency_cache,
         click_evidence_shards,
         click_host_coverage,
+        click_verification_inputs,
     )
 else:  # Executed directly from the bundled hooks directory.
     import click_change_policy
     import click_dependency_cache
     import click_evidence_shards
     import click_host_coverage
+    import click_verification_inputs
 
 
 EVIDENCE_KINDS = ("argv", "browser", "hosted", "manual", "existing")
@@ -73,6 +75,10 @@ def revision_is_valid(value: Any) -> bool:
 def _fresh_source(kind: str, dependency_patterns: tuple[str, ...] = ()) -> dict[str, Any]:
     return {
         "kind": kind,
+        "reuse_policy": "conditional",
+        "input_patterns": [],
+        "outputs_required": False,
+        "verified_input_digest": "",
         "dependency_patterns": list(dependency_patterns),
         "dependency_declaration_digest": (
             click_dependency_cache.patterns_digest(dependency_patterns)
@@ -127,6 +133,10 @@ def _fresh_source(kind: str, dependency_patterns: tuple[str, ...] = ()) -> dict[
 
 
 _SUCCESSOR_BASELINE_FIELDS = (
+    "reuse_policy",
+    "input_patterns",
+    "outputs_required",
+    "verified_input_digest",
     "verified_root",
     "verified_at",
     "verified_dependency_provider",
@@ -159,6 +169,7 @@ def fresh_successor_source(
         or not isinstance(current.get("kind"), str)
         or current.get("kind") not in EVIDENCE_KINDS
         or not _dependency_fields_are_valid(current)
+        or not _input_policy_fields_are_valid(current)
         or current.get("shard") is not None
         and not click_evidence_shards.source_metadata_is_valid(current["shard"])
     ):
@@ -480,6 +491,14 @@ def activate_shard_plan(
     for child in children:
         assert isinstance(child, dict)
         source = _fresh_source("argv", tuple(patterns))
+        for field in (
+            "reuse_policy",
+            "input_patterns",
+            "outputs_required",
+            "verified_input_digest",
+        ):
+            if field in parent:
+                source[field] = json.loads(json.dumps(parent[field]))
         source["shard"] = click_evidence_shards.source_metadata(plan, child)
         sources[str(child["source_key"])] = source
     shard_sets = evidence_state.setdefault("shard_sets", {})
@@ -509,11 +528,36 @@ def collapse_shard_plan(
     patterns = shard_set.get("dependency_patterns")
     if not isinstance(children, list) or not isinstance(patterns, list):
         return None, "Click Evidence Shards fallback state is malformed."
+    child_sources: list[dict[str, Any]] = []
     for child in children:
         if not isinstance(child, dict) or not isinstance(child.get("source_key"), str):
             return None, "Click Evidence Shards fallback state is malformed."
-        sources.pop(str(child["source_key"]), None)
-    sources[parent_source_key] = _fresh_source("argv", tuple(patterns))
+        child_source = sources.pop(str(child["source_key"]), None)
+        if isinstance(child_source, dict):
+            child_sources.append(child_source)
+    parent = _fresh_source("argv", tuple(patterns))
+    if child_sources:
+        parent["reuse_policy"] = (
+            "always-run"
+            if any(source.get("reuse_policy") == "always-run" for source in child_sources)
+            else "conditional"
+        )
+        combined_inputs = {
+            pattern
+            for source in child_sources
+            for pattern in source.get("input_patterns", [])
+            if isinstance(pattern, str)
+        }
+        normalized_inputs, input_error = click_verification_inputs.normalize_patterns(
+            sorted(combined_inputs)
+        )
+        if input_error or normalized_inputs is None:
+            return None, "The Evidence Shards input policy is malformed."
+        parent["input_patterns"] = list(normalized_inputs)
+        parent["outputs_required"] = any(
+            source.get("outputs_required") is True for source in child_sources
+        )
+    sources[parent_source_key] = parent
     shard_sets.pop(parent_source_key, None)
     _refresh_registry(evidence_state, sources)
     state["evidence_state"] = evidence_state
@@ -652,6 +696,26 @@ def _host_coverage_field_is_valid(source: dict[str, Any]) -> bool:
     return bool(
         isinstance(coverage, dict)
         and (not coverage or click_host_coverage.receipt_is_valid(coverage))
+    )
+
+
+def _input_policy_fields_are_valid(source: dict[str, Any]) -> bool:
+    reuse_policy = source.get("reuse_policy", "conditional")
+    input_patterns = source.get("input_patterns", [])
+    outputs_required = source.get("outputs_required", False)
+    verified_input_digest = source.get("verified_input_digest", "")
+    normalized, error = click_verification_inputs.normalize_patterns(input_patterns)
+    return bool(
+        reuse_policy in {"conditional", "always-run"}
+        and normalized is not None
+        and not error
+        and list(normalized) == input_patterns
+        and isinstance(outputs_required, bool)
+        and isinstance(verified_input_digest, str)
+        and (
+            not verified_input_digest
+            or re.fullmatch(r"[0-9a-f]{64}", verified_input_digest) is not None
+        )
     )
 
 
@@ -815,6 +879,7 @@ def _sources_from_ledger(evidence_state: Any) -> dict[str, Any] | None:
             )
             is None
             or not _dependency_fields_are_valid(source)
+            or not _input_policy_fields_are_valid(source)
             or not _safe_change_fields_are_valid(source)
             or not _successor_fields_are_valid(source)
             or not _host_coverage_field_is_valid(source)

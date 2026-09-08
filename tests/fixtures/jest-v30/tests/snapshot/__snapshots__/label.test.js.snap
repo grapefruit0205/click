@@ -1,0 +1,8 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`stable snapshot input 1`] = `
+{
+  "label": "click",
+  "version": 1,
+}
+`;

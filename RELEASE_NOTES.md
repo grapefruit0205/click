@@ -1,5 +1,44 @@
 # Release notes
 
+## v0.94.0 — 2026-09-08
+
+- Automatic inventory and exact-file sharding now cover bounded, pinned Vitest
+  5 and Jest 30 profiles in addition to CPython unittest. Static configuration,
+  duplicate basenames, exact selectors, snapshots, and conservative dynamic or
+  ambiguous fallback are covered by fixture tests. Pytest collection remains a
+  bounded profile with pinned CI ownership.
+- Node test/check, npm test, Go test, and JSON/YAML/Markdown/SVG content
+  validation now carry tool-specific command, runtime, and explicit-input
+  identities through Hook-to-runner execution and exact reuse. Unsupported
+  languages and discovery shapes keep the original parent command.
+- A resident Hook worker reuses imported Python modules across frequent events,
+  while each event retains its own Git snapshot, content hashes, one-use claim,
+  runner process, and ledger result. Windows command transport is hardened to
+  avoid repeated process setup and chat-time Hook termination failures.
+- Sharding status and the first dashboard screen separately expose command
+  execution, automatic inventory/splitting, same-state exact reuse,
+  owner-committed policy reuse, and authoritative-observation reuse. Korean,
+  English, and Simplified Chinese locales contain the same projection keys.
+- A deterministic mixed-project fixture covers Vitest, unittest, Go, shared
+  JSON, Markdown, and assets. New test membership, dynamic imports, lockfile and
+  schema changes, asset add/delete, failure, repair, exact reuse, and policy
+  reuse preserve the same final outcome as full verification.
+- Automatic sharding `init/status/refresh`, complete-inventory enforcement,
+  authorized shard reuse, and conservative parent fallback remain required
+  regressions. The final local inventory contained 1,030 unique tests: 1,023
+  passed, 7 platform/environment checks skipped, and 0 failed after retaining
+  and correcting the initial affected-partition failures.
+- Linux/macOS/Windows jobs now cover deterministic partitions, Vitest, Jest,
+  Node/npm/Go, and native observation. Python 3.10–3.14, pytest 9.1.1, a mixed
+  project, native toolchain profiles, and content tools have dedicated CI jobs.
+  Local Linux results do not claim that those new remote jobs passed before the
+  release candidate CI run.
+- Existing component measurements are retained without new samples: warmed
+  resident Hook median fell from 104.192ms to 60.921ms, while the first worker
+  event was 253.484ms. These figures do not establish whole-task duration or
+  token savings. See the [multilingual expansion report](docs/multilang-expansion/FINAL_REPORT.md)
+  for evidence boundaries and remaining limits.
+
 ## v0.93.0 — 2026-09-08
 
 - Successful evidence and current mutation revisions now require nonnegative

@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from pathlib import Path
 import re
 import shlex
 from typing import Any
@@ -166,9 +165,7 @@ def command_parts(tokens: list[str]) -> tuple[str, list[str]]:
         remaining.pop(0)
     if not remaining:
         return "", []
-    executable = Path(remaining[0]).name.lower()
-    if executable.endswith(".exe"):
-        executable = executable[:-4]
+    executable = policy_executable_name(remaining[0])
     return executable, [item.lower() for item in remaining[1:]]
 
 

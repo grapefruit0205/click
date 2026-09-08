@@ -1,0 +1,21 @@
+test_sanitized_path_fails_closed_on_a_symlink_loop (tests.test_click_gate_inspection.ClickGateInspectionTests.test_sanitized_path_fails_closed_on_a_symlink_loop) ... FAIL
+
+======================================================================
+FAIL: test_sanitized_path_fails_closed_on_a_symlink_loop (tests.test_click_gate_inspection.ClickGateInspectionTests.test_sanitized_path_fails_closed_on_a_symlink_loop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/mnt/data/click_revised_review/source/click-main/tests/test_click_gate_inspection.py", line 830, in test_sanitized_path_fails_closed_on_a_symlink_loop
+    self.assertEqual(sanitized, "")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+AssertionError: '/tmp/tmp8552tyba/loop-a' != ''
+- /tmp/tmp8552tyba/loop-a
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.004s
+
+FAILED (failures=1)
+
+Source: uploaded prompt package, logs/path-loop.log. Runtime reported by the
+package: CPython 3.13.5 on Linux 6.18.35. This is preserved source evidence,
+not a reproduction on the implementation host.

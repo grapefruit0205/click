@@ -41,6 +41,7 @@
           "tests.test_click_mutation",
           "tests.test_click_observation_cache",
           "tests.test_click_process",
+          "tests.test_click_runtime_identity",
           "tests.test_click_service",
           "tests.test_click_verification_policy",
           "-q"
@@ -82,14 +83,18 @@
           "-m",
           "unittest",
           "tests.test_click_change_policy",
+          "tests.test_click_content_validation",
           "tests.test_click_dependency_cache",
           "tests.test_click_evidence_shards",
           "tests.test_click_efficiency",
           "tests.test_click_gate_verification",
           "tests.test_click_incremental",
+          "tests.test_click_multilang_execution",
           "tests.test_click_receipt",
           "tests.test_click_receipt_runtime",
           "tests.test_click_verification",
+          "tests.test_click_verification_freshness",
+          "tests.test_click_verification_inputs",
           "-q"
         ]
       ],
@@ -111,6 +116,7 @@
           "tests.test_click_dependency_trace",
           "tests.test_click_dashboard_projection",
           "tests.test_click_hook",
+          "tests.test_click_hook_worker",
           "tests.test_click_host_coverage",
           "tests.test_click_host_router",
           "tests.test_click_observer_backend",
@@ -137,6 +143,7 @@
           "unittest",
           "tests.test_click_auto_sharding",
           "tests.test_click_shard_proposal",
+          "tests.test_click_verification_adapters",
           "-q"
         ]
       ],

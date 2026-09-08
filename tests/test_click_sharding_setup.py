@@ -40,6 +40,18 @@ SETTING_FREE_E2E_SUPPORTED = (
     and sys.implementation.name == "cpython"
     and sys.version_info[:3] == (3, 12, 3)
 )
+VITEST_SOURCE = ROOT / "tests" / "fixtures" / "vitest-v5"
+VITEST_AVAILABLE = bool(
+    shutil.which("node")
+    and shutil.which("npx")
+    and (VITEST_SOURCE / "node_modules" / "vitest" / "package.json").is_file()
+)
+JEST_SOURCE = ROOT / "tests" / "fixtures" / "jest-v30"
+JEST_AVAILABLE = bool(
+    shutil.which("node")
+    and shutil.which("npx")
+    and (JEST_SOURCE / "node_modules" / "jest" / "package.json").is_file()
+)
 
 
 def write(root: Path, relative: str, content: str) -> None:
@@ -460,6 +472,242 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
         self.assertFalse(failed["sharding_ready"])
         self.assertFalse(failed["reuse_ready"])
 
+    def test_status_is_read_only_and_does_not_collect_or_execute_project_checks(self) -> None:
+        generated = setup.generate(
+            self.root, self.command, self.analysis_contract
+        )
+        with (
+            mock.patch.object(
+                setup.inventory,
+                "collect_once",
+                side_effect=AssertionError("status must not collect tests"),
+            ),
+            mock.patch.object(
+                setup,
+                "_run_check",
+                side_effect=AssertionError("status must not execute checks"),
+            ),
+        ):
+            report = setup.status(self.root)
+        self.assertEqual(report["status"], generated["status"])
+        self.assertEqual(report["command_status"], "available")
+        self.assertEqual(report["inventory_status"], "supported")
+
+
+@unittest.skipUnless(VITEST_AVAILABLE, "pinned Vitest fixture is unavailable")
+class VitestShardingSetupTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix="click-vitest-setup-")
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name)
+        self.root = self.base / "project"
+        shutil.copytree(VITEST_SOURCE, self.root, symlinks=True)
+        shutil.rmtree(self.root / "node_modules" / ".vite", ignore_errors=True)
+        self.plugin_data = self.base / "plugin-data"
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "PLUGIN_DATA": str(self.plugin_data),
+                "CLICK_CONFIG_HOME": str(self.plugin_data),
+                "CLICK_SHARDING_MIN_PARENT_MS": "0",
+                "CLICK_SHARDING_MIN_AVOIDABLE_MS": "0",
+                "CLICK_SHARDING_MANAGEMENT_RESERVE_MS": "0",
+            },
+            clear=False,
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        cost_policy = mock.patch.object(
+            setup,
+            "_measure_cost_policy",
+            return_value={
+                "strategy": "sharded",
+                "reason": "fixture-selects-sharding",
+                "thresholds": {
+                    "min_parent_ms": 0.0,
+                    "min_avoidable_ms": 0.0,
+                    "management_reserve_ms": 0.0,
+                },
+            },
+        )
+        cost_policy.start()
+        self.addCleanup(cost_policy.stop)
+        git(self.root, "init", "-q")
+        git(self.root, "config", "user.email", "click-tests@example.invalid")
+        git(self.root, "config", "user.name", "Click Tests")
+        git(self.root, "add", ".")
+        git(self.root, "commit", "-qm", "fixture")
+        self.command = ["npx", "--no-install", "vitest", "run"]
+        self.authority = "evs_" + "5" * 32
+
+    def test_cost_probe_disables_only_the_derived_vitest_cache(self) -> None:
+        before = inventory.workspace_snapshot(self.root, inventory.Limits())
+        result = setup._run_check(self.root, self.command)
+        after = inventory.workspace_snapshot(self.root, inventory.Limits())
+
+        self.assertEqual(result["status"], "passed", result)
+        self.assertEqual(after, before)
+        self.assertFalse((self.root / "node_modules" / ".vite").exists())
+
+    def test_init_status_and_refresh_preserve_exact_parent_fallback(self) -> None:
+        generated = setup.generate(
+            self.root,
+            self.command,
+            self.authority,
+            runtime_mode="evidence",
+        )
+        self.assertEqual(generated["status"], "application-ready", generated)
+        self.assertEqual(generated["adapter"]["id"], inventory.VITEST_ADAPTER)
+        applied = setup.apply(
+            self.root, self.authority, runtime_mode="evidence"
+        )
+        self.assertEqual(applied["status"], "commit-required", applied)
+        git(self.root, "add", *setup.POLICY_PATHS)
+        git(self.root, "commit", "-qm", "add Vitest sharding policy")
+        self.assertEqual(setup.status(self.root)["status"], "baseline-required")
+        bootstrapped = setup.bootstrap(
+            self.root, self.authority, runtime_mode="evidence"
+        )
+        self.assertEqual(bootstrapped["status"], "baseline-required", bootstrapped)
+        self.assertEqual(bootstrapped["bootstrap"]["status"], "passed")
+        self.assertTrue(bootstrapped["bootstrap"]["inventory_equal"])
+        self.assertEqual(len(bootstrapped["bootstrap"]["children"]), 3)
+
+        lockfile = self.root / "package-lock.json"
+        original_lock = lockfile.read_bytes()
+        lockfile.write_bytes(original_lock + b"\n")
+        lock_changed = setup.status(self.root)
+        self.assertEqual(lock_changed["status"], "review-required", lock_changed)
+        self.assertEqual(lock_changed["reasons"], ["configuration-changed"])
+        lockfile.write_bytes(original_lock)
+
+        write(
+            self.root,
+            "tests/new.test.js",
+            "import { test } from 'vitest'\ntest('new', () => {})\n",
+        )
+        changed = setup.status(self.root)
+        self.assertEqual(changed["status"], "review-required", changed)
+        self.assertEqual(changed["reasons"], ["test-discovery-changed"])
+        refresh = setup.plan(
+            self.root,
+            "refresh",
+            [],
+            {},
+            runtime_mode="evidence",
+            authority_id=self.authority,
+        )
+        self.assertEqual(refresh["action"], "generate")
+        self.assertEqual(refresh["command"], self.command)
+
+        (self.root / "tests" / "new.test.js").unlink()
+        write(self.root, "vitest.config.js", "export default {}\n")
+        configuration = setup.status(self.root)
+        self.assertEqual(configuration["status"], "review-required", configuration)
+        self.assertEqual(configuration["reasons"], ["configuration-changed"])
+        refresh = setup.plan(
+            self.root,
+            "refresh",
+            [],
+            {},
+            runtime_mode="evidence",
+            authority_id=self.authority,
+        )
+        self.assertEqual(refresh["action"], "generate")
+
+
+@unittest.skipUnless(JEST_AVAILABLE, "pinned Jest fixture is unavailable")
+class JestShardingSetupTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix="click-jest-setup-")
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name)
+        self.root = self.base / "project"
+        shutil.copytree(JEST_SOURCE, self.root, symlinks=True)
+        self.plugin_data = self.base / "plugin-data"
+        environment = mock.patch.dict(
+            os.environ,
+            {
+                "PLUGIN_DATA": str(self.plugin_data),
+                "CLICK_CONFIG_HOME": str(self.plugin_data),
+                "CLICK_SHARDING_MIN_PARENT_MS": "0",
+                "CLICK_SHARDING_MIN_AVOIDABLE_MS": "0",
+                "CLICK_SHARDING_MANAGEMENT_RESERVE_MS": "0",
+            },
+            clear=False,
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        cost_policy = mock.patch.object(
+            setup,
+            "_measure_cost_policy",
+            return_value={
+                "strategy": "sharded",
+                "reason": "fixture-selects-sharding",
+                "thresholds": {
+                    "min_parent_ms": 0.0,
+                    "min_avoidable_ms": 0.0,
+                    "management_reserve_ms": 0.0,
+                },
+            },
+        )
+        cost_policy.start()
+        self.addCleanup(cost_policy.stop)
+        git(self.root, "init", "-q")
+        git(self.root, "config", "user.email", "click-tests@example.invalid")
+        git(self.root, "config", "user.name", "Click Tests")
+        git(self.root, "add", ".")
+        git(self.root, "commit", "-qm", "fixture")
+        self.command = ["npx", "--no-install", "jest", "--runInBand"]
+        self.authority = "evs_" + "6" * 32
+
+    def test_init_status_refresh_snapshot_and_exact_children(self) -> None:
+        before = inventory.workspace_snapshot(self.root, inventory.Limits())
+        self.assertEqual(setup._run_check(self.root, self.command)["status"], "passed")
+        self.assertEqual(inventory.workspace_snapshot(self.root, inventory.Limits()), before)
+
+        generated = setup.generate(
+            self.root, self.command, self.authority, runtime_mode="evidence"
+        )
+        self.assertEqual(generated["status"], "application-ready", generated)
+        self.assertEqual(generated["adapter"]["id"], inventory.JEST_ADAPTER)
+        applied = setup.apply(
+            self.root, self.authority, runtime_mode="evidence"
+        )
+        self.assertEqual(applied["status"], "commit-required", applied)
+        git(self.root, "add", *setup.POLICY_PATHS)
+        git(self.root, "commit", "-qm", "add Jest sharding policy")
+        self.assertEqual(setup.status(self.root)["status"], "baseline-required")
+        bootstrapped = setup.bootstrap(
+            self.root, self.authority, runtime_mode="evidence"
+        )
+        self.assertEqual(bootstrapped["bootstrap"]["status"], "passed", bootstrapped)
+        self.assertTrue(bootstrapped["bootstrap"]["inventory_equal"])
+        self.assertEqual(len(bootstrapped["bootstrap"]["children"]), 5)
+
+        snapshot = next((self.root / "tests").rglob("*.snap"))
+        original_snapshot = snapshot.read_bytes()
+        snapshot.write_bytes(original_snapshot + b"\n")
+        changed = setup.status(self.root)
+        self.assertEqual(changed["status"], "review-required", changed)
+        self.assertEqual(changed["reasons"], ["configuration-changed"])
+        snapshot.write_bytes(original_snapshot)
+
+        write(self.root, "tests/new.test.js", "test('new', () => expect(1).toBe(1));\n")
+        discovery = setup.status(self.root)
+        self.assertEqual(discovery["status"], "review-required", discovery)
+        self.assertEqual(discovery["reasons"], ["test-discovery-changed"])
+        refresh = setup.plan(
+            self.root,
+            "refresh",
+            [],
+            {},
+            runtime_mode="evidence",
+            authority_id=self.authority,
+        )
+        self.assertEqual(refresh["action"], "generate")
+        self.assertEqual(refresh["command"], self.command)
+
 
 @unittest.skipUnless(
     SETTING_FREE_E2E_SUPPORTED,
@@ -794,7 +1042,10 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         )
         self.assertEqual(final["status"], "sharding-ready", final)
         self.assertTrue(final["sharding_ready"])
-        self.assertFalse(final["reuse_ready"])
+        self.assertTrue(final["reuse_ready"])
+        self.assertEqual(final["reuse_status"], "exact")
+        self.assertEqual(final["exact_reuse_status"], "available")
+        self.assertEqual(final["authoritative_reuse_status"], "unavailable")
         state = self.contract_state()
         batch = CLICK_VERIFICATION.click_incremental.current_batch(
             state["verification"]
@@ -912,14 +1163,22 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
             sharding_only = setup.status(self.workspace, without_observer)
         self.assertEqual(sharding_only["status"], "sharding-ready")
         self.assertTrue(sharding_only["sharding_ready"])
-        self.assertFalse(sharding_only["reuse_ready"])
-        self.assertEqual(sharding_only["reuse_status"], "unavailable")
+        self.assertTrue(sharding_only["reuse_ready"])
+        self.assertEqual(sharding_only["reuse_status"], "exact")
+        self.assertEqual(sharding_only["exact_reuse_status"], "available")
+        self.assertEqual(sharding_only["policy_reuse_status"], "unavailable")
+        self.assertEqual(
+            sharding_only["authoritative_reuse_status"], "unavailable"
+        )
+        self.assertEqual(sharding_only["inventory_status"], "supported")
         self.assertEqual(
             report["status"], "reuse-ready", {"report": report, "observations": observations}
         )
         self.assertTrue(report["sharding_ready"])
         self.assertTrue(report["reuse_ready"])
         self.assertEqual(report["reuse_status"], "authoritative-v2")
+        self.assertEqual(report["exact_reuse_status"], "available")
+        self.assertEqual(report["authoritative_reuse_status"], "available")
 
         self.assertEqual(
             contract_state["auto_sharding_setup"]["status"], "reuse-ready"
