@@ -683,7 +683,8 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
                     "runtime-prefix-lib-root": (Path(raw) / "lib").resolve(),
                 },
             )
-        self.assertIsNone(module._linux_external_runtime_root(Path("/usr")))
+        if os.name != "nt":
+            self.assertIsNone(module._linux_external_runtime_root(Path("/usr")))
 
     def test_windows_bootstrap_restores_and_chains_existing_customization(self) -> None:
         with tempfile.TemporaryDirectory(prefix="click-bootstrap-") as raw:

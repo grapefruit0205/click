@@ -51,6 +51,7 @@ class Limits:
 
 
 VITEST_VERSION = "5.0.0"
+SNAPSHOT_DERIVED_ROOTS = frozenset({"node_modules"})
 VITEST_CONFIG_NAMES = (
     "vitest.config.js", "vitest.config.mjs", "vitest.config.cjs",
     "vitest.config.ts", "vitest.config.mts", "vitest.config.cts",
@@ -629,6 +630,11 @@ def workspace_snapshot(root: Path, limits: Limits) -> dict[str, str]:
             if path.is_symlink():
                 dirs.remove(name)
                 names.append(name)
+            elif base == root and name in SNAPSHOT_DERIVED_ROOTS:
+                # Package-runner execution binds the complete installed tree
+                # through click_runtime_identity.  Avoid walking the same
+                # dependency tree during every source/inventory snapshot.
+                dirs.remove(name)
             elif name == ".git":
                 raise AnalysisError("nested-git-project")
         for name in sorted(names):

@@ -197,6 +197,20 @@ class CommandParsingTests(unittest.TestCase):
 
             self.assertIn("linked.txt", snapshot)
 
+    def test_workspace_snapshot_skips_the_separately_bound_install_tree(self):
+        with tempfile.TemporaryDirectory(prefix="click-snapshot-install-") as directory:
+            root = Path(directory)
+            git_fixture(root)
+            write(root, "package.json", '{"private": true}\n')
+            write(root, "node_modules/dependency/index.js", "export default true\n")
+
+            snapshot = inventory.workspace_snapshot(root, inventory.Limits())
+
+            self.assertIn("package.json", snapshot)
+            self.assertFalse(
+                any(path == "node_modules" or path.startswith("node_modules/") for path in snapshot)
+            )
+
     def test_missing_command_requires_selection_without_importing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

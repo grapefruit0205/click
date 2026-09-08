@@ -203,7 +203,8 @@ class MultilangExecutionHookTests(ClickGateTestCase):
         _, command = self.vitest_project()
         first = self.verify_gate([command], "turn-1")
         self.assert_runner(first)
-        self.assertEqual(self.run_rewritten(first).returncode, 0)
+        result = self.run_rewritten(first)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
         reused = self.verify_gate([command], "turn-1")
         self.assert_runner(reused, False)
 
