@@ -1,0 +1,32 @@
+{
+  "name": "phase-0-focused",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_evidence",
+    "tests.test_click_change_policy",
+    "tests.test_click_verification_bindings",
+    "tests.test_click_runner_transport",
+    "tests.test_click_auto_sharding",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": "?? docs/review-hardening/\n",
+  "input_fingerprint_start": "564e305fd562c5ee91c14af16495eaed13da0cad12a363473f36129fae725a50",
+  "exit_code": 0,
+  "elapsed_seconds": 10.175737,
+  "input_fingerprint_end": "564e305fd562c5ee91c14af16495eaed13da0cad12a363473f36129fae725a50",
+  "dirty_end": "?? docs/review-hardening/\n",
+  "counts": {
+    "ran": 61,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0,
+    "passed": 60
+  }
+}

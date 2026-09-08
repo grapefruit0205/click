@@ -65,6 +65,11 @@ def registry_digest(sources: dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def revision_is_valid(value: Any) -> bool:
+    """A current revision or successful evidence revision is a nonnegative int."""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 def _fresh_source(kind: str, dependency_patterns: tuple[str, ...] = ()) -> dict[str, Any]:
     return {
         "kind": kind,
@@ -119,6 +124,56 @@ def _fresh_source(kind: str, dependency_patterns: tuple[str, ...] = ()) -> dict[
         "last_successor_origin_revision": -1,
         "last_successor_mode": "",
     }
+
+
+_SUCCESSOR_BASELINE_FIELDS = (
+    "verified_root",
+    "verified_at",
+    "verified_dependency_provider",
+    "verified_dependency_manifest_digest",
+    "verified_dependency_entry_digest",
+    "verified_dependency_digest",
+    "verified_dependency_paths",
+    "verified_dependency_observation_digest",
+    "verified_dependency_observation",
+    "verified_safe_change_receipt",
+)
+_SUCCESSOR_MEASUREMENT_FIELDS = (
+    "last_success_duration_ms",
+    "last_success_duration_baseline",
+)
+
+
+def fresh_successor_source(
+    current: dict[str, Any], previous: dict[str, Any]
+) -> dict[str, Any]:
+    """Build candidate facts on normal defaults, without carrying execution state.
+
+    The caller requalifies these facts before installing this source. Current
+    kind, dependency declaration and shard remain owned by the new lifecycle.
+    Measurement metadata retains its original provenance but grants no reuse.
+    """
+    if (
+        not isinstance(current, dict)
+        or not isinstance(previous, dict)
+        or not isinstance(current.get("kind"), str)
+        or current.get("kind") not in EVIDENCE_KINDS
+        or not _dependency_fields_are_valid(current)
+        or current.get("shard") is not None
+        and not click_evidence_shards.source_metadata_is_valid(current["shard"])
+    ):
+        raise ValueError("Successor source requires a valid current declaration and shard.")
+    candidate = _fresh_source(current["kind"], tuple(current.get("dependency_patterns", [])))
+    # Select fields before copying: future source fields are excluded even if
+    # they contain nested or non-serializable values.
+    candidate.update(json.loads(json.dumps({
+        field: previous[field]
+        for field in (*_SUCCESSOR_BASELINE_FIELDS, *_SUCCESSOR_MEASUREMENT_FIELDS)
+        if field in previous
+    })))
+    if current.get("shard") is not None:
+        candidate["shard"] = json.loads(json.dumps(current["shard"]))
+    return candidate
 
 
 def fresh_state(contract: dict[str, Any]) -> dict[str, Any]:
@@ -472,11 +527,9 @@ def register_runtime_sources(
     if state.get("status") != "evidence" or kind not in EVIDENCE_KINDS:
         return None, "Dynamic evidence registration requires Evidence mode."
     evidence_state = state.get("evidence_state")
-    if not isinstance(evidence_state, dict):
-        return None, "Click Evidence registry is unavailable."
-    sources = evidence_state.get("sources")
-    if not isinstance(sources, dict):
-        return None, "Click Evidence registry is unavailable."
+    sources = _sources_from_ledger(evidence_state)
+    if sources is None:
+        return None, "Click Evidence registry is unavailable or malformed."
     for source_id in source_ids:
         if not isinstance(source_id, str) or not re.fullmatch(
             r"[A-Za-z][A-Za-z0-9_-]{0,31}", source_id
@@ -705,15 +758,20 @@ def sources_from_state(
         if "state_schema_version" in state:
             return {}
         return None
-    evidence_state = state.get("evidence_state")
+    sources = _sources_from_ledger(state.get("evidence_state"))
+    return sources if sources is not None else {}
+
+
+def _sources_from_ledger(evidence_state: Any) -> dict[str, Any] | None:
+    """Validate an existing ledger without replacing malformed stored sources."""
     if (
         not isinstance(evidence_state, dict)
         or evidence_state.get("version") != EVIDENCE_STATE_VERSION
     ):
-        return {}
+        return None
     sources = evidence_state.get("sources")
     if not isinstance(sources, dict):
-        return {}
+        return None
     for key, source in sources.items():
         reserved_units = source.get("reserved_units", 0) if isinstance(source, dict) else 0
         reserved_digest = (
@@ -726,9 +784,13 @@ def sources_from_state(
             or not re.fullmatch(r"[0-9a-f]{64}", key)
             or not isinstance(source, dict)
             or source.get("kind") not in EVIDENCE_KINDS
+            or not isinstance(source.get("status"), str)
             or source.get("status") not in EVIDENCE_STATUSES
             or not isinstance(source.get("verified_revision"), int)
             or isinstance(source.get("verified_revision"), bool)
+            or source["verified_revision"] < -1
+            or source.get("status") == "passed"
+            and not revision_is_valid(source["verified_revision"])
             or not isinstance(source.get("attempts"), int)
             or isinstance(source.get("attempts"), bool)
             or not isinstance(source.get("unchanged_failure_retries"), int)
@@ -775,7 +837,7 @@ def sources_from_state(
                 )
             )
         ):
-            return {}
+            return None
     source_count = evidence_state.get("source_count")
     stored_digest = evidence_state.get("registry_digest")
     if (
@@ -787,7 +849,7 @@ def sources_from_state(
         or not secrets.compare_digest(stored_digest, registry_digest(sources))
         or not click_evidence_shards.state_is_valid(evidence_state, sources)
     ):
-        return {}
+        return None
     return sources
 
 
@@ -796,7 +858,9 @@ def is_current(source: Any, revision: int) -> bool:
     return bool(
         isinstance(source, dict)
         and source.get("status") == "passed"
-        and int(source.get("verified_revision", -1)) == revision
+        and revision_is_valid(revision)
+        and revision_is_valid(source.get("verified_revision"))
+        and source["verified_revision"] == revision
     )
 
 

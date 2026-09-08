@@ -1,0 +1,278 @@
+{
+  "owned_files": [
+    "hooks/click_verification.py",
+    "tests/test_click_gate_verification.py"
+  ],
+  "scope": "record, claim, reservation release, collection boundary; one approved _run_verification callsite keyword",
+  "final_file_sha256": {
+    "hooks/click_verification.py": "09b5c1ce77eee114afe10fd1769257329acdb05eeb0bd7f68a9e8677ee917c8e",
+    "tests/test_click_gate_verification.py": "1fcc27cf6fce71bc0a023377fc50c92f458ca3619a46ffb490a97e33e48080cf"
+  },
+  "owned_function_sha256": {
+    "_verification_claim_binding": {
+      "line": 1739,
+      "sha256": "00659fe0f92a61d65e1a7815470121e3fd72709de2c9cd26718000f0d207c06d"
+    },
+    "_record_verification_result": {
+      "line": 1764,
+      "sha256": "f6b89666f7ffe05c72c56f2d424fb6e43dcee9737306312b4dbaaa5461943ec2"
+    },
+    "_claim_verification_run": {
+      "line": 2317,
+      "sha256": "1b461eb417d82ee2ad0cc76d4bc094891efcd4c2cee49ed3bdc5fea9067104cd"
+    },
+    "_release_unclaimed_verification_reservation": {
+      "line": 2611,
+      "sha256": "940115557102f1542731c97e258afefd5943982b65c62366a8fb8575d845b9e1"
+    },
+    "_collection_boundary_check": {
+      "line": 2783,
+      "sha256": "f2bf8da7ba7753a113bde2921cc625db2fff1d548cb55c72ee0b0e1153c8fb27"
+    },
+    "_run_verification": {
+      "line": 2897,
+      "sha256": "eb1826fe3b8c861eff243a8989bd41910ebb0fc8e5e598f3882c9cd2ef1cee4b"
+    }
+  },
+  "runs": {
+    "phase-4-boundary-red": {
+      "name": "phase-4-boundary-red",
+      "command": [
+        "env",
+        "CLICK_GATE_UNDER_TEST=/tmp/click-review-hardening-20260908/phase-4-boundary-snapshot/hooks/click_gate.py",
+        "CLICK_HOOK_CONFIG_UNDER_TEST=/tmp/click-review-hardening-20260908/phase-4-boundary-snapshot/hooks/hooks.json",
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "a4dbd1b46ea7a0569dcb2f581f0d7db4d7a0aac75afa2478397258648976f07e",
+      "exit_code": 1,
+      "elapsed_seconds": 5.798698,
+      "input_fingerprint_end": "a4dbd1b46ea7a0569dcb2f581f0d7db4d7a0aac75afa2478397258648976f07e",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 9,
+        "skipped": 0,
+        "failures": 25,
+        "errors": 12,
+        "passed": 0,
+        "note": "unittest failures/errors include subtest outcomes; method pass count not separately available"
+      }
+    },
+    "phase-4-collection-claim-red": {
+      "name": "phase-4-collection-claim-red",
+      "command": [
+        "env",
+        "CLICK_GATE_UNDER_TEST=/tmp/click-review-hardening-20260908/phase-4-claimbinding-snapshot/hooks/click_gate.py",
+        "CLICK_HOOK_CONFIG_UNDER_TEST=/tmp/click-review-hardening-20260908/phase-4-claimbinding-snapshot/hooks/hooks.json",
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_collection_boundary_rechecks_authority_after_snapshot",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "c0326aca7f78fb113ee76f7cdbed1fc1e9b92d7bba465a144bef2ac5730a29d9",
+      "exit_code": 1,
+      "elapsed_seconds": 1.636049,
+      "input_fingerprint_end": "c0326aca7f78fb113ee76f7cdbed1fc1e9b92d7bba465a144bef2ac5730a29d9",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 1,
+        "skipped": 0,
+        "failures": 3,
+        "errors": 0,
+        "passed": 0,
+        "note": "unittest failures/errors include subtest outcomes; method pass count not separately available"
+      }
+    },
+    "phase-4-task-identity-red": {
+      "name": "phase-4-task-identity-red",
+      "command": [
+        "env",
+        "CLICK_GATE_UNDER_TEST=/tmp/click-review-hardening-20260908/phase-4-boundary-snapshot/hooks/click_gate.py",
+        "CLICK_HOOK_CONFIG_UNDER_TEST=/tmp/click-review-hardening-20260908/phase-4-boundary-snapshot/hooks/hooks.json",
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_task_identity_changed_after_claim_cannot_record_success",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "fe97b67af5e3098e8727bcc4841046aa36d78b747937ed9891bb5ebf95d6a263",
+      "exit_code": 1,
+      "elapsed_seconds": 0.779748,
+      "input_fingerprint_end": "fe97b67af5e3098e8727bcc4841046aa36d78b747937ed9891bb5ebf95d6a263",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 1,
+        "skipped": 0,
+        "failures": 4,
+        "errors": 0,
+        "passed": 0,
+        "note": "unittest failures/errors include subtest outcomes; method pass count not separately available"
+      }
+    },
+    "phase-4-boundary-green": {
+      "name": "phase-4-boundary-green",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "151646300a6ace057d0999e0c6e845d57de3006bdc6ca074a5e3e7763871824b",
+      "exit_code": 0,
+      "elapsed_seconds": 5.199175,
+      "input_fingerprint_end": "151646300a6ace057d0999e0c6e845d57de3006bdc6ca074a5e3e7763871824b",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 9,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "passed": 9
+      }
+    },
+    "phase-4-boundary-regression": {
+      "name": "phase-4-boundary-regression",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_rewritten_verification_runner_is_claimed_before_execution",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_replay_does_not_release_active_runner",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_tampered_verification_token_does_not_release_reservation",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_late_completion_from_cancelled_batch_cannot_overwrite_successor_batch",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_keyboard_interrupt_records_failure_and_releases_runner",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_result_rejects_lost_context_bindings",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_stale_or_future_reservation_before_execution",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_never_auto_expires_while_result_is_unknown",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_shards_retain_passed_sibling_and_retry_only_unresolved",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_each_shard_can_use_existing_committed_safe_change_authority",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_executable_change_before_execution",
+        "tests.test_runner_state_recovery",
+        "tests.test_click_claims",
+        "tests.test_click_failure_collection.ClickFailureCollectionIntegrationTests.test_workspace_drift_at_source_boundary_stops_before_next_source",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "33b29525438eabed3094885fe75e75046d5c674e775da0c179ac684df6e4936d",
+      "exit_code": 0,
+      "elapsed_seconds": 38.38754,
+      "input_fingerprint_end": "33b29525438eabed3094885fe75e75046d5c674e775da0c179ac684df6e4936d",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 22,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "passed": 22
+      }
+    },
+    "phase-4-boundary-final": {
+      "name": "phase-4-boundary-final",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests",
+        "tests.test_click_failure_collection",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "1b9aed073ecf62d382da3114a8eed783dd47bcab7e6a391791dc4f64dbd66867",
+      "exit_code": 0,
+      "elapsed_seconds": 17.782192,
+      "input_fingerprint_end": "1b9aed073ecf62d382da3114a8eed783dd47bcab7e6a391791dc4f64dbd66867",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 18,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "passed": 18
+      }
+    },
+    "phase-4-boundary-identity-final": {
+      "name": "phase-4-boundary-identity-final",
+      "command": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests",
+        "tests.test_click_failure_collection",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun",
+        "tests.test_click_gate_verification.ClickGateVerificationTests.test_each_shard_can_use_existing_committed_safe_change_authority",
+        "-q"
+      ],
+      "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+      "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "test_target_overrides": {},
+      "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+      "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_process.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "input_fingerprint_start": "76e67097346357cebc5b8be5cc9e5f6ff0183a64c91033f91d3b0f0a393dcf09",
+      "exit_code": 0,
+      "elapsed_seconds": 30.884511,
+      "input_fingerprint_end": "76e67097346357cebc5b8be5cc9e5f6ff0183a64c91033f91d3b0f0a393dcf09",
+      "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_process.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+      "counts": {
+        "ran": 21,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0,
+        "passed": 21
+      }
+    }
+  },
+  "native_os_not_run": [
+    "Windows",
+    "macOS"
+  ],
+  "storage_product_changes": false,
+  "state_schema_changes": false
+}

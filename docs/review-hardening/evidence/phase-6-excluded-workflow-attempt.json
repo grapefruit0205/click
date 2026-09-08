@@ -1,0 +1,108 @@
+{
+  "classification": "Excluded comparison attempt; asymmetric existing bytecode cache conditions",
+  "included_in_final_performance_summaries": false,
+  "complete_runs": [
+    {
+      "run_id": "heavy-trial-0-current",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": true,
+      "subprocess_overall_ms": 62386.139941,
+      "source_digest_before": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349",
+      "source_digest_after": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349"
+    },
+    {
+      "run_id": "heavy-trial-0-frozen",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": true,
+      "subprocess_overall_ms": 83968.345618,
+      "source_digest_before": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+      "source_digest_after": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6"
+    },
+    {
+      "run_id": "heavy-trial-1-current",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": false,
+      "subprocess_overall_ms": 61180.47756,
+      "source_digest_before": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349",
+      "source_digest_after": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349"
+    },
+    {
+      "run_id": "heavy-trial-1-frozen",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": false,
+      "subprocess_overall_ms": 82549.881874,
+      "source_digest_before": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+      "source_digest_after": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6"
+    },
+    {
+      "run_id": "short-trial-0-current",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": true,
+      "subprocess_overall_ms": 60930.662851,
+      "source_digest_before": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349",
+      "source_digest_after": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349"
+    },
+    {
+      "run_id": "short-trial-0-frozen",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": true,
+      "subprocess_overall_ms": 82607.326576,
+      "source_digest_before": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+      "source_digest_after": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6"
+    },
+    {
+      "run_id": "short-trial-1-current",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": false,
+      "subprocess_overall_ms": 61033.344081,
+      "source_digest_before": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349",
+      "source_digest_after": "4f3c052849dee1bdd507a90ec4e7138b538a41b2f8b973b45e541f7270b0c349"
+    },
+    {
+      "run_id": "short-trial-1-frozen",
+      "valid": true,
+      "exit_code": 0,
+      "outer_warmup": false,
+      "subprocess_overall_ms": 82556.849297,
+      "source_digest_before": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+      "source_digest_after": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6"
+    }
+  ],
+  "interruption": {
+    "reason": "Excluded: asymmetric existing Python bytecode caches. -B prohibits writes but permits cache reads. Rerun uses empty PYTHONPYCACHEPREFIX for both versions.",
+    "interrupted_at": 1788833406.8212302,
+    "processes": [
+      {
+        "pid": 1839451,
+        "ppid": 1657636,
+        "start": "12283706",
+        "command": "python3 -B /tmp/click-review-hardening-20260908/workflow-comparison/compare_guarded_workflows.py --baseline /tmp/click-review-hardening-20260908/baseline --current /home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release --output-dir /tmp/click-review-hardening-20260908/workflow-comparison/final-results "
+      },
+      {
+        "pid": 1856515,
+        "ppid": 1839451,
+        "start": "12341503",
+        "command": "/usr/bin/python3.12 -B /tmp/click-review-hardening-20260908/baseline/benchmarks/incremental_verification.py --guarded-workflow --iterations 1 --warmups 0 --workload-rounds 1 --output /tmp/click-review-hardening-20260908/workflow-comparison/final-results/short-trial-2-frozen/raw.json "
+      },
+      {
+        "pid": 1856838,
+        "ppid": 1856515,
+        "start": "12343031",
+        "command": "/usr/bin/python3.12 /tmp/click-review-hardening-20260908/baseline/hooks/click_gate.py prompt-submit "
+      }
+    ]
+  },
+  "initial_root": "/tmp/click-review-hardening-20260908/workflow-comparison/final-results",
+  "frozen_hook_cache_files": 0,
+  "current_hook_cache_files": 230,
+  "current_cpython312_hook_cache_files": 65,
+  "replacement": "workflow-comparison/controlled-results; empty isolated PYTHONPYCACHEPREFIX, -B and PYTHONDONTWRITEBYTECODE=1",
+  "note": "Valid here refers only to original fixture/outcome/digest checks. These runs are not comparable performance evidence and are not pooled with the controlled experiment. No existing cache was removed."
+}

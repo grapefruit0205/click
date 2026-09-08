@@ -1,0 +1,28 @@
+{
+  "name": "phase-0-policy-integration",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_change_policy",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_committed_safe_change_policy_reuses_without_runtime_observer",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_safe_change_policy_reruns_when_code_is_also_changed",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_current_receipt_reruns_when_the_git_tree_changes_out_of_band",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_replay_does_not_release_active_runner",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_that_changes_repository_content_cannot_pass",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "exit_code": 0,
+  "unittest_elapsed_seconds": 13.174,
+  "counts": {
+    "ran": 18,
+    "passed": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "execution_tool_session": 15190,
+  "recording_note": "Started immediately before parent requested wrapper. Original tool stdout/stderr and command archived after completion. No pre-run full input fingerprint captured; do not describe this as wrapper-recorded timing. Includes 13 change-policy tests overlapping the parent focused run, plus 5 integration tests."
+}

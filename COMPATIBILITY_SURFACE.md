@@ -38,9 +38,11 @@ facade for Shadow Observer v1. It selects a backend through
 lifecycle handling to `hooks/click_observer_common.py`, and delegates Linux
 `strace` collection and parsing to `hooks/click_observer_linux.py`. Privileged
 native macOS `fs_usage` collection lives in `hooks/click_observer_macos.py`.
-The facade continues to expose the existing tested entry points. macOS never
-elevates its own privilege and falls back when permission is absent; Windows
-remains an explicit unavailable placeholder.
+The facade continues to expose the existing tested entry points. Native macOS
+and Windows ETW collectors require their supported host conditions and report
+unavailable when those conditions are absent; they do not elevate privilege
+automatically. OS-specific CI exercises their native paths. Local Linux checks
+do not validate native macOS or Windows execution.
 
 ## Documented legacy symbol
 

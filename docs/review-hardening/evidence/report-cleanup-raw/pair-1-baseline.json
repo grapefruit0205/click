@@ -1,0 +1,478 @@
+{
+  "environment": {
+    "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "source": "/tmp/click-review-hardening-20260908/baseline",
+    "gate_sha256": "dadaa5f7e80e719cdf0ffa0c74fad7752b32573c2b192211352d06eb8c47fe6a",
+    "pid": 1799143
+  },
+  "method": {
+    "harness_version": 2,
+    "warmup_per_case_mode": 2,
+    "timing_repetitions": 11,
+    "memory_repetitions": 3,
+    "payload": {
+      "payload": "검증 상태: report cleanup component baseline"
+    },
+    "fallback": "renderer returns exit 2 only for inline -c argv, actual fallback write/cleanup/runner rendering retained",
+    "inline": "actual POSIX renderer; no directory cleanup",
+    "scope": "warm in-process _json_report_command component only; fixture population and post-call deletion excluded; timings include lightweight fallback mock context; tracemalloc captures Python allocation not total RSS; concurrent unrelated tests may introduce noise; no whole-task or token metric"
+  },
+  "cases": [
+    {
+      "existing_matching_files": 0,
+      "nonmatching_files": 0,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.028224,
+            0.021555,
+            0.019171,
+            0.015771,
+            0.015284,
+            0.014444,
+            0.013499,
+            0.013683,
+            0.013504,
+            0.015153,
+            0.013912
+          ],
+          "median": 0.015153,
+          "min": 0.013499,
+          "max": 0.028224
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            0.784455,
+            0.670297,
+            0.627866,
+            0.667177,
+            0.620377,
+            0.635211,
+            0.52471,
+            0.471558,
+            0.45051,
+            0.439639,
+            0.517277
+          ],
+          "median": 0.620377,
+          "min": 0.439639,
+          "max": 0.784455
+        },
+        "peak_python_bytes": {
+          "samples": [
+            12104,
+            12072,
+            12024
+          ],
+          "median": 12072,
+          "min": 12024,
+          "max": 12104
+        },
+        "operations": {
+          "directory_entries_yielded": 1,
+          "matching_paths_yielded": 1,
+          "matching_stat_calls": 1,
+          "other_stat_calls": 4,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      }
+    },
+    {
+      "existing_matching_files": 16,
+      "nonmatching_files": 0,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.013883,
+            0.012301,
+            0.011293,
+            0.010495,
+            0.011562,
+            0.011042,
+            0.009961,
+            0.009888,
+            0.009779,
+            0.010191,
+            0.00981
+          ],
+          "median": 0.010495,
+          "min": 0.009779,
+          "max": 0.013883
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            0.65059,
+            0.588886,
+            0.538403,
+            0.532023,
+            0.52814,
+            0.528736,
+            0.545066,
+            0.556036,
+            0.544997,
+            0.528112,
+            0.531079
+          ],
+          "median": 0.538403,
+          "min": 0.528112,
+          "max": 0.65059
+        },
+        "peak_python_bytes": {
+          "samples": [
+            18668,
+            18668,
+            18668
+          ],
+          "median": 18668,
+          "min": 18668,
+          "max": 18668
+        },
+        "operations": {
+          "directory_entries_yielded": 17,
+          "matching_paths_yielded": 17,
+          "matching_stat_calls": 17,
+          "other_stat_calls": 4,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 16
+        }
+      }
+    },
+    {
+      "existing_matching_files": 6000,
+      "nonmatching_files": 0,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.00814,
+            0.006426,
+            0.005019,
+            0.004772,
+            0.00493,
+            0.005515,
+            0.004997,
+            0.004836,
+            0.004408,
+            0.005352,
+            0.008876
+          ],
+          "median": 0.005019,
+          "min": 0.004408,
+          "max": 0.008876
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            15.972821,
+            22.959436,
+            15.480978,
+            14.288207,
+            14.009775,
+            13.998537,
+            21.130776,
+            14.161424,
+            13.703961,
+            13.566639,
+            13.423415
+          ],
+          "median": 14.161424,
+          "min": 13.423415,
+          "max": 22.959436
+        },
+        "peak_python_bytes": {
+          "samples": [
+            4937068,
+            4939076,
+            4937073
+          ],
+          "median": 4937073,
+          "min": 4937068,
+          "max": 4939076
+        },
+        "operations": {
+          "directory_entries_yielded": 6001,
+          "matching_paths_yielded": 6001,
+          "matching_stat_calls": 129,
+          "other_stat_calls": 4,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 128
+        }
+      }
+    },
+    {
+      "existing_matching_files": 16,
+      "nonmatching_files": 6000,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.008726,
+            0.006686,
+            0.005789,
+            0.005118,
+            0.005224,
+            0.005329,
+            0.004739,
+            0.004631,
+            0.005116,
+            0.005411,
+            0.004723
+          ],
+          "median": 0.005224,
+          "min": 0.004631,
+          "max": 0.008726
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            4.097643,
+            4.079709,
+            4.415451,
+            3.865238,
+            3.653849,
+            3.407519,
+            3.658322,
+            3.466908,
+            3.408465,
+            3.366018,
+            3.330018
+          ],
+          "median": 3.653849,
+          "min": 3.330018,
+          "max": 4.415451
+        },
+        "peak_python_bytes": {
+          "samples": [
+            2010290,
+            2010290,
+            2010290
+          ],
+          "median": 2010290,
+          "min": 2010290,
+          "max": 2010290
+        },
+        "operations": {
+          "directory_entries_yielded": 6017,
+          "matching_paths_yielded": 17,
+          "matching_stat_calls": 17,
+          "other_stat_calls": 4,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 16
+        }
+      }
+    },
+    {
+      "existing_matching_files": 6000,
+      "nonmatching_files": 6000,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.00679,
+            0.005081,
+            0.004567,
+            0.003936,
+            0.004183,
+            0.004301,
+            0.004263,
+            0.004337,
+            0.004531,
+            0.004458,
+            0.004323
+          ],
+          "median": 0.004337,
+          "min": 0.003936,
+          "max": 0.00679
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1941,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1941
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            17.571672,
+            17.898447,
+            17.379322,
+            17.304959,
+            25.075243,
+            17.488307,
+            17.28073,
+            17.808143,
+            17.527403,
+            25.413246,
+            17.90108
+          ],
+          "median": 17.571672,
+          "min": 17.28073,
+          "max": 25.413246
+        },
+        "peak_python_bytes": {
+          "samples": [
+            6930346,
+            6930290,
+            6930290
+          ],
+          "median": 6930290,
+          "min": 6930290,
+          "max": 6930346
+        },
+        "operations": {
+          "directory_entries_yielded": 12001,
+          "matching_paths_yielded": 6001,
+          "matching_stat_calls": 129,
+          "other_stat_calls": 4,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 128
+        }
+      }
+    }
+  ],
+  "starvation": {
+    "mechanism": "same actual tempfile files/stat/unlink for both versions with deterministic scandir: 128 fresh then 8 stale; valid writer names; renderer forces fallback",
+    "repeated_fallback_calls": 6,
+    "stale_remaining_after_each_call": [
+      8,
+      8,
+      8,
+      8,
+      8,
+      8
+    ],
+    "deletions_per_call": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "directory_entries_per_call": [
+      137,
+      138,
+      139,
+      140,
+      141,
+      142
+    ],
+    "fresh_preserved": true,
+    "new_reports_preserved": true
+  }
+}

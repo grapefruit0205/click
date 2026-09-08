@@ -17,8 +17,8 @@ if __package__:
 else:  # Installed launchers execute hooks directly.
     import click_import_bootstrap
 
-(click_capability, click_change_policy, click_dependency_cache, click_evidence_shards, click_host_coverage, click_incremental,) = click_import_bootstrap.load_siblings(
-    __package__, "click_capability", "click_change_policy", "click_dependency_cache", "click_evidence_shards", "click_host_coverage", "click_incremental"
+(click_capability, click_change_policy, click_dependency_cache, click_evidence, click_evidence_shards, click_host_coverage, click_incremental,) = click_import_bootstrap.load_siblings(
+    __package__, "click_capability", "click_change_policy", "click_dependency_cache", "click_evidence", "click_evidence_shards", "click_host_coverage", "click_incremental"
 )
 
 def verification_receipt_matches(
@@ -33,6 +33,12 @@ def verification_receipt_matches(
     executable_digest: str,
     host_coverage: dict[str, Any],
 ) -> bool:
+    if (
+        not isinstance(source, dict)
+        or not click_evidence.revision_is_valid(revision)
+        or not click_evidence.revision_is_valid(source.get("verified_revision"))
+    ):
+        return False
     if not all(
         isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
         for value in (
@@ -53,7 +59,7 @@ def verification_receipt_matches(
         return False
     return bool(
         source.get("status") == "passed"
-        and int(source.get("verified_revision", -1)) == revision
+        and source["verified_revision"] == revision
         and source.get("verified_contract_digest") == contract_digest
         and source.get("verified_check_digest") == group_digest
         and source.get("verified_root") == git_root
@@ -147,6 +153,8 @@ def dependency_receipt_is_valid(receipt: Any) -> bool:
     if not isinstance(receipt, dict):
         return False
     provider = receipt.get("provider")
+    if not isinstance(provider, str):
+        return False
     manifest_digest = receipt.get("manifest_digest")
     entry_digest = receipt.get("entry_digest")
     dependency_digest = receipt.get("dependency_digest")
@@ -195,6 +203,8 @@ def dependency_receipt_matches(
     executable_digest: str,
     host_coverage: dict[str, Any],
 ) -> bool:
+    if not isinstance(source, dict) or not click_evidence.revision_is_valid(revision):
+        return False
     if not dependency_receipt_is_valid(receipt):
         return False
     if not click_dependency_cache.dependency_observation_is_complete(
@@ -214,9 +224,7 @@ def dependency_receipt_matches(
     verified_revision = source.get("verified_revision", -1)
     verified_at = source.get("verified_at", 0)
     if (
-        not isinstance(verified_revision, int)
-        or isinstance(verified_revision, bool)
-        or verified_revision < 0
+        not click_evidence.revision_is_valid(verified_revision)
         or verified_revision >= revision
         or not isinstance(verified_at, int)
         or isinstance(verified_at, bool)
@@ -286,6 +294,27 @@ def store_dependency_receipt(
     }
 
 
+def _promotion_revision_and_count(
+    source: dict[str, Any], *, revision: int, tree_digest: str, counter: str
+) -> tuple[int, int]:
+    """Check mutation preconditions after the caller matched all reuse bindings."""
+    prior_revision = source.get("verified_revision")
+    count = source.get(counter, 0)
+    if (
+        source.get("status") != "stale"
+        or not click_evidence.revision_is_valid(prior_revision)
+        or not click_evidence.revision_is_valid(revision)
+        or prior_revision >= revision
+        or not isinstance(tree_digest, str)
+        or re.fullmatch(r"[0-9a-f]{64}", tree_digest) is None
+        or not isinstance(count, int)
+        or isinstance(count, bool)
+        or count < 0
+    ):
+        raise ValueError("Receipt promotion requires valid revisions, tree, and reuse count.")
+    return prior_revision, count
+
+
 def promote_dependency_receipt(
     source: dict[str, Any],
     receipt: dict[str, Any],
@@ -293,7 +322,12 @@ def promote_dependency_receipt(
     revision: int,
     tree_digest: str,
 ) -> None:
-    prior_revision = int(source.get("verified_revision", -1))
+    """Apply a matched dependency receipt; reject malformed inputs before mutation."""
+    if not isinstance(source, dict) or not dependency_receipt_is_valid(receipt):
+        raise ValueError("Receipt promotion requires a valid source and dependency receipt.")
+    prior_revision, reuse_count = _promotion_revision_and_count(
+        source, revision=revision, tree_digest=tree_digest, counter="dependency_reuse_count"
+    )
     source["status"] = "passed"
     source["verified_revision"] = revision
     source["verified_tree_digest"] = tree_digest
@@ -310,9 +344,7 @@ def promote_dependency_receipt(
     }
     source["last_exit_code"] = 0
     source["unchanged_failure_retries"] = 0
-    source["dependency_reuse_count"] = int(
-        source.get("dependency_reuse_count", 0)
-    ) + 1
+    source["dependency_reuse_count"] = reuse_count + 1
     source["last_dependency_reused_at"] = int(time.time()) or 1
     source["last_dependency_reused_from_revision"] = prior_revision
 
@@ -345,26 +377,26 @@ def safe_change_receipt_matches(
     environment_digest: str,
     executable_digest: str,
     host_coverage: dict[str, Any],
+    decision_context: dict[str, Any] | None = None,
 ) -> bool:
-    if not isinstance(decision, dict) or decision.get("status") != "reuse":
-        return False
-    receipt = decision.get("receipt")
-    decision_digest = decision.get("decision_digest")
-    changed_paths = decision.get("changed_paths")
     if (
-        not click_change_policy.receipt_is_valid(receipt)
-        or not click_change_policy.changed_paths_are_valid(changed_paths)
-        or not isinstance(decision_digest, str)
-        or re.fullmatch(r"[0-9a-f]{64}", decision_digest) is None
+        not isinstance(source, dict)
+        or not click_evidence.revision_is_valid(revision)
+        or not click_change_policy.reuse_decision_matches(
+            decision, source.get("verified_safe_change_receipt"),
+            check_digest=group_digest, decision_context=decision_context,
+        )
     ):
+        return False
+    assert isinstance(decision_context, dict)
+    if decision_context["revision"] != revision or decision_context["git_root"] != git_root:
         return False
     verified_revision = source.get("verified_revision", -1)
     verified_at = source.get("verified_at", 0)
     return bool(
         source.get("status") == "stale"
-        and isinstance(verified_revision, int)
-        and not isinstance(verified_revision, bool)
-        and 0 <= verified_revision < revision
+        and click_evidence.revision_is_valid(verified_revision)
+        and verified_revision < revision
         and isinstance(verified_at, int)
         and not isinstance(verified_at, bool)
         and verified_at > 0
@@ -375,11 +407,6 @@ def safe_change_receipt_matches(
         and source.get("verified_executable_digest") == executable_digest
         and click_host_coverage.receipt_is_current(host_coverage)
         and source.get("verified_host_coverage") == host_coverage
-        and source.get("verified_safe_change_receipt", {})
-        != {}
-        and click_change_policy.receipt_is_valid(
-            source.get("verified_safe_change_receipt")
-        )
     )
 
 
@@ -389,8 +416,28 @@ def promote_safe_change_receipt(
     *,
     revision: int,
     tree_digest: str,
+    decision_context: dict[str, Any] | None = None,
 ) -> None:
-    prior_revision = int(source.get("verified_revision", -1))
+    """Apply a matched safe-change decision only after validating mutation inputs."""
+    if (
+        not isinstance(source, dict)
+        or not isinstance(decision_context, dict)
+        or decision_context.get("tree_digest") != tree_digest
+        or not safe_change_receipt_matches(
+            source, decision, revision=revision,
+            contract_digest=source.get("verified_contract_digest", ""),
+            group_digest=source.get("verified_check_digest", ""),
+            git_root=source.get("verified_root", ""),
+            environment_digest=source.get("verified_environment_digest", ""),
+            executable_digest=source.get("verified_executable_digest", ""),
+            host_coverage=source.get("verified_host_coverage", {}),
+            decision_context=decision_context,
+        )
+    ):
+        raise ValueError("Receipt promotion requires a valid source and safe-change decision.")
+    prior_revision, reuse_count = _promotion_revision_and_count(
+        source, revision=revision, tree_digest=tree_digest, counter="safe_change_reuse_count"
+    )
     changed_paths = list(decision["changed_paths"])
     source["status"] = "passed"
     source["verified_revision"] = revision
@@ -398,9 +445,7 @@ def promote_safe_change_receipt(
     source["verified_safe_change_receipt"] = decision["receipt"]
     source["last_exit_code"] = 0
     source["unchanged_failure_retries"] = 0
-    source["safe_change_reuse_count"] = int(
-        source.get("safe_change_reuse_count", 0)
-    ) + 1
+    source["safe_change_reuse_count"] = reuse_count + 1
     source["last_safe_change_reused_at"] = int(time.time()) or 1
     source["last_safe_change_reused_from_revision"] = prior_revision
     source["last_safe_change_paths"] = changed_paths[:128]
@@ -505,23 +550,40 @@ def requalify_successor_baseline(
     exact_tree: bool,
 ) -> None:
     """Create a new-lifecycle baseline only after explicit binding checks."""
-    current_shard = current.get("shard")
-    current_patterns = list(current.get("dependency_patterns", []))
-    current_declaration = current.get("dependency_declaration_digest", "")
-    preserved = json.loads(json.dumps(previous))
-    current.clear()
-    current.update(preserved)
-    if current_shard is None:
-        current.pop("shard", None)
-    else:
-        current["shard"] = current_shard
-    current.update(
-        dependency_patterns=current_patterns,
-        dependency_declaration_digest=current_declaration,
+    if (
+        not isinstance(current, dict)
+        or not isinstance(previous, dict)
+        or not click_evidence.revision_is_valid(revision)
+        or not click_evidence.revision_is_valid(previous.get("verified_revision"))
+    ):
+        raise ValueError("Successor requalification requires valid evidence revisions.")
+    if (
+        current.get("kind") != "argv"
+        or previous.get("kind") != "argv"
+        or current.get("status") != "ready"
+        or current.get("attempts") != 0
+        or current.get("verified_contract_digest")
+        or not isinstance(exact_tree, bool)
+        or not isinstance(units, int)
+        or isinstance(units, bool)
+        or units < 0
+        or not isinstance(previous.get("verified_root"), str)
+        or not previous["verified_root"]
+        or not all(
+            isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
+            for value in (contract_digest, group_digest, tree_digest, environment_digest, executable_digest)
+        )
+        or successor_binding_reason(
+            previous, current, group_digest=group_digest,
+            git_root=previous["verified_root"], environment_digest=environment_digest,
+            executable_digest=executable_digest, host_coverage=host_coverage,
+        )
+    ):
+        raise ValueError("Successor requalification requires passing facts and current bindings.")
+    candidate = click_evidence.fresh_successor_source(current, previous)
+    candidate.update(
         status="passed" if exact_tree else "stale",
         verified_revision=revision if exact_tree else max(0, revision - 1),
-        attempts=0,
-        unchanged_failure_retries=0,
         last_exit_code=0,
         last_check_digest=group_digest,
         locked_check_digest=group_digest,
@@ -534,32 +596,18 @@ def requalify_successor_baseline(
         verified_environment_digest=environment_digest,
         verified_executable_digest=executable_digest,
         verified_host_coverage=dict(host_coverage),
-        dependency_reuse_count=0,
-        last_dependency_reused_at=0,
-        last_dependency_reused_from_revision=-1,
-        safe_change_reuse_count=0,
-        last_safe_change_reused_at=0,
-        last_safe_change_reused_from_revision=-1,
-        last_safe_change_paths=[],
-        last_safe_change_path_count=0,
-        last_safe_change_decision_digest="",
-        successor_reuse_count=0,
-        last_successor_reused_at=0,
-        last_successor_origin_batch_id="",
-        last_successor_origin_evidence_session_id="",
-        last_successor_origin_contract_id="",
-        last_successor_candidate_digest="",
-        last_successor_origin_revision=-1,
-        last_successor_mode="",
     )
+    current.clear()
+    current.update(candidate)
 
 
 def mark_successor_reuse(
     source: dict[str, Any], metadata: dict[str, Any], *, mode: str
 ) -> None:
-    source["successor_reuse_count"] = int(
-        source.get("successor_reuse_count", 0)
-    ) + 1
+    count = source.get("successor_reuse_count", 0)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        raise ValueError("Successor reuse requires a valid reuse count.")
+    source["successor_reuse_count"] = count + 1
     source["last_successor_reused_at"] = int(time.time()) or 1
     source["last_successor_origin_batch_id"] = metadata["batch_id"]
     source["last_successor_origin_evidence_session_id"] = metadata.get("evidence_session_id", "")
@@ -567,7 +615,6 @@ def mark_successor_reuse(
     source["last_successor_candidate_digest"] = metadata["candidate_digest"]
     source["last_successor_origin_revision"] = metadata["origin_revision"]
     source["last_successor_mode"] = mode
-    source["verified_at"] = int(time.time()) or 1
 
 
 def observation_nonreuse_reason(observation: Any) -> str:

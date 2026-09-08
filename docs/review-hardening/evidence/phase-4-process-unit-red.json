@@ -1,0 +1,31 @@
+{
+  "name": "phase-4-process-unit-red",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_process.ClickProcessTests.test_termination_stops_descendant_after_parent_already_exited",
+    "tests.test_click_process.ClickProcessTests.test_termination_stops_term_ignoring_descendant_after_parent_exits",
+    "tests.test_click_process.ClickProcessTests.test_run_argv_timeout_stops_descendant_holding_exited_parent_pipe",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "input_fingerprint_start": "653a7b01bbc699b23cd12a90d54a8af0a261471ecf114b90bb96b1eace607fc4",
+  "exit_code": 1,
+  "elapsed_seconds": 5.114286,
+  "input_fingerprint_end": "653a7b01bbc699b23cd12a90d54a8af0a261471ecf114b90bb96b1eace607fc4",
+  "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "counts": {
+    "ran": 3,
+    "skipped": 0,
+    "failures": 3,
+    "errors": 0,
+    "passed": 0
+  }
+}

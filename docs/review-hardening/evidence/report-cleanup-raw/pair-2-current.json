@@ -1,0 +1,478 @@
+{
+  "environment": {
+    "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "source": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+    "gate_sha256": "d3bcd14b1a1302babdc1b708b4cafd83b439f0a307d51f0734c0c3ed1b91da78",
+    "pid": 1799680
+  },
+  "method": {
+    "harness_version": 2,
+    "warmup_per_case_mode": 2,
+    "timing_repetitions": 11,
+    "memory_repetitions": 3,
+    "payload": {
+      "payload": "검증 상태: report cleanup component baseline"
+    },
+    "fallback": "renderer returns exit 2 only for inline -c argv, actual fallback write/cleanup/runner rendering retained",
+    "inline": "actual POSIX renderer; no directory cleanup",
+    "scope": "warm in-process _json_report_command component only; fixture population and post-call deletion excluded; timings include lightweight fallback mock context; tracemalloc captures Python allocation not total RSS; concurrent unrelated tests may introduce noise; no whole-task or token metric"
+  },
+  "cases": [
+    {
+      "existing_matching_files": 0,
+      "nonmatching_files": 0,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.018692,
+            0.012399,
+            0.011799,
+            0.008682,
+            0.009316,
+            0.009054,
+            0.008241,
+            0.008445,
+            0.008455,
+            0.009477,
+            0.008876
+          ],
+          "median": 0.009054,
+          "min": 0.008241,
+          "max": 0.018692
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            0.494674,
+            0.473604,
+            0.643743,
+            0.420333,
+            0.392421,
+            0.386709,
+            0.360523,
+            0.355403,
+            0.382273,
+            0.359864,
+            0.335198
+          ],
+          "median": 0.386709,
+          "min": 0.335198,
+          "max": 0.643743
+        },
+        "peak_python_bytes": {
+          "samples": [
+            12176,
+            12144,
+            12096
+          ],
+          "median": 12144,
+          "min": 12096,
+          "max": 12176
+        },
+        "operations": {
+          "directory_entries_yielded": 1,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 1,
+          "other_stat_calls": 3,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      }
+    },
+    {
+      "existing_matching_files": 16,
+      "nonmatching_files": 0,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.008977,
+            0.007418,
+            0.006817,
+            0.006281,
+            0.007549,
+            0.006801,
+            0.006023,
+            0.00595,
+            0.006516,
+            0.006373,
+            0.006184
+          ],
+          "median": 0.006516,
+          "min": 0.00595,
+          "max": 0.008977
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            0.452878,
+            0.424414,
+            0.443354,
+            0.427097,
+            0.420305,
+            0.398523,
+            0.403411,
+            0.539366,
+            0.429442,
+            0.396836,
+            0.386509
+          ],
+          "median": 0.424414,
+          "min": 0.386509,
+          "max": 0.539366
+        },
+        "peak_python_bytes": {
+          "samples": [
+            11384,
+            11384,
+            11384
+          ],
+          "median": 11384,
+          "min": 11384,
+          "max": 11384
+        },
+        "operations": {
+          "directory_entries_yielded": 17,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 1,
+          "other_stat_calls": 3,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 16,
+          "nofollow_direntry_stat_calls": 16,
+          "existing_report_path_stat_calls": 0
+        }
+      }
+    },
+    {
+      "existing_matching_files": 6000,
+      "nonmatching_files": 0,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.007909,
+            0.005661,
+            0.005165,
+            0.004774,
+            0.004244,
+            0.005116,
+            0.004862,
+            0.004365,
+            0.004489,
+            0.004523,
+            0.004337
+          ],
+          "median": 0.004774,
+          "min": 0.004244,
+          "max": 0.007909
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1941,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1941
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            21.141442,
+            21.034138,
+            20.105969,
+            20.744006,
+            20.317208,
+            20.638206,
+            20.559993,
+            20.266592,
+            20.225677,
+            20.446732,
+            20.322536
+          ],
+          "median": 20.446732,
+          "min": 20.105969,
+          "max": 21.141442
+        },
+        "peak_python_bytes": {
+          "samples": [
+            11744,
+            11816,
+            11816
+          ],
+          "median": 11816,
+          "min": 11744,
+          "max": 11816
+        },
+        "operations": {
+          "directory_entries_yielded": 6001,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 1,
+          "other_stat_calls": 3,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 6000,
+          "nofollow_direntry_stat_calls": 6000,
+          "existing_report_path_stat_calls": 0
+        }
+      }
+    },
+    {
+      "existing_matching_files": 16,
+      "nonmatching_files": 6000,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.007327,
+            0.005619,
+            0.004929,
+            0.004544,
+            0.004307,
+            0.005434,
+            0.004423,
+            0.004071,
+            0.004081,
+            0.004456,
+            0.00443
+          ],
+          "median": 0.004456,
+          "min": 0.004071,
+          "max": 0.007327
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1941,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1941
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            3.62612,
+            3.543706,
+            3.567056,
+            3.582948,
+            3.57492,
+            3.580705,
+            3.692129,
+            3.565807,
+            3.596698,
+            3.566085,
+            3.559864
+          ],
+          "median": 3.57492,
+          "min": 3.543706,
+          "max": 3.692129
+        },
+        "peak_python_bytes": {
+          "samples": [
+            11384,
+            11384,
+            11384
+          ],
+          "median": 11384,
+          "min": 11384,
+          "max": 11384
+        },
+        "operations": {
+          "directory_entries_yielded": 6017,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 1,
+          "other_stat_calls": 3,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 16,
+          "nofollow_direntry_stat_calls": 16,
+          "existing_report_path_stat_calls": 0
+        }
+      }
+    },
+    {
+      "existing_matching_files": 6000,
+      "nonmatching_files": 6000,
+      "file_age": "fresh (< TTL)",
+      "inline": {
+        "wall_ms": {
+          "samples": [
+            0.007029,
+            0.017572,
+            0.004544,
+            0.004113,
+            0.004009,
+            0.00472,
+            0.004447,
+            0.004077,
+            0.003743,
+            0.004362,
+            0.004011
+          ],
+          "median": 0.004362,
+          "min": 0.003743,
+          "max": 0.017572
+        },
+        "peak_python_bytes": {
+          "samples": [
+            1965,
+            1941,
+            1941
+          ],
+          "median": 1941,
+          "min": 1941,
+          "max": 1965
+        },
+        "operations": {
+          "directory_entries_yielded": 0,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 0,
+          "other_stat_calls": 0,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 0,
+          "nofollow_direntry_stat_calls": 0,
+          "existing_report_path_stat_calls": 0
+        }
+      },
+      "fallback": {
+        "wall_ms": {
+          "samples": [
+            25.156309,
+            25.169019,
+            25.936846,
+            24.453395,
+            24.446105,
+            24.64696,
+            24.355143,
+            24.652638,
+            24.512549,
+            24.516088,
+            24.309394
+          ],
+          "median": 24.516088,
+          "min": 24.309394,
+          "max": 25.936846
+        },
+        "peak_python_bytes": {
+          "samples": [
+            11384,
+            11384,
+            11325
+          ],
+          "median": 11384,
+          "min": 11325,
+          "max": 11384
+        },
+        "operations": {
+          "directory_entries_yielded": 12001,
+          "matching_paths_yielded": 0,
+          "matching_stat_calls": 1,
+          "other_stat_calls": 3,
+          "unlink_calls": 0,
+          "direntry_stat_calls": 6000,
+          "nofollow_direntry_stat_calls": 6000,
+          "existing_report_path_stat_calls": 0
+        }
+      }
+    }
+  ],
+  "starvation": {
+    "mechanism": "same actual tempfile files/stat/unlink for both versions with deterministic scandir: 128 fresh then 8 stale; valid writer names; renderer forces fallback",
+    "repeated_fallback_calls": 6,
+    "stale_remaining_after_each_call": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "deletions_per_call": [
+      8,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "directory_entries_per_call": [
+      137,
+      130,
+      131,
+      132,
+      133,
+      134
+    ],
+    "fresh_preserved": true,
+    "new_reports_preserved": true
+  }
+}

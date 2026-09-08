@@ -1,0 +1,60 @@
+{
+  "inventory_count": 951,
+  "unique_count": 951,
+  "partitions": [
+    97,
+    280,
+    291,
+    283
+  ],
+  "classes": {
+    "ReviewHardeningGateTests": [
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_drift_after_safe_change_promotion_rolls_back_reuse",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_evidence_changed_decision_runs_real_check",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_evidence_rechecks_environment_after_reuse_decision",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_evidence_rechecks_workspace_after_reuse_decision",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_evidence_rejects_malformed_current_revision_from_state",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_evidence_rejects_malformed_success_revision_from_state",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_evidence_successor_copies_facts_and_preserves_execution_time",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_guarded_changed_decision_runs_real_check",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_guarded_rechecks_environment_after_reuse_decision",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_guarded_rechecks_workspace_after_reuse_decision",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_guarded_rejects_malformed_current_revision_from_state",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_guarded_rejects_malformed_success_revision_from_state",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_guarded_successor_copies_facts_after_independent_approval",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_reuse_rechecks_executable_content_outside_workspace",
+      "tests.test_click_gate_verification.ReviewHardeningGateTests.test_reuse_rechecks_replaced_symlink_target"
+    ],
+    "VerificationLifecycleBoundaryTests": [
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_authority_changed_after_claim_cannot_record_success",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_authority_changed_after_prepare_cannot_execute",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_claim_atomic_write_failure_executes_nothing_and_can_retry",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_claim_recovery_write_failure_preserves_consumed_claim",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_collection_boundary_rechecks_authority_after_snapshot",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_malformed_revision_after_claim_cannot_record_success",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_malformed_revision_after_prepare_cannot_claim_or_execute",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_normal_claim_and_record_preserve_both_authority_modes",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_result_atomic_write_failure_cannot_publish_success_or_replay",
+      "tests.test_click_gate_verification.VerificationLifecycleBoundaryTests.test_task_identity_changed_after_claim_cannot_record_success"
+    ],
+    "JsonReportCleanupTests": [
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_concurrent_disappearance_and_stat_error_are_best_effort",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_directory_open_and_iteration_errors_preserve_new_report",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_empty_directory_preserves_new_report",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_exact_writer_names_and_strict_ttl_preserve_other_state",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_fresh_prefix_does_not_starve_expired_suffix_across_calls",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_inline_and_oversized_untransportable_reports_do_not_scan_or_write",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_legacy_prefix_report_remains_readable_once",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_many_nonmatching_entries_need_no_metadata_and_fresh_reports_are_preserved",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_own_new_report_is_skipped_even_if_its_timestamp_looks_expired",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_path_replacement_with_directory_does_not_change_report_result",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_permission_failure_does_not_consume_deletion_budget",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_report_write_error_propagates_and_runner_render_error_removes_new_file",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_streaming_stops_after_128_successful_deletions",
+      "tests.test_click_runner_transport.ClickJsonReportCleanupTests.test_symlinks_are_not_followed_or_removed"
+    ]
+  },
+  "new_test_modules": [],
+  "shard_policy_changed": false,
+  "raw_inventory": "/tmp/click-review-hardening-20260908/phase-6-inventory.log"
+}

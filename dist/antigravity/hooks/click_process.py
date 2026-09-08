@@ -16,6 +16,7 @@ from pathlib import Path
 import signal
 import subprocess
 import threading
+import time
 from typing import Any, BinaryIO, Mapping, Sequence
 
 
@@ -272,6 +273,41 @@ def terminate_process_group(
     child: subprocess.Popen[Any], *, grace_seconds: float = 3.0
 ) -> int:
     """Stop an isolated child group, escalating once when graceful stop fails."""
+    if os.name != "nt":
+        # An exited group leader does not imply its descendants have stopped.
+        # Keep the original isolated group id and give the whole group the
+        # remaining grace period, even when waiting for the leader succeeds.
+        deadline = time.monotonic() + grace_seconds
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+            returncode = child.wait(timeout=max(0.0, deadline - time.monotonic()))
+            while True:
+                try:
+                    os.killpg(child.pid, 0)
+                except ProcessLookupError:
+                    return int(returncode)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(0.02, remaining))
+        except ProcessLookupError:
+            try:
+                return int(child.wait(timeout=grace_seconds))
+            except (OSError, subprocess.TimeoutExpired):
+                return 1
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            return 1
+        try:
+            return int(child.wait(timeout=grace_seconds))
+        except (OSError, subprocess.TimeoutExpired):
+            return 1
+
     if child.poll() is not None:
         return int(child.returncode or 0)
     try:
