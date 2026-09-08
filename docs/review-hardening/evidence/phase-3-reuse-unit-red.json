@@ -1,0 +1,32 @@
+{
+  "name": "phase-3-reuse-unit-red",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_verification.ClickVerificationTests.test_successor_copies_only_allowed_facts_into_current_defaults",
+    "tests.test_click_verification.ClickVerificationTests.test_successor_requalification_failure_leaves_both_sources_unchanged",
+    "tests.test_click_verification.ClickVerificationTests.test_successor_reuse_preserves_execution_timestamp",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "input_fingerprint_start": "d289f3055a51440953572fc2803648e9c248037a1e01d658e0d7d5bfb960fbfa",
+  "exit_code": 1,
+  "elapsed_seconds": 0.352375,
+  "input_fingerprint_end": "d289f3055a51440953572fc2803648e9c248037a1e01d658e0d7d5bfb960fbfa",
+  "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "counts": {
+    "ran": 3,
+    "skipped": 0,
+    "failures": 10,
+    "errors": 0,
+    "passed": 0,
+    "note": "unittest failures/errors include subtest outcomes; method pass count not separately available"
+  }
+}

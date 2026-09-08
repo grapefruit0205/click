@@ -1,0 +1,13 @@
+
+======================================================================
+FAIL: test_synthetic_noncontiguous_results_cannot_create_false_receipts (tests.test_click_gate_verification.ClickGateVerificationTests.test_synthetic_noncontiguous_results_cannot_create_false_receipts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release/tests/test_click_gate_verification.py", line 2675, in test_synthetic_noncontiguous_results_cannot_create_false_receipts
+    self.assertTrue(recorded)
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 1 test in 0.620s
+
+FAILED (failures=1)

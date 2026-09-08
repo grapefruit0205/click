@@ -1,5 +1,48 @@
 # Release notes
 
+## v0.93.0 — 2026-09-08
+
+- Successful evidence and current mutation revisions now require nonnegative
+  integers without Boolean, float, or string coercion. The unverified `-1`
+  sentinel remains valid only for non-passing lifecycle states. Malformed
+  ledgers, path collections, and adjacent policy values fail safely without
+  creating passing evidence.
+- Safe-change decisions bind the exact original receipt, check, policy entry,
+  workspace, source, tree, and revision context. Successor tasks now start from
+  normal source defaults and copy only named verification facts and original
+  measurement provenance; approval, claim, attempts, completion, and unknown
+  future fields do not transfer.
+- Exact, dependency-observed, safe-change, and successor reuse now share a final
+  workspace, environment, and executable confirmation before a reuse plan is
+  stored. Detected drift restores tentative promotions and runs the affected
+  checks when execution authority remains valid. Result and collection
+  boundaries also retain the original one-use claim and current task identity.
+- Explicit POSIX termination continues checking the original isolated process
+  group after its leader exits and escalates when descendants remain. Native
+  Windows process behavior is unchanged.
+- JSON fallback-report cleanup streams directory entries, follows no symlinks,
+  recognizes only writer-owned names, and deletes at most 128 expired reports
+  per call while reaching expired entries behind fresh ones. Metadata work
+  remains O(N): in the largest paired fixture, Python peak allocation fell from
+  6,930,290 to 11,384 bytes while median fallback latency rose from 17.710ms to
+  24.913ms.
+- Automatic sharding `init/status/refresh`, full-parent fallback, valid shard
+  reuse, Evidence/Guarded/Off semantics, independent Guarded approval, replay
+  protection, receipt compatibility, and the read-only multilingual dashboard
+  remain supported. Persisted evidence and receipt schema versions are unchanged.
+- Local final coverage contains 951 unique tests: 945 passed and 6 environment
+  or platform skips. The record combines the initial complete run with the
+  corrected affected partition after one synthetic fixture omitted a newly
+  required invocation-local claim binding; it is not presented as one clean
+  initial full-suite pass. Distribution generation, parity, compilation, and
+  whitespace checks passed.
+- The user stopped the repeated workflow experiment after one complete paired
+  sample per workload. Whole-benchmark times were nearly unchanged in those
+  samples, while prepared reuse requests showed additional confirmation cost.
+  No stable speedup, whole-task duration, or token saving is claimed. See the
+  [review-hardening record](docs/review-hardening/reports/phase-6.md) for raw
+  evidence, exact boundaries, classifications, and remaining platform limits.
+
 ## v0.92.0 — 2026-09-08
 
 - Verification planning, execution bindings, and reuse policy now have separate

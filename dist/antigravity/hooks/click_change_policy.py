@@ -43,6 +43,7 @@ SNAPSHOT_FIELDS = frozenset(
     {"version", "provider", "object_format", "head", "overrides", "digest"}
 )
 OVERRIDE_FIELDS = frozenset({"path", "identity"})
+DECISION_CONTEXT_FIELDS = frozenset({"source_key", "revision", "git_root", "tree_digest"})
 
 GitCapture = Callable[[Path, list[str]], bytes | None]
 
@@ -66,8 +67,13 @@ def _safe_relative_path(value: Any) -> bool:
         or not value
         or "\x00" in value
         or "\\" in value
-        or len(os.fsencode(value)) > MAX_PATH_BYTES
     ):
+        return False
+    try:
+        encoded = os.fsencode(value)
+    except UnicodeEncodeError:
+        return False
+    if len(encoded) > MAX_PATH_BYTES:
         return False
     path = PurePosixPath(value)
     return not path.is_absolute() and all(
@@ -382,7 +388,9 @@ def snapshot_is_valid(value: Any) -> bool:
     overrides = value.get("overrides")
     oid_length = 40 if object_format == "sha1" else 64 if object_format == "sha256" else 0
     if (
-        value.get("version") != 1
+        not isinstance(value.get("version"), int)
+        or isinstance(value.get("version"), bool)
+        or value.get("version") != 1
         or value.get("provider") != SNAPSHOT_PROVIDER_NAME
         or not oid_length
         or not isinstance(head, str)
@@ -436,8 +444,8 @@ def changed_paths_are_valid(value: Any, *, maximum: int = MAX_CHANGED_PATHS) -> 
     return bool(
         isinstance(value, list)
         and len(value) <= maximum
-        and value == sorted(set(value))
         and all(_safe_relative_path(path) for path in value)
+        and value == sorted(set(value))
     )
 
 
@@ -554,14 +562,80 @@ def _changed_paths(
     return changed
 
 
+def _decision_context_is_valid(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and set(value) == DECISION_CONTEXT_FIELDS
+        and _is_digest(value.get("source_key"))
+        and isinstance(value.get("revision"), int)
+        and not isinstance(value.get("revision"), bool)
+        and value["revision"] >= 0
+        and isinstance(value.get("git_root"), str)
+        and bool(value["git_root"])
+        and _is_digest(value.get("tree_digest"))
+    )
+
+
+def _decision_payload(
+    baseline: dict[str, Any], current: dict[str, Any], changed_paths: list[str],
+    check_digest: str, decision_context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "provider": PROVIDER_NAME,
+        "entry_digest": current["entry_digest"],
+        "from_snapshot": baseline["baseline"]["digest"],
+        "to_snapshot": current["baseline"]["digest"],
+        "changed_paths": changed_paths,
+        "check_digest": check_digest,
+        "baseline_receipt_digest": _digest(baseline),
+        "context": decision_context,
+    }
+
+
+def reuse_decision_matches(
+    decision: Any, baseline_receipt: Any, *, check_digest: str,
+    decision_context: Any,
+) -> bool:
+    """Validate a produced decision against its source and captured current scope.
+
+    This is an in-memory consistency check, not issuer authentication. The
+    caller still owns current execution bindings and post-decision drift checks.
+    """
+    if (
+        not isinstance(decision, dict)
+        or decision.get("status") != "reuse"
+        or not _decision_context_is_valid(decision_context)
+        or not _is_digest(check_digest)
+        or not receipt_is_valid(baseline_receipt)
+        or not receipt_is_valid(decision.get("receipt"))
+        or not changed_paths_are_valid(decision.get("changed_paths"))
+        or not _is_digest(decision.get("decision_digest"))
+    ):
+        return False
+    current = decision["receipt"]
+    changed = decision["changed_paths"]
+    if any(current[field] != baseline_receipt[field] for field in (
+        "config_digest", "entry_digest", "patterns",
+    )) or any(
+        path in PROTECTED_POLICY_PATHS
+        or not any(click_dependency_cache.path_matches(pattern, path) for pattern in current["patterns"])
+        for path in changed
+    ):
+        return False
+    return decision["decision_digest"] == _digest(_decision_payload(
+        baseline_receipt, current, changed, check_digest, decision_context,
+    ))
+
+
 def decide(
     cwd: Path,
     checks: list[dict[str, Any]],
     baseline_receipt: Any,
     *,
     git_capture: GitCapture,
+    decision_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a deterministic reuse/rerun decision for one exact check group."""
+    """Return a policy decision; execution reuse also requires a bound context."""
     fallback = {
         "status": "unknown",
         "reason": "preflight-unavailable",
@@ -569,7 +643,9 @@ def decide(
         "decision_digest": "",
         "receipt": {},
     }
-    if not receipt_is_valid(baseline_receipt):
+    if not receipt_is_valid(baseline_receipt) or (
+        decision_context is not None and not _decision_context_is_valid(decision_context)
+    ):
         return fallback
     current_receipts = receipts_for_groups(
         cwd, {"candidate": checks}, git_capture=git_capture
@@ -593,6 +669,8 @@ def decide(
     if loaded is None:
         return fallback
     root = loaded[0]
+    if decision_context is not None and decision_context["git_root"] != os.path.normcase(str(root)):
+        return fallback
     changed = _changed_paths(
         root,
         baseline_receipt["baseline"],
@@ -601,14 +679,9 @@ def decide(
     )
     if changed is None:
         return fallback
-    decision_payload = {
-        "provider": PROVIDER_NAME,
-        "entry_digest": current["entry_digest"],
-        "from_snapshot": baseline_receipt["baseline"]["digest"],
-        "to_snapshot": current["baseline"]["digest"],
-        "changed_paths": changed,
-    }
-    decision_digest = _digest(decision_payload)
+    decision_digest = _digest(_decision_payload(
+        baseline_receipt, current, changed, _group_digest(checks), decision_context,
+    ))
     protected_changed = any(path in PROTECTED_POLICY_PATHS for path in changed)
     unmatched = [
         path

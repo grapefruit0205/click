@@ -1,0 +1,26 @@
+{
+  "name": "phase-6-compile",
+  "command": [
+    "/tmp/click-release-pytest-shyO6a/venv/bin/python",
+    "-m",
+    "compileall",
+    "-q",
+    "hooks",
+    "evals",
+    "scripts",
+    "benchmarks",
+    "tests",
+    "dist/antigravity/hooks"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M COMPATIBILITY_SURFACE.md\n M dist/antigravity/hooks/click_change_policy.py\n M dist/antigravity/hooks/click_evidence.py\n M dist/antigravity/hooks/click_gate.py\n M dist/antigravity/hooks/click_process.py\n M dist/antigravity/hooks/click_verification.py\n M dist/antigravity/hooks/click_verification_reuse.py\n M docs/runtime-optimization.md\n M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_gate.py\n M hooks/click_process.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_runner_transport.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n",
+  "input_fingerprint_start": "97e2af1d709de9e92dcae80133250c098d09ca9a0c3fcf2c95792a9592674994",
+  "exit_code": 0,
+  "elapsed_seconds": 1.091336,
+  "input_fingerprint_end": "97e2af1d709de9e92dcae80133250c098d09ca9a0c3fcf2c95792a9592674994",
+  "dirty_end": " M COMPATIBILITY_SURFACE.md\n M dist/antigravity/hooks/click_change_policy.py\n M dist/antigravity/hooks/click_evidence.py\n M dist/antigravity/hooks/click_gate.py\n M dist/antigravity/hooks/click_process.py\n M dist/antigravity/hooks/click_verification.py\n M dist/antigravity/hooks/click_verification_reuse.py\n M docs/runtime-optimization.md\n M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_gate.py\n M hooks/click_process.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_runner_transport.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n"
+}

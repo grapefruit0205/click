@@ -1,0 +1,43 @@
+{
+  "name": "phase-4-boundary-regression",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_rewritten_verification_runner_is_claimed_before_execution",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_replay_does_not_release_active_runner",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_tampered_verification_token_does_not_release_reservation",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_late_completion_from_cancelled_batch_cannot_overwrite_successor_batch",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_keyboard_interrupt_records_failure_and_releases_runner",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_result_rejects_lost_context_bindings",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_stale_or_future_reservation_before_execution",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_never_auto_expires_while_result_is_unknown",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_shards_retain_passed_sibling_and_retry_only_unresolved",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_each_shard_can_use_existing_committed_safe_change_authority",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_executable_change_before_execution",
+    "tests.test_runner_state_recovery",
+    "tests.test_click_claims",
+    "tests.test_click_failure_collection.ClickFailureCollectionIntegrationTests.test_workspace_drift_at_source_boundary_stops_before_next_source",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "input_fingerprint_start": "33b29525438eabed3094885fe75e75046d5c674e775da0c179ac684df6e4936d",
+  "exit_code": 0,
+  "elapsed_seconds": 38.38754,
+  "input_fingerprint_end": "33b29525438eabed3094885fe75e75046d5c674e775da0c179ac684df6e4936d",
+  "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "counts": {
+    "ran": 22,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "passed": 22
+  }
+}

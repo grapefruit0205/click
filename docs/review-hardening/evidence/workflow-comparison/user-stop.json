@@ -1,0 +1,37 @@
+{
+  "reason": "User explicitly requested stopping measurement and reporting only completed results.",
+  "stopped_at": 1788835074.0096219,
+  "owned_processes": [
+    {
+      "pid": 1885292,
+      "ppid": 1881374,
+      "start": "12489383",
+      "argv": [
+        "python3",
+        "-B",
+        "/tmp/click-review-hardening-20260908/workflow-comparison/resume_guarded_workflows.py",
+        ""
+      ]
+    },
+    {
+      "pid": 1887747,
+      "ppid": 1885292,
+      "start": "12503455",
+      "argv": [
+        "/usr/bin/python3.12",
+        "-B",
+        "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release/benchmarks/incremental_verification.py",
+        "--guarded-workflow",
+        "--iterations",
+        "1",
+        "--warmups",
+        "0",
+        "--workload-rounds",
+        "1",
+        "--output",
+        "/tmp/click-review-hardening-20260908/workflow-comparison/controlled-results/short-trial-2-current/raw.json",
+        ""
+      ]
+    }
+  ]
+}

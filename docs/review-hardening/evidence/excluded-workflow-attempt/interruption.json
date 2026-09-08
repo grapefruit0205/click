@@ -1,0 +1,24 @@
+{
+  "reason": "Excluded: asymmetric existing Python bytecode caches. -B prohibits writes but permits cache reads. Rerun uses empty PYTHONPYCACHEPREFIX for both versions.",
+  "interrupted_at": 1788833406.8212302,
+  "processes": [
+    {
+      "pid": 1839451,
+      "ppid": 1657636,
+      "start": "12283706",
+      "command": "python3 -B /tmp/click-review-hardening-20260908/workflow-comparison/compare_guarded_workflows.py --baseline /tmp/click-review-hardening-20260908/baseline --current /home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release --output-dir /tmp/click-review-hardening-20260908/workflow-comparison/final-results "
+    },
+    {
+      "pid": 1856515,
+      "ppid": 1839451,
+      "start": "12341503",
+      "command": "/usr/bin/python3.12 -B /tmp/click-review-hardening-20260908/baseline/benchmarks/incremental_verification.py --guarded-workflow --iterations 1 --warmups 0 --workload-rounds 1 --output /tmp/click-review-hardening-20260908/workflow-comparison/final-results/short-trial-2-frozen/raw.json "
+    },
+    {
+      "pid": 1856838,
+      "ppid": 1856515,
+      "start": "12343031",
+      "command": "/usr/bin/python3.12 /tmp/click-review-hardening-20260908/baseline/hooks/click_gate.py prompt-submit "
+    }
+  ]
+}

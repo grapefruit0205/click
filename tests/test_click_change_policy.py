@@ -1,13 +1,114 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from hooks import click_change_policy
+
+
+class ClickChangePolicyValidationTests(unittest.TestCase):
+    def snapshot(self, **updates: object) -> dict[str, object]:
+        value: dict[str, object] = {
+            "version": 1,
+            "provider": click_change_policy.SNAPSHOT_PROVIDER_NAME,
+            "object_format": "sha1",
+            "head": "a" * 40,
+            "overrides": [],
+        }
+        value.update(updates)
+        value["digest"] = click_change_policy._digest(value)
+        return value
+
+    def test_changed_paths_rejects_malformed_values_without_raising(self) -> None:
+        for value in (
+            None, True, 1, 1.9, "README.md", {}, ("README.md",),
+            [None], [True], [1], [1.9], [float("nan")], [float("inf")],
+            ["README.md", 1], [[]], [{}], ["README.md", []],
+        ):
+            with self.subTest(value=value):
+                self.assertFalse(click_change_policy.changed_paths_are_valid(value))
+
+    def test_changed_paths_preserves_order_uniqueness_and_existing_limits(self) -> None:
+        for value in ([], ["README.md"], ["README.md", "docs/guide.md"]):
+            with self.subTest(value=value):
+                self.assertTrue(click_change_policy.changed_paths_are_valid(value))
+        for value in (
+            ["README.md", "README.md"], ["docs/guide.md", "README.md"],
+            ["../README.md"], ["/README.md"], ["README\x00.md"],
+        ):
+            with self.subTest(value=value):
+                self.assertFalse(click_change_policy.changed_paths_are_valid(value))
+        maximum = click_change_policy.MAX_CHANGED_PATHS
+        paths = [f"docs/{index:05d}.md" for index in range(maximum + 1)]
+        self.assertTrue(click_change_policy.changed_paths_are_valid(paths[:maximum]))
+        self.assertFalse(click_change_policy.changed_paths_are_valid(paths))
+        self.assertTrue(click_change_policy.changed_paths_are_valid(paths[:128], maximum=128))
+        self.assertFalse(click_change_policy.changed_paths_are_valid(paths[:129], maximum=128))
+        self.assertTrue(click_change_policy.changed_paths_are_valid(["x" * click_change_policy.MAX_PATH_BYTES]))
+        self.assertFalse(click_change_policy.changed_paths_are_valid(["x" * (click_change_policy.MAX_PATH_BYTES + 1)]))
+
+    def test_unencodable_paths_fail_closed(self) -> None:
+        snapshot = self.snapshot(overrides=[{"path": "README.md", "identity": "missing"}])
+        error = UnicodeEncodeError("utf-8", "\ud800", 0, 1, "surrogates not allowed")
+        with mock.patch.object(click_change_policy.os, "fsencode", side_effect=error):
+            self.assertFalse(click_change_policy.changed_paths_are_valid(["README.md"]))
+            self.assertFalse(click_change_policy.snapshot_is_valid(snapshot))
+
+    def test_snapshot_requires_integer_schema_version(self) -> None:
+        self.assertTrue(click_change_policy.snapshot_is_valid(self.snapshot()))
+        self.assertTrue(click_change_policy.snapshot_is_valid(
+            self.snapshot(object_format="sha256", head="a" * 64)
+        ))
+        for version in (True, False, 1.0, 1.9, "1", None, [], {}, float("nan"), float("inf")):
+            with self.subTest(version=version):
+                self.assertFalse(click_change_policy.snapshot_is_valid(self.snapshot(version=version)))
+
+    def test_snapshot_rejects_malformed_overrides_and_retains_limits(self) -> None:
+        for overrides in (
+            None, {}, "README.md", [None], [[]], [{}],
+            [{"path": [], "identity": "missing"}],
+            [{"path": "README.md", "identity": {}}],
+            [{"path": "README.md", "identity": "missing"}] * 2,
+            [{"path": "z.md", "identity": "missing"}, {"path": "a.md", "identity": "missing"}],
+        ):
+            with self.subTest(overrides=overrides):
+                self.assertFalse(click_change_policy.snapshot_is_valid(self.snapshot(overrides=overrides)))
+        maximum = click_change_policy.MAX_DIRTY_PATHS
+        overrides = [{"path": f"docs/{index:05d}.md", "identity": "missing"} for index in range(maximum + 1)]
+        self.assertTrue(click_change_policy.snapshot_is_valid(self.snapshot(overrides=overrides[:maximum])))
+        self.assertFalse(click_change_policy.snapshot_is_valid(self.snapshot(overrides=overrides)))
+
+    def test_receipt_rejects_malformed_patterns_and_digest_values(self) -> None:
+        receipt = {
+            "provider": click_change_policy.PROVIDER_NAME,
+            "config_digest": "a" * 64,
+            "entry_digest": "b" * 64,
+            "patterns": ["README.md", "docs/**"],
+            "baseline": self.snapshot(),
+        }
+        self.assertTrue(click_change_policy.receipt_is_valid(receipt))
+        for patterns in (
+            None, {}, "README.md", [], [None], [True], [1], [[]], [{}],
+            ["README.md", {}], ["README.md", "README.md"], ["docs/**", "README.md"],
+        ):
+            with self.subTest(patterns=patterns):
+                self.assertFalse(click_change_policy.receipt_is_valid({**receipt, "patterns": patterns}))
+        for field in ("config_digest", "entry_digest"):
+            for value in (None, True, 1, 1.0, [], {}, "", "A" * 64, "a" * 63, "a" * 65):
+                with self.subTest(field=field, value=value):
+                    self.assertFalse(click_change_policy.receipt_is_valid({**receipt, field: value}))
+        for value in (None, True, 1, [], {}, "", "A" * 64):
+            with self.subTest(snapshot_digest=value):
+                self.assertFalse(click_change_policy.receipt_is_valid({
+                    **receipt, "baseline": {**receipt["baseline"], "digest": value},
+                }))
 
 
 class ClickChangePolicyTests(unittest.TestCase):
@@ -258,6 +359,112 @@ class ClickChangePolicyTests(unittest.TestCase):
         decision = self.decide(baseline)
 
         self.assertEqual(decision["status"], "unknown")
+
+    def bound_decision(self):
+        baseline = self.baseline()
+        (self.root / "README.md").write_text("after\n", encoding="utf-8")
+        git_root_output = self.git_capture(
+            self.root, ["rev-parse", "--show-toplevel"]
+        )
+        self.assertIsNotNone(git_root_output)
+        assert git_root_output is not None
+        context = {
+            "source_key": "1" * 64, "revision": 1,
+            "git_root": os.path.normcase(os.fsdecode(git_root_output.strip())),
+            "tree_digest": "2" * 64,
+        }
+        decision = click_change_policy.decide(
+            self.root, self.checks, baseline,
+            git_capture=self.git_capture, decision_context=context,
+        )
+        self.assertEqual(decision["status"], "reuse")
+        return baseline, decision, context
+
+    def test_bound_decision_matches_exact_check_baseline_and_current_scope(self) -> None:
+        from hooks import click_verification_plan
+
+        baseline, decision, context = self.bound_decision()
+        digest = click_change_policy.group_digest(self.checks)
+        self.assertEqual(digest, click_verification_plan.verification_group_digest(self.checks))
+        with mock.patch.object(click_change_policy, "receipts_for_groups", side_effect=AssertionError("matching must not read files")), mock.patch.object(click_change_policy, "_load_policy", side_effect=AssertionError("matching must not reload policy")):
+            self.assertTrue(click_change_policy.reuse_decision_matches(
+                decision, baseline, check_digest=digest, decision_context=context,
+            ))
+        changed = {
+            "source_key": "3" * 64, "revision": 2,
+            "git_root": str(self.root / "other"), "tree_digest": "4" * 64,
+        }
+        for field, value in changed.items():
+            with self.subTest(field=field):
+                self.assertFalse(click_change_policy.reuse_decision_matches(
+                    decision, baseline, check_digest=digest,
+                    decision_context={**context, field: value},
+                ))
+        self.assertFalse(click_change_policy.reuse_decision_matches(
+            decision, baseline, check_digest="5" * 64, decision_context=context,
+        ))
+        different_baseline = self.baseline()
+        self.assertNotEqual(different_baseline, baseline)
+        self.assertFalse(click_change_policy.reuse_decision_matches(
+            decision, different_baseline, check_digest=digest, decision_context=context,
+        ))
+
+    def test_bound_decision_rejects_changed_payload_and_policy(self) -> None:
+        baseline, decision, context = self.bound_decision()
+        cases = []
+        for field, value in (
+            ("decision_digest", "f" * 64),
+            ("changed_paths", ["src/unit.py"]),
+            ("changed_paths", ["docs/guide.md"]),
+            ("receipt", baseline),
+        ):
+            cases.append({**copy.deepcopy(decision), field: value})
+        for field, value in (
+            ("config_digest", "6" * 64), ("entry_digest", "7" * 64),
+            ("patterns", ["README.md", "docs/**", "src/**"]),
+        ):
+            changed = copy.deepcopy(decision)
+            changed["receipt"][field] = value
+            cases.append(changed)
+        for changed in cases:
+            with self.subTest(changed=changed):
+                self.assertFalse(click_change_policy.reuse_decision_matches(
+                    changed, baseline, check_digest=click_change_policy.group_digest(self.checks),
+                    decision_context=context,
+                ))
+        (self.root / "src/unit.py").write_text("VALUE = 2\n", encoding="utf-8")
+        unsafe = click_change_policy.decide(
+            self.root, self.checks, baseline,
+            git_capture=self.git_capture, decision_context=context,
+        )
+        self.assertEqual(unsafe["status"], "rerun")
+        unsafe["status"] = "reuse"
+        self.assertFalse(click_change_policy.reuse_decision_matches(
+            unsafe, baseline, check_digest=click_change_policy.group_digest(self.checks),
+            decision_context=context,
+        ))
+
+    def test_unbound_or_malformed_context_is_not_reuse_authority(self) -> None:
+        baseline, decision, context = self.bound_decision()
+        unbound = self.decide(baseline)
+        self.assertEqual(unbound["status"], "reuse")
+        self.assertFalse(click_change_policy.reuse_decision_matches(
+            unbound, baseline, check_digest=click_change_policy.group_digest(self.checks),
+            decision_context=context,
+        ))
+        for malformed in (None, {}, [], {**context, "revision": True}, {**context, "revision": "1"}, {**context, "tree_digest": []}):
+            with self.subTest(context=malformed):
+                self.assertFalse(click_change_policy.reuse_decision_matches(
+                    decision, baseline, check_digest=click_change_policy.group_digest(self.checks),
+                    decision_context=malformed,
+                ))
+        for malformed in ({**context, "git_root": str(self.root / "other")}, {**context, "revision": True}):
+            with self.subTest(producer_context=malformed):
+                rejected = click_change_policy.decide(
+                    self.root, self.checks, baseline,
+                    git_capture=self.git_capture, decision_context=malformed,
+                )
+                self.assertEqual(rejected["status"], "unknown")
 
 
 if __name__ == "__main__":

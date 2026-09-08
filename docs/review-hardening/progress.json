@@ -1,0 +1,27 @@
+{
+  "purpose": "documentation only; not approval or reuse authority",
+  "baseline_head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "phases": {
+    "0": "passed",
+    "1": "passed",
+    "2": "passed",
+    "3": "passed",
+    "4": "passed",
+    "5": "passed",
+    "6": "passed"
+  },
+  "phase_6_status": {
+    "reason": "Passed within the user's final scope: regression and distribution parity completed; repeated performance measurement stopped at the user's request and is reported as partial.",
+    "regression": "Complete local inventory covered: 945 passed, 6 skipped; full execution plus corrected official affected partition.",
+    "distribution": "Official build and parity passed.",
+    "performance": "9 complete valid runs: 4 warmups, 2 complete measured pairs, 1 unpaired measured baseline. Planned three-pair replication not completed.",
+    "execution": "Stopped; no background measurement scheduled.",
+    "release_handoff": "The user subsequently authorized packaging as v0.93.0, release PR, main integration, publication, reinstall, and branch cleanup. Cross-platform release validation is owned by that PR's CI.",
+    "release_readiness": "Local preparation complete with explicit performance limits; public release remains conditional on the v0.93.0 PR checks."
+  },
+  "verification_limits": [
+    "Native Windows/macOS and other Python versions not executed locally.",
+    "Only one complete before/after measured pair per workload; no variance or reliable speedup claim.",
+    "Whole user-task duration and token savings unmeasured."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "branch": "main",
+  "status": "",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "tools": {
+    "python3": "/usr/bin/python3",
+    "pytest": null,
+    "strace": "/usr/bin/strace",
+    "rg": "/usr/lib/chatgpt/resources/rg",
+    "git": "/usr/bin/git",
+    "node": "/home/grapefruit/.nvm/versions/node/v22.23.2/bin/node",
+    "cc": "/usr/bin/cc"
+  },
+  "pytest_module": false,
+  "baseline_archive_sha256": "3bd84128771a1abfdb39eaf720ad0006ad62f5879fdd8e480c29c594645e2eb5",
+  "baseline_path": "/tmp/click-review-hardening-20260908/baseline",
+  "artifacts": "/tmp/click-review-hardening-20260908"
+}

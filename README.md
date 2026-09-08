@@ -30,14 +30,14 @@ codex plugin add click@click
 
 Restart Codex and start a new task so the installed Hooks and skill reload. Review pending Click Hooks in the CLI's `/hooks` view before relying on them; see [Hook troubleshooting](#hook-troubleshooting).
 
-Current release: **v0.92.0**. To update:
+Current release: **v0.93.0**. To update:
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.92.0 reduces Hook startup and repeated binding work, separates verification and dashboard modules, and partitions the complete CI inventory across Linux, macOS, and Windows. See [release notes](RELEASE_NOTES.md) and the [runtime optimization record](docs/runtime-optimization.md) for changes, measurements, and their limits.
+Restart and use a fresh task after updating. v0.93.0 rejects malformed evidence revisions, binds safe-change and successor reuse to their exact current inputs, confirms those inputs again before reuse, and improves explicit process termination and fallback-report cleanup. Automatic sharding and authorized shard reuse remain supported. See [release notes](RELEASE_NOTES.md) and the [review-hardening record](docs/review-hardening/reports/phase-6.md) for validation, measurements, and their limits.
 
 ## Start with everyday work
 

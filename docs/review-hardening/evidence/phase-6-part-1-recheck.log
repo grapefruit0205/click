@@ -1,0 +1,139 @@
+Inventory: 951 tests; partitions: [97, 280, 291, 283]; no missing or duplicate ids.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 요청 미완료 · 실제 실행 0개 · 재사용 적용 0개; 재사용으로 생략한 테스트 실행시간: 요청 미완료; 동일 샤드 전체 순차 실행 예상: 측정 정보 없음; 이번 테스트 실행: 측정 정보 없음; 테스트 실행시간 감소: 측정 정보 없음; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 3.41 ms; 이번 테스트 실행: 3.41 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/2:E_ALPHA:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 2/2:E_BETA:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 2개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 16.01 ms; 이번 테스트 실행: 16.01 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/3:E_CHAIN:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 2/3:E_CHAIN:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_fail
+[Click 결과] 1개 샤드 요청 미완료 · 실제 실행 1개 · 재사용 적용 0개; 재사용으로 생략한 테스트 실행시간: 요청 미완료; 동일 샤드 전체 순차 실행 예상: 측정 정보 없음; 이번 테스트 실행: 13.33 ms; 테스트 실행시간 감소: 측정 정보 없음; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 5.46 ms; 이번 테스트 실행: 5.46 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click shadow] complete: inputs=1 external=0 unresolved=0 overhead=1ms
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 6 ms; 이번 테스트 실행: 6 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click shadow] complete: inputs=1 external=0 unresolved=0 overhead=2ms
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 7.62 ms; 이번 테스트 실행: 7.62 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click shadow] complete: inputs=1 external=0 unresolved=0 overhead=2ms
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 10.62 ms; 이번 테스트 실행: 10.62 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click] Verification runner environment changed after preparation; rebound to the current canonical environment.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 4.41 ms; 이번 테스트 실행: 4.41 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click 결과] 1개 샤드 요청 미완료 · 실제 실행 0개 · 재사용 적용 0개; 재사용으로 생략한 테스트 실행시간: 요청 미완료; 동일 샤드 전체 순차 실행 예상: 측정 정보 없음; 이번 테스트 실행: 측정 정보 없음; 테스트 실행시간 감소: 측정 정보 없음; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+
+test_broad_checks_must_use_the_receipt_bound_runner_after_approval (tests.test_click_gate_verification.ClickGateVerificationTests.test_broad_checks_must_use_the_receipt_bound_runner_after_approval) ... ok
+test_caller_installed_v1_receipt_does_not_reuse_across_revision (tests.test_click_gate_verification.ClickGateVerificationTests.test_caller_installed_v1_receipt_does_not_reuse_across_revision) ... ok
+test_caller_installed_v1_shard_observations_rerun_every_child (tests.test_click_gate_verification.ClickGateVerificationTests.test_caller_installed_v1_shard_observations_rerun_every_child) ... ok
+test_change_after_approved_mutation_receipt_disables_dependency_reuse (tests.test_click_gate_verification.ClickGateVerificationTests.test_change_after_approved_mutation_receipt_disables_dependency_reuse) ... ok
+test_claimed_verification_never_auto_expires_while_result_is_unknown (tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_never_auto_expires_while_result_is_unknown) ... ok
+test_claimed_verification_replay_does_not_release_active_runner (tests.test_click_gate_verification.ClickGateVerificationTests.test_claimed_verification_replay_does_not_release_active_runner) ... Click verification runner was already claimed; replay is blocked.
+ok
+test_committed_safe_change_policy_reuses_without_runtime_observer (tests.test_click_gate_verification.ClickGateVerificationTests.test_committed_safe_change_policy_reuses_without_runtime_observer) ... ok
+test_current_receipt_is_not_reused_across_host_coverage_identities (tests.test_click_gate_verification.ClickGateVerificationTests.test_current_receipt_is_not_reused_across_host_coverage_identities) ... ok
+test_current_receipt_reruns_when_the_execution_environment_changes (tests.test_click_gate_verification.ClickGateVerificationTests.test_current_receipt_reruns_when_the_execution_environment_changes) ... ok
+test_current_receipt_reruns_when_the_git_tree_changes_out_of_band (tests.test_click_gate_verification.ClickGateVerificationTests.test_current_receipt_reruns_when_the_git_tree_changes_out_of_band) ... ok
+test_deep_class_normalization_does_not_create_authority (tests.test_click_gate_verification.ClickGateVerificationTests.test_deep_class_normalization_does_not_create_authority) ... ok
+test_dependency_change_reruns_cross_revision_check (tests.test_click_gate_verification.ClickGateVerificationTests.test_dependency_change_reruns_cross_revision_check) ... ok
+test_each_shard_can_use_existing_committed_safe_change_authority (tests.test_click_gate_verification.ClickGateVerificationTests.test_each_shard_can_use_existing_committed_safe_change_authority) ... ok
+test_edited_shard_map_runs_original_parent_suite (tests.test_click_gate_verification.ClickGateVerificationTests.test_edited_shard_map_runs_original_parent_suite) ... ok
+test_environment_change_reruns_cross_revision_check (tests.test_click_gate_verification.ClickGateVerificationTests.test_environment_change_reruns_cross_revision_check) ... ok
+test_evidence_mode_dynamically_registers_and_exports_host_authority (tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_mode_dynamically_registers_and_exports_host_authority) ... ok
+test_evidence_shards_retain_passed_sibling_and_retry_only_unresolved (tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_shards_retain_passed_sibling_and_retry_only_unresolved) ... ok
+test_evidence_status_distinguishes_execution_reuse_and_invalidation (tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_status_distinguishes_execution_reuse_and_invalidation) ... ok
+test_evidence_status_reports_failed_and_unstarted_checks (tests.test_click_gate_verification.ClickGateVerificationTests.test_evidence_status_reports_failed_and_unstarted_checks) ... ok
+test_explicit_batch_workdir_expands_shards_from_nested_repository (tests.test_click_gate_verification.ClickGateVerificationTests.test_explicit_batch_workdir_expands_shards_from_nested_repository) ... ok
+test_failed_batch_advises_after_unchanged_retry (tests.test_click_gate_verification.ClickGateVerificationTests.test_failed_batch_advises_after_unchanged_retry) ... ok
+test_follow_up_evidence_does_not_reuse_same_revision_for_changed_tree (tests.test_click_gate_verification.ClickGateVerificationTests.test_follow_up_evidence_does_not_reuse_same_revision_for_changed_tree) ... ok
+test_follow_up_evidence_rechecks_command_binding (tests.test_click_gate_verification.ClickGateVerificationTests.test_follow_up_evidence_rechecks_command_binding) ... ok
+test_follow_up_evidence_rechecks_environment_binding (tests.test_click_gate_verification.ClickGateVerificationTests.test_follow_up_evidence_rechecks_environment_binding) ... ok
+test_follow_up_evidence_requalifies_exact_success_and_records_origin (tests.test_click_gate_verification.ClickGateVerificationTests.test_follow_up_evidence_requalifies_exact_success_and_records_origin) ... ok
+test_guarded_successor_does_not_inherit_a_dependency_declaration (tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_does_not_inherit_a_dependency_declaration) ... ok
+test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun (tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun) ... ok
+test_guarded_successor_requires_new_approval_and_exports_contract_origin (tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_requires_new_approval_and_exports_contract_origin) ... ok
+test_guarded_successor_shards_keep_original_timing_sample_across_reuse (tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_shards_keep_original_timing_sample_across_reuse) ... ok
+test_hook_raises_underdeclared_verification_to_its_minimum_class (tests.test_click_gate_verification.ClickGateVerificationTests.test_hook_raises_underdeclared_verification_to_its_minimum_class) ... ok
+test_incomplete_observation_cannot_fall_back_to_safe_change_skip (tests.test_click_gate_verification.ClickGateVerificationTests.test_incomplete_observation_cannot_fall_back_to_safe_change_skip) ... ok
+test_inline_and_direct_python_programs_are_not_verification (tests.test_click_gate_verification.ClickGateVerificationTests.test_inline_and_direct_python_programs_are_not_verification) ... ok
+test_keyboard_interrupt_records_failure_and_releases_runner (tests.test_click_gate_verification.ClickGateVerificationTests.test_keyboard_interrupt_records_failure_and_releases_runner) ... [Click] Verification was interrupted. The active check was stopped and recorded as non-passing.
+ok
+test_late_completion_from_cancelled_batch_cannot_overwrite_successor_batch (tests.test_click_gate_verification.ClickGateVerificationTests.test_late_completion_from_cancelled_batch_cannot_overwrite_successor_batch) ... ok
+test_legacy_class_change_does_not_invalidate_exact_argv_receipt (tests.test_click_gate_verification.ClickGateVerificationTests.test_legacy_class_change_does_not_invalidate_exact_argv_receipt) ... ok
+test_legacy_class_normalization_is_deterministic_but_non_authoritative (tests.test_click_gate_verification.ClickGateVerificationTests.test_legacy_class_normalization_is_deterministic_but_non_authoritative) ... ok
+test_new_source_path_created_during_verification_fails_stale (tests.test_click_gate_verification.ClickGateVerificationTests.test_new_source_path_created_during_verification_fails_stale) ... ok
+test_new_untracked_verification_artifact_fails_stale (tests.test_click_gate_verification.ClickGateVerificationTests.test_new_untracked_verification_artifact_fails_stale) ... ok
+test_prediction_root_lookup_does_not_take_an_authority_snapshot (tests.test_click_gate_verification.ClickGateVerificationTests.test_prediction_root_lookup_does_not_take_an_authority_snapshot) ... ok
+test_prepared_environment_value_change_is_rebound_before_execution (tests.test_click_gate_verification.ClickGateVerificationTests.test_prepared_environment_value_change_is_rebound_before_execution) ... ok
+test_quick_profile_does_not_control_verification_authority (tests.test_click_gate_verification.ClickGateVerificationTests.test_quick_profile_does_not_control_verification_authority) ... ok
+test_receipt_fingerprint_resolves_relative_path_from_runner_cwd (tests.test_click_gate_verification.ClickGateVerificationTests.test_receipt_fingerprint_resolves_relative_path_from_runner_cwd) ... ok
+test_record_result_ignores_supplied_dependency_observation (tests.test_click_gate_verification.ClickGateVerificationTests.test_record_result_ignores_supplied_dependency_observation) ... ok
+test_relative_verifier_selection_uses_explicit_workspace (tests.test_click_gate_verification.ClickGateVerificationTests.test_relative_verifier_selection_uses_explicit_workspace) ... ok
+test_rewritten_verification_runner_is_claimed_before_execution (tests.test_click_gate_verification.ClickGateVerificationTests.test_rewritten_verification_runner_is_claimed_before_execution) ... Click verification runner is no longer authorized to execute.
+ok
+test_rewritten_verification_uses_bound_root_not_ambient_plugin_data (tests.test_click_gate_verification.ClickGateVerificationTests.test_rewritten_verification_uses_bound_root_not_ambient_plugin_data) ... ok
+test_runner_only_environment_noise_does_not_invalidate_receipt (tests.test_click_gate_verification.ClickGateVerificationTests.test_runner_only_environment_noise_does_not_invalidate_receipt) ... ok
+test_runner_persists_each_group_before_starting_the_next_group (tests.test_click_gate_verification.ClickGateVerificationTests.test_runner_persists_each_group_before_starting_the_next_group) ... ok
+test_runner_records_exact_commands_and_stops_after_the_first_failure (tests.test_click_gate_verification.ClickGateVerificationTests.test_runner_records_exact_commands_and_stops_after_the_first_failure) ... ok
+test_runner_rejects_tampered_host_coverage_binding_before_execution (tests.test_click_gate_verification.ClickGateVerificationTests.test_runner_rejects_tampered_host_coverage_binding_before_execution) ... ok
+test_running_batch_blocks_parallel_mutation_and_verification (tests.test_click_gate_verification.ClickGateVerificationTests.test_running_batch_blocks_parallel_mutation_and_verification) ... ok
+test_safe_change_policy_reruns_when_code_is_also_changed (tests.test_click_gate_verification.ClickGateVerificationTests.test_safe_change_policy_reruns_when_code_is_also_changed) ... ok
+test_shadow_observer_is_off_by_default (tests.test_click_gate_verification.ClickGateVerificationTests.test_shadow_observer_is_off_by_default) ... ok
+test_shadow_observer_records_without_affecting_evidence_or_receipt (tests.test_click_gate_verification.ClickGateVerificationTests.test_shadow_observer_records_without_affecting_evidence_or_receipt) ... ok
+test_shadow_prediction_is_fixed_before_rerun_and_evaluated_afterward (tests.test_click_gate_verification.ClickGateVerificationTests.test_shadow_prediction_is_fixed_before_rerun_and_evaluated_afterward) ... ok
+test_shard_map_alone_never_authorizes_cross_revision_skip (tests.test_click_gate_verification.ClickGateVerificationTests.test_shard_map_alone_never_authorizes_cross_revision_skip) ... ok
+test_source_reservation_survives_mutation_and_prevents_check_swapping (tests.test_click_gate_verification.ClickGateVerificationTests.test_source_reservation_survives_mutation_and_prevents_check_swapping) ... ok
+test_split_argv_batches_bind_exact_groups_without_a_profile_ceiling (tests.test_click_gate_verification.ClickGateVerificationTests.test_split_argv_batches_bind_exact_groups_without_a_profile_ceiling) ... ok
+test_stateful_runner_prefix_rejects_non_gate_state_root (tests.test_click_gate_verification.ClickGateVerificationTests.test_stateful_runner_prefix_rejects_non_gate_state_root) ... ok
+test_stateful_runner_requires_one_canonical_bound_state_root (tests.test_click_gate_verification.ClickGateVerificationTests.test_stateful_runner_requires_one_canonical_bound_state_root) ... ok
+test_success_receipt_binds_the_current_host_coverage_identity (tests.test_click_gate_verification.ClickGateVerificationTests.test_success_receipt_binds_the_current_host_coverage_identity) ... ok
+test_successful_final_batch_is_not_repeated_until_code_changes (tests.test_click_gate_verification.ClickGateVerificationTests.test_successful_final_batch_is_not_repeated_until_code_changes) ... ok
+test_successor_reuse_keeps_authority_when_timing_basis_is_unusable (tests.test_click_gate_verification.ClickGateVerificationTests.test_successor_reuse_keeps_authority_when_timing_basis_is_unusable) ... ok
+test_synthetic_noncontiguous_results_cannot_create_false_receipts (tests.test_click_gate_verification.ClickGateVerificationTests.test_synthetic_noncontiguous_results_cannot_create_false_receipts) ... ok
+test_tampered_verification_token_does_not_release_reservation (tests.test_click_gate_verification.ClickGateVerificationTests.test_tampered_verification_token_does_not_release_reservation) ... Click verification runner token did not match active state.
+ok
+test_unavailable_runtime_observation_reruns_after_any_revision (tests.test_click_gate_verification.ClickGateVerificationTests.test_unavailable_runtime_observation_reruns_after_any_revision) ... ok
+test_unclaimed_expired_verification_does_not_consume_source_attempt (tests.test_click_gate_verification.ClickGateVerificationTests.test_unclaimed_expired_verification_does_not_consume_source_attempt) ... ok
+test_uninvoked_verification_remains_fail_open (tests.test_click_gate_verification.ClickGateVerificationTests.test_uninvoked_verification_remains_fail_open) ... ok
+test_unknown_verification_wrapper_is_normalized_but_must_resolve (tests.test_click_gate_verification.ClickGateVerificationTests.test_unknown_verification_wrapper_is_normalized_but_must_resolve) ... ok
+test_unrelated_manifest_change_cannot_make_v1_receipt_authoritative (tests.test_click_gate_verification.ClickGateVerificationTests.test_unrelated_manifest_change_cannot_make_v1_receipt_authoritative) ... ok
+test_v1_observation_cannot_activate_safe_change_policy (tests.test_click_gate_verification.ClickGateVerificationTests.test_v1_observation_cannot_activate_safe_change_policy) ... ok
+test_verification_batch_has_no_arbitrary_character_cap (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_batch_has_no_arbitrary_character_cap) ... ok
+test_verification_batch_has_no_fixed_check_count_cap (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_batch_has_no_fixed_check_count_cap) ... ok
+test_verification_batch_rejects_legacy_shell_strings (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_batch_rejects_legacy_shell_strings) ... ok
+test_verification_classifier_supports_common_build_and_check_forms (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_classifier_supports_common_build_and_check_forms) ... ok
+test_verification_classifier_uses_scope_before_kind_markers (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_classifier_uses_scope_before_kind_markers) ... ok
+test_verification_detects_content_committed_during_the_batch (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_detects_content_committed_during_the_batch) ... ok
+test_verification_environment_binding_recovers_missing_prepared_key (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_environment_binding_recovers_missing_prepared_key) ... ok
+test_verification_environment_ignores_shell_bookkeeping (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_environment_ignores_shell_bookkeeping) ... ok
+test_verification_environment_mismatch_rebinds_before_execution (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_environment_mismatch_rebinds_before_execution) ... ok
+test_verification_fails_closed_when_git_snapshot_cannot_be_established (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_fails_closed_when_git_snapshot_cannot_be_established) ... [Click] Verification could not establish a protected Git workspace snapshot. No check was executed.
+ok
+test_verification_generic_report_fails_stale (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_generic_report_fails_stale) ... ok
+test_verification_ignored_artifact_does_not_change_snapshot (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_ignored_artifact_does_not_change_snapshot) ... ok
+test_verification_pins_selected_symlink_launcher_not_its_target (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_pins_selected_symlink_launcher_not_its_target) ... ok
+test_verification_protects_preexisting_untracked_content (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_protects_preexisting_untracked_content) ... ok
+test_verification_result_rejects_lost_context_bindings (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_result_rejects_lost_context_bindings) ... ok
+test_verification_root_dockerfile_fails_stale (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_root_dockerfile_fails_stale) ... ok
+test_verification_root_main_py_fails_stale (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_root_main_py_fails_stale) ... ok
+test_verification_root_package_json_fails_stale (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_root_package_json_fails_stale) ... ok
+test_verification_runner_rejects_executable_change_before_execution (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_executable_change_before_execution) ... Click verification executable changed before execution.
+ok
+test_verification_runner_rejects_prepared_workdir_mismatch (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_prepared_workdir_mismatch) ... Click verification runner workdir did not match the prepared capability.
+ok
+test_verification_runner_rejects_stale_or_future_reservation_before_execution (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_stale_or_future_reservation_before_execution) ... Click verification runner authorization expired before execution.
+Click verification runner authorization expired before execution.
+ok
+test_verification_runner_rejects_tampered_environment_binding (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_tampered_environment_binding) ... ok
+test_verification_runner_rejects_tampered_source_reservation (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_runner_rejects_tampered_source_reservation) ... Click verification runner source reservation did not match.
+ok
+test_verification_that_changes_repository_content_cannot_pass (tests.test_click_gate_verification.ClickGateVerificationTests.test_verification_that_changes_repository_content_cannot_pass) ... ok
+test_windows_environment_binding_is_case_insensitive (tests.test_click_gate_verification.ClickGateVerificationTests.test_windows_environment_binding_is_case_insensitive) ... ok
+test_workspace_changing_failure_does_not_mark_unrun_evidence_executed (tests.test_click_gate_verification.ClickGateVerificationTests.test_workspace_changing_failure_does_not_mark_unrun_evidence_executed) ... ok
+
+----------------------------------------------------------------------
+Ran 97 tests in 214.861s
+
+OK

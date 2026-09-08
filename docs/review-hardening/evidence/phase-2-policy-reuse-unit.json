@@ -1,0 +1,30 @@
+{
+  "name": "phase-2-policy-reuse-unit",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_change_policy",
+    "tests.test_click_verification",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "input_fingerprint_start": "32efaed003b46f7e826562af00e8d35d833ffbf19e3bbbf207903c5361db899b",
+  "exit_code": 0,
+  "elapsed_seconds": 2.460323,
+  "input_fingerprint_end": "32efaed003b46f7e826562af00e8d35d833ffbf19e3bbbf207903c5361db899b",
+  "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "counts": {
+    "ran": 33,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "passed": 33
+  }
+}

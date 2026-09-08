@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import copy
+
+from contextlib import ExitStack
+
 from click_gate_test_support import (
     CLICK_CAPABILITY,
     CLICK_EVIDENCE,
@@ -23,6 +27,223 @@ from click_gate_test_support import (
     time,
     unittest,
 )
+
+
+class VerificationLifecycleBoundaryTests(ClickGateTestCase):
+    """Inject post-admission faults through existing internal call boundaries."""
+
+    hook_in_process = True
+
+    def _runner_context(self) -> ExitStack:
+        context = ExitStack()
+        context.enter_context(mock.patch.dict(os.environ, {
+            "PLUGIN_DATA": str(self.plugin_data), "CLICK_CONFIG_HOME": str(self.plugin_data),
+        }))
+        context.enter_context(mock.patch.object(CLICK_VERIFICATION.Path, "cwd", return_value=self.workspace))
+        context.enter_context(mock.patch.object(sys, "path", [str(Path(CLICK_VERIFICATION.__file__).parent), *sys.path]))
+        return context
+
+    def _prepared(self, mode: str = "guarded") -> list[str]:
+        self.plugin_data = Path(self.temporary.name) / f"plugin-{getattr(self, '_sequence', 0)}"
+        self._sequence = getattr(self, "_sequence", 0) + 1
+        self.submitted_turns.clear()
+        if mode == "guarded":
+            self.approve_contract()
+        else:
+            self.prompt_submit("Verify the current task", "turn-2")
+        self._payload = self.verify_gate([self.verification_argv()])
+        return split_runner_command(self._payload["hookSpecificOutput"]["updatedInput"]["command"])
+
+    def _run(self, tokens: list[str], execute: object) -> int:
+        with self._runner_context():
+            return CLICK_VERIFICATION._run_verification(
+                tokens[5:], execute_commands=execute,
+                git_workspace_snapshot=lambda *_args, **_kwargs: None,
+                git_metadata_present=lambda _path: False,
+            )
+
+    def _change_state(self, tokens: list[str], field: str, value: object) -> None:
+        path = Path(tokens[5])
+        state = json.loads(path.read_text(encoding="utf-8"))
+        target = state["verification"] if field == "mutation_revision" else state
+        target[field] = value
+        path.write_text(json.dumps(state), encoding="utf-8")
+
+    def _assert_no_success(self, tokens: list[str]) -> None:
+        state = json.loads(Path(tokens[5]).read_text(encoding="utf-8"))
+        self.assertNotEqual(state["verification"]["status"], "passed")
+        for source in state["evidence_state"]["sources"].values():
+            self.assertNotEqual(source["status"], "passed")
+            self.assertEqual(source["verified_revision"], -1)
+
+    def test_normal_claim_and_record_preserve_both_authority_modes(self) -> None:
+        for mode in ("evidence", "guarded"):
+            with self.subTest(mode=mode):
+                tokens = self._prepared(mode)
+                execute = mock.Mock(return_value=0)
+                self.assertEqual(self._run(tokens, execute), 0)
+                execute.assert_called_once()
+                state = json.loads(Path(tokens[5]).read_text(encoding="utf-8"))
+                self.assertEqual(state["verification"]["status"], "passed")
+                self.assertEqual(state["verification"]["runner_token_digest"], "")
+
+    def test_malformed_revision_after_prepare_cannot_claim_or_execute(self) -> None:
+        for mode in ("evidence", "guarded"):
+            for value in (True, False, 0.0, "0", -1, None, [], {}):
+                with self.subTest(mode=mode, revision=value):
+                    tokens = self._prepared(mode)
+                    self._change_state(tokens, "mutation_revision", value)
+                    execute = mock.Mock(return_value=0)
+                    self.assertEqual(self._run(tokens, execute), 2)
+                    execute.assert_not_called()
+                    self._assert_no_success(tokens)
+
+    def test_malformed_revision_after_claim_cannot_record_success(self) -> None:
+        for mode in ("evidence", "guarded"):
+            for value in (True, False, 0.0, "0", -1, None, [], {}):
+                with self.subTest(mode=mode, revision=value):
+                    tokens = self._prepared(mode)
+                    def execute(*_args: object, **_kwargs: object) -> int:
+                        self._change_state(tokens, "mutation_revision", value)
+                        return 0
+                    self.assertNotEqual(self._run(tokens, execute), 0)
+                    self._assert_no_success(tokens)
+
+    def test_authority_changed_after_prepare_cannot_execute(self) -> None:
+        for mode in ("evidence", "guarded"):
+            for status in ("staged", "off"):
+                with self.subTest(mode=mode, status=status):
+                    tokens = self._prepared(mode)
+                    self._change_state(tokens, "status", status)
+                    execute = mock.Mock(return_value=0)
+                    self.assertEqual(self._run(tokens, execute), 2)
+                    execute.assert_not_called()
+                    self._assert_no_success(tokens)
+
+    def test_authority_changed_after_claim_cannot_record_success(self) -> None:
+        for mode in ("evidence", "guarded"):
+            changes = [("status", "staged"), ("status", "off"),
+                       ("status", "approved" if mode == "evidence" else "evidence"),
+                       ("contract_digest", "f" * 64), ("mutation_revision", 1)]
+            for field, value in changes:
+                with self.subTest(mode=mode, field=field, value=value):
+                    tokens = self._prepared(mode)
+                    def execute(*_args: object, **_kwargs: object) -> int:
+                        self._change_state(tokens, field, value)
+                        return 0
+                    self.assertNotEqual(self._run(tokens, execute), 0)
+                    self._assert_no_success(tokens)
+
+    def test_task_identity_changed_after_claim_cannot_record_success(self) -> None:
+        for mode, changes in (
+            ("evidence", (("evidence_session_id", "evs_" + "f" * 32),)),
+            ("guarded", (("contract_id", "ctr_" + "f" * 32),
+                         ("staged_turn_id", "replacement-stage"),
+                         ("approved_turn_id", "replacement-approval"))),
+        ):
+            for field, value in changes:
+                with self.subTest(mode=mode, field=field):
+                    tokens = self._prepared(mode)
+                    def execute(*_args: object, **_kwargs: object) -> int:
+                        self._change_state(tokens, field, value)
+                        return 0
+                    self.assertNotEqual(self._run(tokens, execute), 0)
+                    self._assert_no_success(tokens)
+
+    def test_collection_boundary_rechecks_authority_after_snapshot(self) -> None:
+        changes = (("status", "off"), ("status", "evidence"),
+                   ("mutation_revision", True), ("mutation_revision", 1),
+                   ("contract_digest", "f" * 64),
+                   ("contract_id", "ctr_" + "f" * 32),
+                   ("staged_turn_id", "replacement-stage"),
+                   ("approved_turn_id", "replacement-approval"))
+        for when, field, value in (
+            (when, field, value) for when in ("before", "during") for field, value in changes
+        ):
+            with self.subTest(when=when, field=field, value=value):
+                tokens = self._prepared()
+                raw, error = CLICK_CAPABILITY.decode_encoded_request(tokens[8], "verification")
+                self.assertEqual(error, "")
+                with self._runner_context():
+                    with CLICK_STATE.state_lock():
+                        batch, error = CLICK_VERIFICATION._claim_verification_run(Path(tokens[5]), raw, tokens[6], tokens[7])
+                    self.assertEqual(error, "")
+                    assert batch is not None
+                    grouped, error = CLICK_VERIFICATION._verification_groups(batch)
+                    self.assertEqual(error, "")
+                    before = {"root": str(self.workspace), "digest": "1" * 64, "protected_untracked": []}
+                    def snapshot(*_args: object, **_kwargs: object) -> dict:
+                        if when == "during":
+                            self._change_state(tokens, field, value)
+                        return before
+                    if when == "before":
+                        self._change_state(tokens, field, value)
+                    reason, _ = CLICK_VERIFICATION._collection_boundary_check(
+                        Path(tokens[5]), tokens[6], tokens[7], next_source_key=next(iter(grouped)),
+                        expected_claim_binding=batch.get("_click_claim_binding"),
+                        grouped_checks=grouped, before=before,
+                        verification_environment=batch["_click_verification_environment"],
+                        file_content_digest=CLICK_VERIFICATION._file_content_digest,
+                        git_workspace_snapshot=snapshot,
+                    )
+                    self.assertEqual(reason, "claim-or-cancellation-changed")
+
+    def test_claim_atomic_write_failure_executes_nothing_and_can_retry(self) -> None:
+        tokens = self._prepared()
+        path = Path(tokens[5])
+        before = path.read_bytes()
+        execute = mock.Mock(return_value=0)
+        replace = CLICK_STATE.os.replace
+        def fail_replace(source: object, destination: object) -> None:
+            if Path(destination) == path:
+                raise OSError("injected primary state replace failure")
+            replace(source, destination)
+        with mock.patch.object(CLICK_STATE.os, "replace", side_effect=fail_replace):
+            with self.assertRaises(OSError):
+                self._run(tokens, execute)
+        execute.assert_not_called()
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self._run(tokens, execute), 0)
+        execute.assert_called_once()
+
+    def test_claim_recovery_write_failure_preserves_consumed_claim(self) -> None:
+        tokens = self._prepared()
+        path = Path(tokens[5])
+        recovery = CLICK_STATE._recovery_snapshot_path(path)
+        execute = mock.Mock(return_value=0)
+        replace = CLICK_STATE.os.replace
+        def fail_replace(source: object, destination: object) -> None:
+            if Path(destination) == recovery:
+                raise OSError("injected recovery replace failure")
+            replace(source, destination)
+        with mock.patch.object(CLICK_STATE.os, "replace", side_effect=fail_replace):
+            with self.assertRaises(OSError):
+                self._run(tokens, execute)
+        execute.assert_not_called()
+        self._assert_no_success(tokens)
+        state = json.loads(path.read_text(encoding="utf-8"))
+        self.assertGreater(state["verification"]["runner_claimed_at"], 0)
+        self.assertEqual(self._run(tokens, execute), 2)
+        execute.assert_not_called()
+
+    def test_result_atomic_write_failure_cannot_publish_success_or_replay(self) -> None:
+        tokens = self._prepared()
+        path = Path(tokens[5])
+        execute = mock.Mock(return_value=0)
+        replace = CLICK_STATE.os.replace
+        def fail_replace(source: object, destination: object) -> None:
+            if Path(destination) == path:
+                payload = json.loads(Path(source).read_text(encoding="utf-8"))
+                if payload["verification"]["status"] == "passed":
+                    raise OSError("injected result replace failure")
+            replace(source, destination)
+        with mock.patch.object(CLICK_STATE.os, "replace", side_effect=fail_replace):
+            with self.assertRaises(OSError):
+                self._run(tokens, execute)
+        execute.assert_called_once()
+        self._assert_no_success(tokens)
+        self.assertEqual(self._run(tokens, execute), 2)
+        execute.assert_called_once()
 
 
 class ClickGateVerificationTests(ClickGateTestCase):
@@ -2423,8 +2644,10 @@ class ClickGateVerificationTests(ClickGateTestCase):
             # The third source deliberately has no result at all. This fixture
             # models out-of-order/corrupt input; the real runner remains fail-fast.
             source_results.pop(missing_key)
+            # Match the runner: discard execution helpers while retaining the
+            # original claim context required at the result-recording boundary.
             for key in list(batch):
-                if key.startswith("_click_"):
+                if key.startswith("_click_") and key != "_click_claim_binding":
                     batch.pop(key)
             for check in batch["checks"]:
                 approved_argv = check.pop("_click_approved_argv", None)
@@ -4336,3 +4559,365 @@ class ClickGateVerificationTests(ClickGateTestCase):
             prepared["hookSpecificOutput"]["additionalContext"],
         )
         self.assertEqual(self.run_rewritten(prepared).returncode, 0)
+
+
+class ReviewHardeningGateTests(ClickGateTestCase):
+    def _passing_state(self, mode: str, *, safe_change: bool = False):
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        files = [".gitignore", "verification_fixture.py"]
+        if safe_change:
+            (self.workspace / "README.md").write_text("before\n", encoding="utf-8")
+            policy = self.workspace / ".click" / "evidence-reuse.json"
+            policy.parent.mkdir()
+            policy.write_text(json.dumps({"version": 1, "entries": [{
+                "checks": [self.verification_argv()], "reuse_if_only_changed": ["README.md"],
+            }]}), encoding="utf-8")
+            files.extend(["README.md", ".click/evidence-reuse.json"])
+        self.initialize_git(*files)
+        if mode == "guarded":
+            self.approve_contract()
+            turn = "turn-2"
+        else:
+            self.prompt_submit("Verify the current work with Evidence.", "turn-1")
+            turn = "turn-1"
+        argv = self.verification_argv()
+        first = self.run_rewritten(self.verify_gate([argv], turn))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        baseline = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(baseline["verification"]["mutation_revision"], 0)
+        return path, baseline, argv, turn
+
+    def _assert_malformed_revision_denied(self, mode: str, field: str):
+        path, baseline, argv, turn = self._passing_state(mode)
+        key = next(iter(baseline["evidence_state"]["sources"]))
+        values = [False, True, 0.0, 0.9, 1.0, 1.9, "0", None, [], {},
+                  float("nan"), float("inf"), -1, -2]
+        for index, value in enumerate([*values, "missing"]):
+            with self.subTest(mode=mode, field=field, value=value):
+                modified = copy.deepcopy(baseline)
+                target = (modified["evidence_state"]["sources"][key]
+                          if field == "verified_revision" else modified["verification"])
+                if value == "missing":
+                    del target[field]
+                else:
+                    target[field] = value
+                raw = json.dumps(modified)
+                path.write_text(raw, encoding="utf-8")
+                request = {"version": 2, "checks": [
+                    {"evidence_id": "E1", "argv": argv, "class": "targeted"},
+                ]}
+                result, payload = self.run_hook("pre-tool", {
+                    **self.base_event, "turn_id": turn,
+                    "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                    "tool_use_id": f"malformed-{field}-{index}",
+                    "tool_input": {"command": "click-gate verify " + shlex.quote(json.dumps(request))},
+                })
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIsNotNone(payload)
+                output = payload["hookSpecificOutput"]
+                self.assertEqual(output.get("permissionDecision"), "deny", payload)
+                self.assertNotIn("updatedInput", output)
+                # Rejection telemetry may change; evidence and its revision may not
+                # be repaired into a fresh success. JSON comparison retains NaN.
+                after = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    json.dumps(after["evidence_state"], sort_keys=True),
+                    json.dumps(modified["evidence_state"], sort_keys=True),
+                )
+                self.assertEqual(
+                    json.dumps(after["verification"].get("mutation_revision", "missing")),
+                    json.dumps(modified["verification"].get("mutation_revision", "missing")),
+                )
+
+    def test_evidence_rejects_malformed_success_revision_from_state(self):
+        self._assert_malformed_revision_denied("evidence", "verified_revision")
+
+    def test_guarded_rejects_malformed_success_revision_from_state(self):
+        self._assert_malformed_revision_denied("guarded", "verified_revision")
+
+    def test_evidence_rejects_malformed_current_revision_from_state(self):
+        self._assert_malformed_revision_denied("evidence", "mutation_revision")
+
+    def test_guarded_rejects_malformed_current_revision_from_state(self):
+        self._assert_malformed_revision_denied("guarded", "mutation_revision")
+
+    def _safe_change_state(self, mode: str):
+        path, baseline, argv, turn = self._passing_state(mode, safe_change=True)
+        self.assertIsNone(self.pre_tool(
+            "apply_patch", "*** Begin Patch\n*** End Patch", turn,
+            submit_prompt=False, tool_use_id="change-readme",
+        ))
+        (self.workspace / "README.md").write_text("after\n", encoding="utf-8")
+        self.tool_hook("post-tool", "apply_patch", {"patch": "README"},
+                       turn_id=turn, tool_use_id="change-readme")
+        return path, baseline, argv, turn
+
+    def _assert_changed_decision_runs(self, mode: str):
+        path, baseline, argv, turn = self._safe_change_state(mode)
+        self.hook_in_process = True
+        decide = CLICK_VERIFICATION.click_change_policy.decide
+
+        def changed_decision(*args, **kwargs):
+            decision = decide(*args, **kwargs)
+            self.assertEqual(decision["status"], "reuse")
+            return {**decision, "decision_digest": "0" * 64}
+
+        with mock.patch.object(CLICK_VERIFICATION.click_change_policy, "decide", side_effect=changed_decision):
+            payload = self.verify_gate([argv], turn)
+        output = payload["hookSpecificOutput"]
+        self.assertEqual(output["permissionDecision"], "allow", payload)
+        self.assertIn("run-verification", split_runner_command(output["updatedInput"]["command"]))
+        pending = json.loads(path.read_text(encoding="utf-8"))
+        key = CLICK_EVIDENCE.evidence_key("E1")
+        self.assertNotEqual(pending["evidence_state"]["sources"][key]["status"], "passed")
+        result = self.run_rewritten(payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        source = json.loads(path.read_text(encoding="utf-8"))["evidence_state"]["sources"][key]
+        self.assertEqual(source["status"], "passed")
+        self.assertEqual(source["attempts"], pending["evidence_state"]["sources"][key]["attempts"] + 1)
+        self.assertEqual(source["safe_change_reuse_count"], 0)
+
+    def test_evidence_changed_decision_runs_real_check(self):
+        self._assert_changed_decision_runs("evidence")
+
+    def test_guarded_changed_decision_runs_real_check(self):
+        self._assert_changed_decision_runs("guarded")
+
+    def _assert_successor_fact_boundary(self, mode: str):
+        if mode == "guarded":
+            self.set_default("guarded", "turn-0")
+        path, previous, argv, turn = self._passing_state(mode)
+        key = CLICK_EVIDENCE.evidence_key("E1")
+        previous_source = previous["evidence_state"]["sources"][key]
+        previous_source["verified_at"] = 1234567890
+        previous_source["verified_future_extension"] = {"nested": ["previous"]}
+        previous_source["future_execution_state"] = {"active": True}
+        path.write_text(json.dumps(previous), encoding="utf-8")
+
+        if mode == "guarded":
+            replacement = self.contract()
+            replacement["outcome"] = "Verify an independently approved successor"
+            self.arm_gate("turn-3")
+            staged = self.stage_gate(replacement, "turn-3")
+            self.assertEqual(staged["hookSpecificOutput"]["permissionDecision"], "allow")
+            staged_state = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotEqual(staged_state["contract_id"], previous["contract_id"])
+            self.assertEqual(staged_state["approved_turn_id"], "")
+            denied = self.verify_gate([argv], "turn-3")
+            self.assertEqual(denied["hookSpecificOutput"]["permissionDecision"], "deny")
+            self.arm_gate("turn-4")
+            self.pass_gate(staged_state["contract_id"], "turn-4")
+            turn = "turn-4"
+        else:
+            self.prompt_submit("Follow-up Evidence task", "turn-2")
+            turn = "turn-2"
+
+        reused = self.verify_gate([argv], turn)
+        self.assertNotIn("run-verification", split_runner_command(
+            reused["hookSpecificOutput"]["updatedInput"]["command"],
+        ))
+        current = json.loads(path.read_text(encoding="utf-8"))
+        source = current["evidence_state"]["sources"][key]
+        self.assertEqual(source["status"], "passed")
+        self.assertEqual(source["attempts"], 0)
+        self.assertEqual(source["verified_at"], previous_source["verified_at"])
+        self.assertGreater(source["last_successor_reused_at"], source["verified_at"])
+        self.assertNotIn("verified_future_extension", source)
+        self.assertNotIn("future_execution_state", source)
+        self.assertNotIn("runner_token", current["verification"])
+        if mode == "guarded":
+            self.assertEqual(current["approved_turn_id"], "turn-4")
+            self.assertEqual(source["last_successor_origin_contract_id"], previous["contract_id"])
+        else:
+            self.assertEqual(source["last_successor_origin_evidence_session_id"],
+                             previous["evidence_session_id"])
+
+    def test_evidence_successor_copies_facts_and_preserves_execution_time(self):
+        self._assert_successor_fact_boundary("evidence")
+
+    def test_guarded_successor_copies_facts_after_independent_approval(self):
+        self._assert_successor_fact_boundary("guarded")
+
+    def _assert_late_workspace_drift(self, mode: str):
+        self.hook_in_process = True
+        inputs = self.workspace / "inputs"
+        inputs.mkdir()
+        original = {"value.txt": "good", "shared.json": "good", "deps.lock": "good"}
+        for name, content in original.items():
+            (inputs / name).write_text(content, encoding="utf-8")
+        fixture = self.workspace / "verification_fixture.py"
+        fixture.write_text(
+            "import unittest\nfrom pathlib import Path\n"
+            "class VerificationFixture(unittest.TestCase):\n"
+            "    def test_pass(self):\n"
+            "        for path in Path('inputs').iterdir():\n"
+            "            self.assertNotEqual(path.read_text(), 'bad')\n",
+            encoding="utf-8",
+        )
+        path, baseline, argv, turn = self._passing_state(mode)
+        matcher = CLICK_VERIFICATION._verification_receipt_matches
+        actions = {
+            "modify": lambda: (inputs / "value.txt").write_text("bad"),
+            "create": lambda: (inputs / "new.txt").write_text("bad"),
+            "delete": lambda: (inputs / "value.txt").unlink(),
+            "rename": lambda: (inputs / "value.txt").rename(inputs / "renamed.txt"),
+            "shared-config": lambda: (inputs / "shared.json").write_text("bad"),
+            "lockfile": lambda: (inputs / "deps.lock").write_text("bad"),
+        }
+        for name, action in actions.items():
+            with self.subTest(mode=mode, change=name):
+                for item in inputs.iterdir():
+                    item.unlink()
+                for filename, content in original.items():
+                    (inputs / filename).write_text(content, encoding="utf-8")
+                path.write_text(json.dumps(baseline), encoding="utf-8")
+
+                def match_then_change(*args, **kwargs):
+                    matched = matcher(*args, **kwargs)
+                    self.assertTrue(matched)
+                    action()
+                    return matched
+
+                with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+                                       side_effect=match_then_change) as matched:
+                    payload = self.verify_gate([argv], turn)
+                self.assertEqual(matched.call_count, 1)
+                self.assertIn("run-verification", split_runner_command(
+                    payload["hookSpecificOutput"]["updatedInput"]["command"],
+                ))
+                pending = json.loads(path.read_text(encoding="utf-8"))
+                source = pending["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+                self.assertNotEqual(source["status"], "passed")
+                result = self.run_rewritten(payload)
+                # The original full command on the exact same final fixture is
+                # an experiment control, not an extra production verification.
+                audit = subprocess.run(argv, cwd=self.workspace, capture_output=True,
+                                       text=True, check=False)
+                self.assertEqual(result.returncode == 0, audit.returncode == 0,
+                                 (result.stderr, audit.stderr))
+                expected_success = name in {"delete", "rename"}
+                self.assertEqual(result.returncode == 0, expected_success)
+                final_source = json.loads(path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+                self.assertEqual(final_source["status"], "passed" if expected_success else "failed")
+                self.assertEqual(final_source["attempts"], source["attempts"] + 1)
+
+    def test_evidence_rechecks_workspace_after_reuse_decision(self):
+        self._assert_late_workspace_drift("evidence")
+
+    def test_guarded_rechecks_workspace_after_reuse_decision(self):
+        self._assert_late_workspace_drift("guarded")
+
+    def _assert_late_environment_drift(self, mode: str):
+        self.hook_in_process = True
+        path, baseline, argv, turn = self._passing_state(mode)
+        matcher = CLICK_VERIFICATION._verification_receipt_matches
+        with mock.patch.dict(os.environ):
+            def match_then_change(*args, **kwargs):
+                matched = matcher(*args, **kwargs)
+                self.assertTrue(matched)
+                os.environ["CLICK_HARDENING_INPUT"] = "changed"
+                return matched
+
+            with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+                                   side_effect=match_then_change):
+                payload = self.verify_gate([argv], turn)
+            self.assertIn("updatedInput", payload["hookSpecificOutput"], payload)
+            self.assertIn("run-verification", split_runner_command(
+                payload["hookSpecificOutput"]["updatedInput"]["command"],
+            ))
+            result = self.run_rewritten(payload, {"CLICK_HARDENING_INPUT": "changed"})
+            self.assertEqual(result.returncode, 0, result.stderr)
+        source = json.loads(path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+        self.assertEqual(source["attempts"], 2)
+        self.assertNotEqual(source["verified_environment_digest"], baseline["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]["verified_environment_digest"])
+
+    def test_evidence_rechecks_environment_after_reuse_decision(self):
+        self._assert_late_environment_drift("evidence")
+
+    def test_guarded_rechecks_environment_after_reuse_decision(self):
+        self._assert_late_environment_drift("guarded")
+
+    def test_reuse_rechecks_replaced_symlink_target(self):
+        if os.name == "nt":
+            self.skipTest("requires native symlink creation privileges; covered here on POSIX")
+        self.hook_in_process = True
+        (self.workspace / "good.txt").write_text("good", encoding="utf-8")
+        (self.workspace / "bad.txt").write_text("bad", encoding="utf-8")
+        link = self.workspace / "current.txt"
+        link.symlink_to("good.txt")
+        fixture = self.workspace / "verification_fixture.py"
+        fixture.write_text(
+            "import unittest\nfrom pathlib import Path\n"
+            "class VerificationFixture(unittest.TestCase):\n"
+            "    def test_pass(self):\n"
+            "        self.assertEqual(Path('current.txt').read_text(), 'good')\n",
+            encoding="utf-8",
+        )
+        path, baseline, argv, turn = self._passing_state("evidence")
+        matcher = CLICK_VERIFICATION._verification_receipt_matches
+
+        def replace_target(*args, **kwargs):
+            result = matcher(*args, **kwargs)
+            self.assertTrue(result)
+            link.unlink()
+            link.symlink_to("bad.txt")
+            return result
+
+        with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+                               side_effect=replace_target):
+            payload = self.verify_gate([argv], turn)
+        self.assertIn("run-verification", split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]))
+        self.assertNotEqual(self.run_rewritten(payload).returncode, 0)
+        self.assertNotEqual(subprocess.run(argv, cwd=self.workspace, capture_output=True).returncode, 0)
+        source = json.loads(path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+        self.assertEqual(source["status"], "failed")
+
+    def test_reuse_rechecks_executable_content_outside_workspace(self):
+        if os.name == "nt":
+            self.skipTest("POSIX executable fixture; native Windows executable replacement is untested")
+        self.hook_in_process = True
+        executable = self.workspace.parent / "pytest"
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o700)
+        self.initialize_git("verification_fixture.py")
+        self.prompt_submit("Verify the executable fixture", "turn-1")
+        argv = [str(executable)]
+        self.assertEqual(self.run_rewritten(self.verify_gate([argv], "turn-1")).returncode, 0)
+        matcher = CLICK_VERIFICATION._verification_receipt_matches
+
+        def replace_executable(*args, **kwargs):
+            result = matcher(*args, **kwargs)
+            self.assertTrue(result)
+            executable.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            return result
+
+        with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+                               side_effect=replace_executable):
+            payload = self.verify_gate([argv], "turn-1")
+        self.assertIn("updatedInput", payload["hookSpecificOutput"], payload)
+        self.assertIn("run-verification", split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]))
+        self.assertNotEqual(self.run_rewritten(payload).returncode, 0)
+        self.assertNotEqual(subprocess.run(argv, cwd=self.workspace, capture_output=True).returncode, 0)
+
+    def test_drift_after_safe_change_promotion_rolls_back_reuse(self):
+        self.hook_in_process = True
+        path, baseline, argv, turn = self._safe_change_state("evidence")
+        promote = CLICK_VERIFICATION._promote_safe_change_receipt
+
+        def promote_then_change(*args, **kwargs):
+            promote(*args, **kwargs)
+            fixture = self.workspace / "verification_fixture.py"
+            fixture.write_text(fixture.read_text().replace("self.assertTrue(True)", "self.fail('late drift')"))
+
+        with mock.patch.object(CLICK_VERIFICATION, "_promote_safe_change_receipt",
+                               side_effect=promote_then_change) as promoted:
+            payload = self.verify_gate([argv], turn)
+        self.assertEqual(promoted.call_count, 1)
+        self.assertIn("run-verification", split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]))
+        source = json.loads(path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+        self.assertNotEqual(source["status"], "passed")
+        self.assertEqual(source["safe_change_reuse_count"], 0)
+        self.assertEqual(source["last_safe_change_decision_digest"], "")
+        self.assertNotEqual(self.run_rewritten(payload).returncode, 0)
+        self.assertNotEqual(subprocess.run(argv, cwd=self.workspace, capture_output=True).returncode, 0)

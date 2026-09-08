@@ -1,0 +1,1316 @@
+{
+  "method": "Two blocks, order baseline-current then current-baseline; 2 warmups and 11 timed samples per mode/case/block, separate3 peak samples; retained original phase0 samples not reused as paired control. No other task heavy tests during these measurements. Python 3.12.3/Linux; full arrays are descriptive samples, not confidence bounds. Measurements are warm in-process report components only.",
+  "cases": [
+    {
+      "matching": 0,
+      "nonmatching": 0,
+      "baseline": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.028224,
+              0.021555,
+              0.019171,
+              0.015771,
+              0.015284,
+              0.014444,
+              0.013499,
+              0.013683,
+              0.013504,
+              0.015153,
+              0.013912,
+              0.012907,
+              0.009428,
+              0.008124,
+              0.006843,
+              0.006014,
+              0.006412,
+              0.006502,
+              0.006745,
+              0.006036,
+              0.007304,
+              0.006272
+            ],
+            "median": 0.013203,
+            "min": 0.006014,
+            "max": 0.028224,
+            "sample_stdev": 0.005863087902384054
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.015153,
+            0.006745
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              0.784455,
+              0.670297,
+              0.627866,
+              0.667177,
+              0.620377,
+              0.635211,
+              0.52471,
+              0.471558,
+              0.45051,
+              0.439639,
+              0.517277,
+              0.469479,
+              0.469221,
+              0.438535,
+              0.46799,
+              0.416822,
+              0.432428,
+              0.469504,
+              0.387087,
+              0.396177,
+              0.382245,
+              0.368041
+            ],
+            "median": 0.46935,
+            "min": 0.368041,
+            "max": 0.784455,
+            "sample_stdev": 0.11300745282552188
+          },
+          "peak_python_bytes": {
+            "samples": [
+              12104,
+              12072,
+              12024,
+              12104,
+              12072,
+              12024
+            ],
+            "median": 12072.0,
+            "min": 12024,
+            "max": 12104,
+            "sample_stdev": 36.01481176775282
+          },
+          "block_wall_medians_ms": [
+            0.620377,
+            0.432428
+          ],
+          "operations": {
+            "directory_entries_yielded": 1,
+            "matching_paths_yielded": 1,
+            "matching_stat_calls": 1,
+            "other_stat_calls": 4,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        }
+      },
+      "current": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.015651,
+              0.010303,
+              0.009479,
+              0.007084,
+              0.006847,
+              0.006557,
+              0.006653,
+              0.006743,
+              0.007431,
+              0.0075,
+              0.006144,
+              0.018692,
+              0.012399,
+              0.011799,
+              0.008682,
+              0.009316,
+              0.009054,
+              0.008241,
+              0.008445,
+              0.008455,
+              0.009477,
+              0.008876
+            ],
+            "median": 0.0085685,
+            "min": 0.006144,
+            "max": 0.018692,
+            "sample_stdev": 0.0030652835479670114
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.007084,
+            0.009054
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              0.423659,
+              0.418075,
+              0.667505,
+              0.452306,
+              0.387439,
+              0.381216,
+              0.379472,
+              0.356284,
+              0.376188,
+              0.369189,
+              0.342793,
+              0.494674,
+              0.473604,
+              0.643743,
+              0.420333,
+              0.392421,
+              0.386709,
+              0.360523,
+              0.355403,
+              0.382273,
+              0.359864,
+              0.335198
+            ],
+            "median": 0.384491,
+            "min": 0.335198,
+            "max": 0.667505,
+            "sample_stdev": 0.0875785393039198
+          },
+          "peak_python_bytes": {
+            "samples": [
+              12176,
+              12144,
+              12096,
+              12176,
+              12144,
+              12096
+            ],
+            "median": 12144.0,
+            "min": 12096,
+            "max": 12176,
+            "sample_stdev": 36.01481176775282
+          },
+          "block_wall_medians_ms": [
+            0.381216,
+            0.386709
+          ],
+          "operations": {
+            "directory_entries_yielded": 1,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 1,
+            "other_stat_calls": 3,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        }
+      },
+      "fallback_delta_ms_baseline_minus_current": 0.08485899999999996
+    },
+    {
+      "matching": 16,
+      "nonmatching": 0,
+      "baseline": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.013883,
+              0.012301,
+              0.011293,
+              0.010495,
+              0.011562,
+              0.011042,
+              0.009961,
+              0.009888,
+              0.009779,
+              0.010191,
+              0.00981,
+              0.008802,
+              0.007947,
+              0.007245,
+              0.006943,
+              0.007022,
+              0.006658,
+              0.006066,
+              0.006051,
+              0.005966,
+              0.00634,
+              0.005896
+            ],
+            "median": 0.0092905,
+            "min": 0.005896,
+            "max": 0.013883,
+            "sample_stdev": 0.002371115700361786
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.010495,
+            0.006658
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              0.65059,
+              0.588886,
+              0.538403,
+              0.532023,
+              0.52814,
+              0.528736,
+              0.545066,
+              0.556036,
+              0.544997,
+              0.528112,
+              0.531079,
+              0.49148,
+              0.472363,
+              0.497761,
+              0.468567,
+              0.45797,
+              0.461534,
+              0.451954,
+              0.462272,
+              0.449257,
+              0.493484,
+              0.447682
+            ],
+            "median": 0.5129365,
+            "min": 0.447682,
+            "max": 0.65059,
+            "sample_stdev": 0.05139948442091546
+          },
+          "peak_python_bytes": {
+            "samples": [
+              18668,
+              18668,
+              18668,
+              18609,
+              18668,
+              18668
+            ],
+            "median": 18668.0,
+            "min": 18609,
+            "max": 18668,
+            "sample_stdev": 24.086649137367917
+          },
+          "block_wall_medians_ms": [
+            0.538403,
+            0.462272
+          ],
+          "operations": {
+            "directory_entries_yielded": 17,
+            "matching_paths_yielded": 17,
+            "matching_stat_calls": 17,
+            "other_stat_calls": 4,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 16
+          }
+        }
+      },
+      "current": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.009146,
+              0.007637,
+              0.007331,
+              0.00648,
+              0.007334,
+              0.006411,
+              0.005834,
+              0.005919,
+              0.006391,
+              0.006628,
+              0.005993,
+              0.008977,
+              0.007418,
+              0.006817,
+              0.006281,
+              0.007549,
+              0.006801,
+              0.006023,
+              0.00595,
+              0.006516,
+              0.006373,
+              0.006184
+            ],
+            "median": 0.006498,
+            "min": 0.005834,
+            "max": 0.009146,
+            "sample_stdev": 0.0009127694276971201
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.00648,
+            0.006516
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              0.418159,
+              0.42733,
+              0.413889,
+              0.410121,
+              0.420279,
+              0.47826,
+              0.408823,
+              0.549354,
+              0.408276,
+              0.410014,
+              0.383408,
+              0.452878,
+              0.424414,
+              0.443354,
+              0.427097,
+              0.420305,
+              0.398523,
+              0.403411,
+              0.539366,
+              0.429442,
+              0.396836,
+              0.386509
+            ],
+            "median": 0.419219,
+            "min": 0.383408,
+            "max": 0.549354,
+            "sample_stdev": 0.04278563060915869
+          },
+          "peak_python_bytes": {
+            "samples": [
+              11384,
+              11384,
+              11384,
+              11384,
+              11384,
+              11384
+            ],
+            "median": 11384.0,
+            "min": 11384,
+            "max": 11384,
+            "sample_stdev": 0.0
+          },
+          "block_wall_medians_ms": [
+            0.413889,
+            0.424414
+          ],
+          "operations": {
+            "directory_entries_yielded": 17,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 1,
+            "other_stat_calls": 3,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 16,
+            "nofollow_direntry_stat_calls": 16,
+            "existing_report_path_stat_calls": 0
+          }
+        }
+      },
+      "fallback_delta_ms_baseline_minus_current": 0.09371750000000001
+    },
+    {
+      "matching": 6000,
+      "nonmatching": 0,
+      "baseline": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.00814,
+              0.006426,
+              0.005019,
+              0.004772,
+              0.00493,
+              0.005515,
+              0.004997,
+              0.004836,
+              0.004408,
+              0.005352,
+              0.008876,
+              0.007504,
+              0.007026,
+              0.005563,
+              0.005682,
+              0.006172,
+              0.006002,
+              0.00622,
+              0.005857,
+              0.005402,
+              0.005849,
+              0.005674
+            ],
+            "median": 0.005678000000000001,
+            "min": 0.004408,
+            "max": 0.008876,
+            "sample_stdev": 0.0011179573906337967
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.005019,
+            0.005857
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              15.972821,
+              22.959436,
+              15.480978,
+              14.288207,
+              14.009775,
+              13.998537,
+              21.130776,
+              14.161424,
+              13.703961,
+              13.566639,
+              13.423415,
+              15.130146,
+              24.11265,
+              17.198706,
+              15.284969,
+              14.636662,
+              14.884403,
+              22.626209,
+              15.484669,
+              14.561827,
+              15.087421,
+              13.95487
+            ],
+            "median": 14.985912,
+            "min": 13.423415,
+            "max": 24.11265,
+            "sample_stdev": 3.305181206174384
+          },
+          "peak_python_bytes": {
+            "samples": [
+              4937068,
+              4939076,
+              4937073,
+              4937068,
+              4939076,
+              4937132
+            ],
+            "median": 4937102.5,
+            "min": 4937068,
+            "max": 4939076,
+            "sample_stdev": 1028.303927186251
+          },
+          "block_wall_medians_ms": [
+            14.161424,
+            15.130146
+          ],
+          "operations": {
+            "directory_entries_yielded": 6001,
+            "matching_paths_yielded": 6001,
+            "matching_stat_calls": 129,
+            "other_stat_calls": 4,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 128
+          }
+        }
+      },
+      "current": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.007954,
+              0.005312,
+              0.00486,
+              0.004649,
+              0.004129,
+              0.004868,
+              0.004902,
+              0.004448,
+              0.004029,
+              0.004568,
+              0.004159,
+              0.007909,
+              0.005661,
+              0.005165,
+              0.004774,
+              0.004244,
+              0.005116,
+              0.004862,
+              0.004365,
+              0.004489,
+              0.004523,
+              0.004337
+            ],
+            "median": 0.0047115,
+            "min": 0.004029,
+            "max": 0.007954,
+            "sample_stdev": 0.0010416454442859775
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1941,
+              1941,
+              1941,
+              1941,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1941,
+            "sample_stdev": 0.0
+          },
+          "block_wall_medians_ms": [
+            0.004649,
+            0.004774
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              20.436398,
+              20.394999,
+              19.855149,
+              20.379947,
+              19.760704,
+              19.588801,
+              19.452193,
+              19.714017,
+              19.703599,
+              19.947233,
+              19.649256,
+              21.141442,
+              21.034138,
+              20.105969,
+              20.744006,
+              20.317208,
+              20.638206,
+              20.559993,
+              20.266592,
+              20.225677,
+              20.446732,
+              20.322536
+            ],
+            "median": 20.2919,
+            "min": 19.452193,
+            "max": 21.141442,
+            "sample_stdev": 0.46395378422660133
+          },
+          "peak_python_bytes": {
+            "samples": [
+              11744,
+              11816,
+              11816,
+              11744,
+              11816,
+              11816
+            ],
+            "median": 11816.0,
+            "min": 11744,
+            "max": 11816,
+            "sample_stdev": 37.1806401235912
+          },
+          "block_wall_medians_ms": [
+            19.760704,
+            20.446732
+          ],
+          "operations": {
+            "directory_entries_yielded": 6001,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 1,
+            "other_stat_calls": 3,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 6000,
+            "nofollow_direntry_stat_calls": 6000,
+            "existing_report_path_stat_calls": 0
+          }
+        }
+      },
+      "fallback_delta_ms_baseline_minus_current": -5.3059879999999975
+    },
+    {
+      "matching": 16,
+      "nonmatching": 6000,
+      "baseline": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.008726,
+              0.006686,
+              0.005789,
+              0.005118,
+              0.005224,
+              0.005329,
+              0.004739,
+              0.004631,
+              0.005116,
+              0.005411,
+              0.004723,
+              0.006582,
+              0.005429,
+              0.005581,
+              0.010404,
+              0.004674,
+              0.005028,
+              0.004723,
+              0.003895,
+              0.003962,
+              0.004957,
+              0.0043
+            ],
+            "median": 0.005117,
+            "min": 0.003895,
+            "max": 0.010404,
+            "sample_stdev": 0.0015064707710349657
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.005224,
+            0.004957
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              4.097643,
+              4.079709,
+              4.415451,
+              3.865238,
+              3.653849,
+              3.407519,
+              3.658322,
+              3.466908,
+              3.408465,
+              3.366018,
+              3.330018,
+              3.433598,
+              3.432521,
+              3.334857,
+              3.358091,
+              3.380966,
+              3.380616,
+              3.364226,
+              3.361135,
+              3.322434,
+              3.408682,
+              3.366
+            ],
+            "median": 3.407992,
+            "min": 3.322434,
+            "max": 4.415451,
+            "sample_stdev": 0.3025640560021138
+          },
+          "peak_python_bytes": {
+            "samples": [
+              2010290,
+              2010290,
+              2010290,
+              2010290,
+              2010290,
+              2010290
+            ],
+            "median": 2010290.0,
+            "min": 2010290,
+            "max": 2010290,
+            "sample_stdev": 0.0
+          },
+          "block_wall_medians_ms": [
+            3.653849,
+            3.366
+          ],
+          "operations": {
+            "directory_entries_yielded": 6017,
+            "matching_paths_yielded": 17,
+            "matching_stat_calls": 17,
+            "other_stat_calls": 4,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 16
+          }
+        }
+      },
+      "current": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.007824,
+              0.005524,
+              0.005299,
+              0.004709,
+              0.004829,
+              0.005618,
+              0.005192,
+              0.005283,
+              0.004362,
+              0.004797,
+              0.007218,
+              0.007327,
+              0.005619,
+              0.004929,
+              0.004544,
+              0.004307,
+              0.005434,
+              0.004423,
+              0.004071,
+              0.004081,
+              0.004456,
+              0.00443
+            ],
+            "median": 0.004879,
+            "min": 0.004071,
+            "max": 0.007824,
+            "sample_stdev": 0.001042649306218335
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1941,
+              1941,
+              1941,
+              1941,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1941,
+            "sample_stdev": 0.0
+          },
+          "block_wall_medians_ms": [
+            0.005283,
+            0.004456
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              4.37307,
+              4.236874,
+              4.205479,
+              4.001185,
+              3.678657,
+              3.593689,
+              3.611578,
+              3.644412,
+              3.576358,
+              3.576836,
+              3.642659,
+              3.62612,
+              3.543706,
+              3.567056,
+              3.582948,
+              3.57492,
+              3.580705,
+              3.692129,
+              3.565807,
+              3.596698,
+              3.566085,
+              3.559864
+            ],
+            "median": 3.5951934999999997,
+            "min": 3.543706,
+            "max": 4.37307,
+            "sample_stdev": 0.24876628687575467
+          },
+          "peak_python_bytes": {
+            "samples": [
+              11384,
+              11384,
+              11384,
+              11384,
+              11384,
+              11384
+            ],
+            "median": 11384.0,
+            "min": 11384,
+            "max": 11384,
+            "sample_stdev": 0.0
+          },
+          "block_wall_medians_ms": [
+            3.644412,
+            3.57492
+          ],
+          "operations": {
+            "directory_entries_yielded": 6017,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 1,
+            "other_stat_calls": 3,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 16,
+            "nofollow_direntry_stat_calls": 16,
+            "existing_report_path_stat_calls": 0
+          }
+        }
+      },
+      "fallback_delta_ms_baseline_minus_current": -0.18720149999999958
+    },
+    {
+      "matching": 6000,
+      "nonmatching": 6000,
+      "baseline": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.00679,
+              0.005081,
+              0.004567,
+              0.003936,
+              0.004183,
+              0.004301,
+              0.004263,
+              0.004337,
+              0.004531,
+              0.004458,
+              0.004323,
+              0.006945,
+              0.00529,
+              0.004773,
+              0.004158,
+              0.004544,
+              0.005353,
+              0.004264,
+              0.004074,
+              0.004395,
+              0.004381,
+              0.004057
+            ],
+            "median": 0.0043879999999999995,
+            "min": 0.003936,
+            "max": 0.006945,
+            "sample_stdev": 0.0007992308802842893
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1941,
+              1941,
+              1941,
+              1941,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1941,
+            "sample_stdev": 0.0
+          },
+          "block_wall_medians_ms": [
+            0.004337,
+            0.004395
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              17.571672,
+              17.898447,
+              17.379322,
+              17.304959,
+              25.075243,
+              17.488307,
+              17.28073,
+              17.808143,
+              17.527403,
+              25.413246,
+              17.90108,
+              19.432915,
+              18.1771,
+              17.290819,
+              17.45355,
+              25.439852,
+              17.771441,
+              17.079578,
+              17.384995,
+              17.647692,
+              26.691543,
+              18.696222
+            ],
+            "median": 17.7095665,
+            "min": 17.079578,
+            "max": 26.691543,
+            "sample_stdev": 3.1828249771051094
+          },
+          "peak_python_bytes": {
+            "samples": [
+              6930346,
+              6930290,
+              6930290,
+              6930346,
+              6930290,
+              6930290
+            ],
+            "median": 6930290.0,
+            "min": 6930290,
+            "max": 6930346,
+            "sample_stdev": 28.918275651682045
+          },
+          "block_wall_medians_ms": [
+            17.571672,
+            17.771441
+          ],
+          "operations": {
+            "directory_entries_yielded": 12001,
+            "matching_paths_yielded": 6001,
+            "matching_stat_calls": 129,
+            "other_stat_calls": 4,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 128
+          }
+        }
+      },
+      "current": {
+        "inline": {
+          "wall_ms": {
+            "samples": [
+              0.00674,
+              0.005335,
+              0.004452,
+              0.004068,
+              0.003995,
+              0.004521,
+              0.004311,
+              0.003988,
+              0.004012,
+              0.00408,
+              0.003815,
+              0.007029,
+              0.017572,
+              0.004544,
+              0.004113,
+              0.004009,
+              0.00472,
+              0.004447,
+              0.004077,
+              0.003743,
+              0.004362,
+              0.004011
+            ],
+            "median": 0.0042120000000000005,
+            "min": 0.003743,
+            "max": 0.017572,
+            "sample_stdev": 0.0029150858607865354
+          },
+          "peak_python_bytes": {
+            "samples": [
+              1965,
+              1941,
+              1941,
+              1965,
+              1941,
+              1941
+            ],
+            "median": 1941.0,
+            "min": 1941,
+            "max": 1965,
+            "sample_stdev": 12.393546707863734
+          },
+          "block_wall_medians_ms": [
+            0.00408,
+            0.004362
+          ],
+          "operations": {
+            "directory_entries_yielded": 0,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 0,
+            "other_stat_calls": 0,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 0,
+            "nofollow_direntry_stat_calls": 0,
+            "existing_report_path_stat_calls": 0
+          }
+        },
+        "fallback": {
+          "wall_ms": {
+            "samples": [
+              24.926973,
+              24.797828,
+              26.14867,
+              25.250892,
+              25.05432,
+              25.158534,
+              25.476613,
+              25.125881,
+              25.108702,
+              24.899806,
+              24.830466,
+              25.156309,
+              25.169019,
+              25.936846,
+              24.453395,
+              24.446105,
+              24.64696,
+              24.355143,
+              24.652638,
+              24.512549,
+              24.516088,
+              24.309394
+            ],
+            "median": 24.9133895,
+            "min": 24.309394,
+            "max": 26.14867,
+            "sample_stdev": 0.48031025638994895
+          },
+          "peak_python_bytes": {
+            "samples": [
+              11384,
+              11384,
+              11384,
+              11384,
+              11384,
+              11325
+            ],
+            "median": 11384.0,
+            "min": 11325,
+            "max": 11384,
+            "sample_stdev": 24.086649137367917
+          },
+          "block_wall_medians_ms": [
+            25.108702,
+            24.516088
+          ],
+          "operations": {
+            "directory_entries_yielded": 12001,
+            "matching_paths_yielded": 0,
+            "matching_stat_calls": 1,
+            "other_stat_calls": 3,
+            "unlink_calls": 0,
+            "direntry_stat_calls": 6000,
+            "nofollow_direntry_stat_calls": 6000,
+            "existing_report_path_stat_calls": 0
+          }
+        }
+      },
+      "fallback_delta_ms_baseline_minus_current": -7.203823
+    }
+  ],
+  "starvation": {
+    "baseline": {
+      "mechanism": "same actual tempfile files/stat/unlink for both versions with deterministic scandir: 128 fresh then 8 stale; valid writer names; renderer forces fallback",
+      "repeated_fallback_calls": 6,
+      "stale_remaining_after_each_call": [
+        8,
+        8,
+        8,
+        8,
+        8,
+        8
+      ],
+      "deletions_per_call": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "directory_entries_per_call": [
+        137,
+        138,
+        139,
+        140,
+        141,
+        142
+      ],
+      "fresh_preserved": true,
+      "new_reports_preserved": true
+    },
+    "current": {
+      "mechanism": "same actual tempfile files/stat/unlink for both versions with deterministic scandir: 128 fresh then 8 stale; valid writer names; renderer forces fallback",
+      "repeated_fallback_calls": 6,
+      "stale_remaining_after_each_call": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "deletions_per_call": [
+        8,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "directory_entries_per_call": [
+        137,
+        130,
+        131,
+        132,
+        133,
+        134
+      ],
+      "fresh_preserved": true,
+      "new_reports_preserved": true
+    }
+  },
+  "source_sha256": {
+    "baseline": "dadaa5f7e80e719cdf0ffa0c74fad7752b32573c2b192211352d06eb8c47fe6a",
+    "current": "d3bcd14b1a1302babdc1b708b4cafd83b439f0a307d51f0734c0c3ed1b91da78"
+  }
+}

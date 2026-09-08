@@ -50,3 +50,11 @@ Repeated executable-record construction medians for 1 / 8 / 64 checks changed **
 The required acceptance criterion remains automatic sharding `init/status/refresh` and shard reuse without regression. The repository shard inventory adds only the new binding test module to its existing owner. The reuse policy is unchanged; edited/uncommitted shard policy still falls back conservatively.
 
 The measurement host is Linux. Portable Windows parsing/transport and metadata regressions run locally. Release validation on Windows and macOS, including native backends, is reported by the OS-specific CI checks on [PR #95](https://github.com/grapefruit0205/click/pull/95).
+
+## v0.93.0 review follow-up
+
+The subsequent [review-hardening work](review-hardening/reports/phase-0.md) is separate from the v0.92.0 measurements above. Successful evidence now uses strict nonnegative integer revisions, and safe-change decisions bind their original receipt, exact check and current source context. Successor sources start from normal defaults and copy only named verification facts and provenance; the original execution timestamp is preserved.
+
+All reuse modes confirm workspace and executable/environment bindings again before storing the final plan. Observed drift returns affected checks to real execution. Claim, result and collection boundaries also compare the current task and approval identity with the original one-use invocation. Explicit POSIX timeout/termination handles a surviving process group even if its leader has exited. These changes retain normal authorized reuse and do not constrain model reasoning or establish test sufficiency.
+
+Phase reports distinguish reproduced behavior from defensive consistency checks and retain failed intermediate checks. This follow-up is packaged as v0.93.0; its local regression, partial performance comparison and platform limits are recorded in [Phase 6](review-hardening/reports/phase-6.md), with workflow state in [progress](review-hardening/progress.json). Native Windows/macOS results from v0.92.0 do not validate the v0.93.0 source; the v0.93.0 PR's own CI is the applicable cross-platform record.

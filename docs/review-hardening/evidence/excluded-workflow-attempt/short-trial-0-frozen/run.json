@@ -1,0 +1,1429 @@
+{
+  "run_id": "short-trial-0-frozen",
+  "version": "frozen",
+  "workload": "short",
+  "rounds": 1,
+  "outer_trial": 0,
+  "outer_warmup": true,
+  "order_in_pair": 0,
+  "version_order": [
+    "frozen",
+    "current"
+  ],
+  "argv": [
+    "/usr/bin/python3.12",
+    "-B",
+    "/tmp/click-review-hardening-20260908/baseline/benchmarks/incremental_verification.py",
+    "--guarded-workflow",
+    "--iterations",
+    "1",
+    "--warmups",
+    "0",
+    "--workload-rounds",
+    "1",
+    "--output",
+    "/tmp/click-review-hardening-20260908/workflow-comparison/final-results/short-trial-0-frozen/raw.json"
+  ],
+  "cwd": "/tmp/click-review-hardening-20260908/baseline",
+  "directory": "/tmp/click-review-hardening-20260908/workflow-comparison/final-results/short-trial-0-frozen",
+  "started_at": "2026-09-08T02:00:13.730295+00:00",
+  "source_digest_before": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+  "exit_code": 0,
+  "timed_out": false,
+  "subprocess_overall_ms": 82607.326576,
+  "source_digest_after": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+  "valid": true,
+  "engine": {
+    "assurance": "unsigned-files-at-measurement",
+    "commit": null,
+    "source_digest": "689193e18af5e5fb6b96c33b503bc18f41c535e8b0722d95d8ad66439ddb29f6",
+    "version": "0.92.0",
+    "working_tree_modified": false
+  },
+  "metrics": {
+    "workflow.baseline.setup_ms": 27.062484,
+    "workflow.baseline.validation_wall_ms": 721.171608,
+    "workflow.baseline.transition_ms": 2.014368,
+    "workflow.baseline.audit_wall_ms": 2039.7097210000002,
+    "stage.baseline.first-run.request_wall_ms": 96.023385,
+    "stage.baseline.first-run.transition_ms": 0.005525,
+    "stage.baseline.first-run.additional_full_audit_ms": 286.67668100000003,
+    "stage.baseline.first-run.audit_same-shards_wall_ms": 190.653296,
+    "stage.baseline.first-run.audit_parent-suite_wall_ms": 96.023385,
+    "stage.baseline.unrelated-code.request_wall_ms": 85.068974,
+    "stage.baseline.unrelated-code.transition_ms": 0.44364,
+    "stage.baseline.unrelated-code.additional_full_audit_ms": 260.296807,
+    "stage.baseline.unrelated-code.audit_same-shards_wall_ms": 175.227833,
+    "stage.baseline.unrelated-code.audit_parent-suite_wall_ms": 85.068974,
+    "stage.baseline.related-code.request_wall_ms": 88.309906,
+    "stage.baseline.related-code.transition_ms": 0.346959,
+    "stage.baseline.related-code.additional_full_audit_ms": 256.356823,
+    "stage.baseline.related-code.audit_same-shards_wall_ms": 168.046917,
+    "stage.baseline.related-code.audit_parent-suite_wall_ms": 88.309906,
+    "stage.baseline.all-code.request_wall_ms": 90.99158,
+    "stage.baseline.all-code.transition_ms": 0.422252,
+    "stage.baseline.all-code.additional_full_audit_ms": 281.963697,
+    "stage.baseline.all-code.audit_same-shards_wall_ms": 190.972117,
+    "stage.baseline.all-code.audit_parent-suite_wall_ms": 90.99158,
+    "stage.baseline.environment.request_wall_ms": 82.153869,
+    "stage.baseline.environment.transition_ms": 0.0122,
+    "stage.baseline.environment.additional_full_audit_ms": 248.144703,
+    "stage.baseline.environment.audit_same-shards_wall_ms": 165.990834,
+    "stage.baseline.environment.audit_parent-suite_wall_ms": 82.153869,
+    "stage.baseline.failure.request_wall_ms": 99.405094,
+    "stage.baseline.failure.transition_ms": 0.324431,
+    "stage.baseline.failure.additional_full_audit_ms": 181.962363,
+    "stage.baseline.failure.audit_same-shards_wall_ms": 82.557269,
+    "stage.baseline.failure.audit_parent-suite_wall_ms": 99.405094,
+    "stage.baseline.retry.request_wall_ms": 86.186356,
+    "stage.baseline.retry.transition_ms": 0.455868,
+    "stage.baseline.retry.additional_full_audit_ms": 276.22303,
+    "stage.baseline.retry.audit_same-shards_wall_ms": 190.036674,
+    "stage.baseline.retry.audit_parent-suite_wall_ms": 86.186356,
+    "stage.baseline.unchanged.request_wall_ms": 93.032444,
+    "stage.baseline.unchanged.transition_ms": 0.003493,
+    "stage.baseline.unchanged.additional_full_audit_ms": 248.08561699999998,
+    "stage.baseline.unchanged.audit_same-shards_wall_ms": 155.053173,
+    "stage.baseline.unchanged.audit_parent-suite_wall_ms": 93.032444,
+    "workflow.click-default.setup_ms": 3292.770853,
+    "workflow.click-default.validation_wall_ms": 10274.334594,
+    "workflow.click-default.transition_ms": 19140.970609,
+    "workflow.click-default.audit_wall_ms": 2059.856284,
+    "workflow.click-default.component_subtotal_excluding_audits_ms": 32708.076055999998,
+    "workflow.click-default.component_subtotal_including_audits_ms": 34767.93234,
+    "stage.click-default.first-run.request_wall_ms": 1357.389794,
+    "stage.click-default.first-run.transition_ms": 0.005023,
+    "stage.click-default.first-run.additional_full_audit_ms": 274.158613,
+    "stage.click-default.first-run.test_execution_ms": 95.655334,
+    "stage.click-default.first-run.audit_same-shards_wall_ms": 179.328053,
+    "stage.click-default.first-run.audit_parent-suite_wall_ms": 94.83056,
+    "stage.click-default.unrelated-code.request_wall_ms": 1392.307524,
+    "stage.click-default.unrelated-code.transition_ms": 3795.272425,
+    "stage.click-default.unrelated-code.additional_full_audit_ms": 275.01853800000004,
+    "stage.click-default.unrelated-code.test_execution_ms": 89.289902,
+    "stage.click-default.unrelated-code.audit_same-shards_wall_ms": 189.464314,
+    "stage.click-default.unrelated-code.audit_parent-suite_wall_ms": 85.554224,
+    "stage.click-default.related-code.request_wall_ms": 1377.879828,
+    "stage.click-default.related-code.transition_ms": 3856.03088,
+    "stage.click-default.related-code.additional_full_audit_ms": 263.834895,
+    "stage.click-default.related-code.test_execution_ms": 91.231211,
+    "stage.click-default.related-code.audit_same-shards_wall_ms": 180.267141,
+    "stage.click-default.related-code.audit_parent-suite_wall_ms": 83.567754,
+    "stage.click-default.all-code.request_wall_ms": 1395.582219,
+    "stage.click-default.all-code.transition_ms": 3880.726148,
+    "stage.click-default.all-code.additional_full_audit_ms": 272.199592,
+    "stage.click-default.all-code.test_execution_ms": 90.881856,
+    "stage.click-default.all-code.audit_same-shards_wall_ms": 180.356073,
+    "stage.click-default.all-code.audit_parent-suite_wall_ms": 91.843519,
+    "stage.click-default.environment.request_wall_ms": 1424.816297,
+    "stage.click-default.environment.transition_ms": 2928.696774,
+    "stage.click-default.environment.additional_full_audit_ms": 267.202316,
+    "stage.click-default.environment.test_execution_ms": 88.994302,
+    "stage.click-default.environment.audit_same-shards_wall_ms": 177.918733,
+    "stage.click-default.environment.audit_parent-suite_wall_ms": 89.283583,
+    "stage.click-default.failure.request_wall_ms": 1437.241532,
+    "stage.click-default.failure.transition_ms": 3849.158946,
+    "stage.click-default.failure.additional_full_audit_ms": 177.00271199999997,
+    "stage.click-default.failure.test_execution_ms": 93.37879,
+    "stage.click-default.failure.audit_same-shards_wall_ms": 87.662022,
+    "stage.click-default.failure.audit_parent-suite_wall_ms": 89.34069,
+    "stage.click-default.retry.request_wall_ms": 1384.286749,
+    "stage.click-default.retry.transition_ms": 831.077304,
+    "stage.click-default.retry.additional_full_audit_ms": 263.636461,
+    "stage.click-default.retry.test_execution_ms": 101.930521,
+    "stage.click-default.retry.audit_same-shards_wall_ms": 176.090143,
+    "stage.click-default.retry.audit_parent-suite_wall_ms": 87.546318,
+    "stage.click-default.unchanged.request_wall_ms": 504.830651,
+    "stage.click-default.unchanged.transition_ms": 0.003109,
+    "stage.click-default.unchanged.additional_full_audit_ms": 266.803157,
+    "stage.click-default.unchanged.test_execution_ms": 0,
+    "stage.click-default.unchanged.audit_same-shards_wall_ms": 177.646194,
+    "stage.click-default.unchanged.audit_parent-suite_wall_ms": 89.156963,
+    "workflow.explicit-reuse.setup_ms": 3300.73615,
+    "workflow.explicit-reuse.validation_wall_ms": 17033.111556,
+    "workflow.explicit-reuse.transition_ms": 19362.133886,
+    "workflow.explicit-reuse.audit_wall_ms": 2077.859104,
+    "workflow.explicit-reuse.component_subtotal_excluding_audits_ms": 39695.981592,
+    "workflow.explicit-reuse.component_subtotal_including_audits_ms": 41773.840696,
+    "stage.explicit-reuse.first-run.request_wall_ms": 1748.291039,
+    "stage.explicit-reuse.first-run.transition_ms": 0.003421,
+    "stage.explicit-reuse.first-run.additional_full_audit_ms": 261.894108,
+    "stage.explicit-reuse.first-run.test_execution_ms": 179.4847,
+    "stage.explicit-reuse.first-run.audit_same-shards_wall_ms": 169.554789,
+    "stage.explicit-reuse.first-run.audit_parent-suite_wall_ms": 92.339319,
+    "stage.explicit-reuse.unrelated-code.request_wall_ms": 2571.498927,
+    "stage.explicit-reuse.unrelated-code.transition_ms": 3799.371921,
+    "stage.explicit-reuse.unrelated-code.additional_full_audit_ms": 275.564653,
+    "stage.explicit-reuse.unrelated-code.test_execution_ms": 89.551818,
+    "stage.explicit-reuse.unrelated-code.audit_same-shards_wall_ms": 183.408928,
+    "stage.explicit-reuse.unrelated-code.audit_parent-suite_wall_ms": 92.155725,
+    "stage.explicit-reuse.related-code.request_wall_ms": 2519.28359,
+    "stage.explicit-reuse.related-code.transition_ms": 3852.064827,
+    "stage.explicit-reuse.related-code.additional_full_audit_ms": 263.183576,
+    "stage.explicit-reuse.related-code.test_execution_ms": 87.99433,
+    "stage.explicit-reuse.related-code.audit_same-shards_wall_ms": 171.848269,
+    "stage.explicit-reuse.related-code.audit_parent-suite_wall_ms": 91.335307,
+    "stage.explicit-reuse.all-code.request_wall_ms": 2590.797281,
+    "stage.explicit-reuse.all-code.transition_ms": 3954.361821,
+    "stage.explicit-reuse.all-code.additional_full_audit_ms": 261.500915,
+    "stage.explicit-reuse.all-code.test_execution_ms": 188.510619,
+    "stage.explicit-reuse.all-code.audit_same-shards_wall_ms": 174.275813,
+    "stage.explicit-reuse.all-code.audit_parent-suite_wall_ms": 87.225102,
+    "stage.explicit-reuse.environment.request_wall_ms": 1942.285137,
+    "stage.explicit-reuse.environment.transition_ms": 3016.774654,
+    "stage.explicit-reuse.environment.additional_full_audit_ms": 264.411782,
+    "stage.explicit-reuse.environment.test_execution_ms": 181.47703,
+    "stage.explicit-reuse.environment.audit_same-shards_wall_ms": 175.069754,
+    "stage.explicit-reuse.environment.audit_parent-suite_wall_ms": 89.342028,
+    "stage.explicit-reuse.failure.request_wall_ms": 2661.743821,
+    "stage.explicit-reuse.failure.transition_ms": 3888.402524,
+    "stage.explicit-reuse.failure.additional_full_audit_ms": 190.01370300000002,
+    "stage.explicit-reuse.failure.test_execution_ms": 99.413828,
+    "stage.explicit-reuse.failure.audit_same-shards_wall_ms": 101.430638,
+    "stage.explicit-reuse.failure.audit_parent-suite_wall_ms": 88.583065,
+    "stage.explicit-reuse.retry.request_wall_ms": 2404.824883,
+    "stage.explicit-reuse.retry.transition_ms": 851.150633,
+    "stage.explicit-reuse.retry.additional_full_audit_ms": 287.78483500000004,
+    "stage.explicit-reuse.retry.test_execution_ms": 92.058607,
+    "stage.explicit-reuse.retry.audit_same-shards_wall_ms": 193.474724,
+    "stage.explicit-reuse.retry.audit_parent-suite_wall_ms": 94.310111,
+    "stage.explicit-reuse.unchanged.request_wall_ms": 594.386878,
+    "stage.explicit-reuse.unchanged.transition_ms": 0.004085,
+    "stage.explicit-reuse.unchanged.additional_full_audit_ms": 273.505532,
+    "stage.explicit-reuse.unchanged.test_execution_ms": 0,
+    "stage.explicit-reuse.unchanged.audit_same-shards_wall_ms": 181.693743,
+    "stage.explicit-reuse.unchanged.audit_parent-suite_wall_ms": 91.811789,
+    "eligible_fixture_comparison.click-default.first-run.parent-suite.delta_ms": -1262.5592339999998,
+    "eligible_fixture_comparison.click-default.first-run.parent-suite.delta_percent": -1331.384349095903,
+    "eligible_fixture_comparison.click-default.unrelated-code.parent-suite.delta_ms": -1306.7533,
+    "eligible_fixture_comparison.click-default.unrelated-code.parent-suite.delta_percent": -1527.3977588762887,
+    "eligible_fixture_comparison.click-default.related-code.parent-suite.delta_ms": -1294.3120740000002,
+    "eligible_fixture_comparison.click-default.related-code.parent-suite.delta_percent": -1548.81759057447,
+    "eligible_fixture_comparison.click-default.all-code.parent-suite.delta_ms": -1303.7386999999999,
+    "eligible_fixture_comparison.click-default.all-code.parent-suite.delta_percent": -1419.5217193278493,
+    "eligible_fixture_comparison.click-default.environment.parent-suite.delta_ms": -1335.5327140000002,
+    "eligible_fixture_comparison.click-default.environment.parent-suite.delta_percent": -1495.8323457964275,
+    "eligible_fixture_comparison.click-default.retry.parent-suite.delta_ms": -1296.7404310000002,
+    "eligible_fixture_comparison.click-default.retry.parent-suite.delta_percent": -1481.204990254416,
+    "eligible_fixture_comparison.click-default.unchanged.parent-suite.delta_ms": -415.67368799999997,
+    "eligible_fixture_comparison.click-default.unchanged.parent-suite.delta_percent": -466.2268363717144,
+    "eligible_fixture_comparison.explicit-reuse.first-run.same-shards.delta_ms": -9.929911000000004,
+    "eligible_fixture_comparison.explicit-reuse.first-run.same-shards.delta_percent": -5.8564615358637875,
+    "eligible_fixture_comparison.explicit-reuse.first-run.parent-suite.delta_ms": -1655.95172,
+    "eligible_fixture_comparison.explicit-reuse.first-run.parent-suite.delta_percent": -1793.333260341675,
+    "eligible_fixture_comparison.explicit-reuse.unrelated-code.same-shards.delta_ms": 93.85711,
+    "eligible_fixture_comparison.explicit-reuse.unrelated-code.same-shards.delta_percent": 51.17368659392634,
+    "eligible_fixture_comparison.explicit-reuse.unrelated-code.parent-suite.delta_ms": -2479.343202,
+    "eligible_fixture_comparison.explicit-reuse.unrelated-code.parent-suite.delta_percent": -2690.3843488833713,
+    "eligible_fixture_comparison.explicit-reuse.related-code.same-shards.delta_ms": 83.85393899999998,
+    "eligible_fixture_comparison.explicit-reuse.related-code.same-shards.delta_percent": 48.79533526171276,
+    "eligible_fixture_comparison.explicit-reuse.related-code.parent-suite.delta_ms": -2427.948283,
+    "eligible_fixture_comparison.explicit-reuse.related-code.parent-suite.delta_percent": -2658.280092056843,
+    "eligible_fixture_comparison.explicit-reuse.all-code.same-shards.delta_ms": -14.234805999999992,
+    "eligible_fixture_comparison.explicit-reuse.all-code.same-shards.delta_percent": -8.167975667397972,
+    "eligible_fixture_comparison.explicit-reuse.all-code.parent-suite.delta_ms": -2503.5721790000002,
+    "eligible_fixture_comparison.explicit-reuse.all-code.parent-suite.delta_percent": -2870.242764519782,
+    "eligible_fixture_comparison.explicit-reuse.environment.same-shards.delta_ms": -6.407276000000024,
+    "eligible_fixture_comparison.explicit-reuse.environment.same-shards.delta_percent": -3.659841779408695,
+    "eligible_fixture_comparison.explicit-reuse.environment.parent-suite.delta_ms": -1852.943109,
+    "eligible_fixture_comparison.explicit-reuse.environment.parent-suite.delta_percent": -2073.988189522629,
+    "eligible_fixture_comparison.explicit-reuse.retry.same-shards.delta_ms": 101.41611700000001,
+    "eligible_fixture_comparison.explicit-reuse.retry.same-shards.delta_percent": 52.41827712854109,
+    "eligible_fixture_comparison.explicit-reuse.retry.parent-suite.delta_ms": -2310.5147720000004,
+    "eligible_fixture_comparison.explicit-reuse.retry.parent-suite.delta_percent": -2449.9120481365994,
+    "eligible_fixture_comparison.explicit-reuse.unchanged.same-shards.delta_ms": 181.693743,
+    "eligible_fixture_comparison.explicit-reuse.unchanged.same-shards.delta_percent": 99.99999999999999,
+    "eligible_fixture_comparison.explicit-reuse.unchanged.parent-suite.delta_ms": -502.57508900000005,
+    "eligible_fixture_comparison.explicit-reuse.unchanged.parent-suite.delta_percent": -547.3971202107825,
+    "subprocess.overall_ms": 82607.326576
+  },
+  "stage_outcomes": [
+    {
+      "configuration": "baseline",
+      "scenario": "first-run",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "unrelated-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "related-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "all-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "environment",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "failure",
+      "status": "failed",
+      "exit_code": 1,
+      "expected_failure": true,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "retry",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "baseline",
+      "scenario": "unchanged",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "parent-command-dispatch-through-return",
+      "test_measurement_scope": null
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "first-run",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "unrelated-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "related-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "all-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "environment",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "failure",
+      "status": "failed",
+      "exit_code": 1,
+      "expected_failure": true,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "retry",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "click-default",
+      "scenario": "unchanged",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 0,
+      "reused_source_count": 1,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "first-run",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 2,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "unrelated-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 1,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "related-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 1,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "all-code",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 2,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "environment",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 2,
+      "reused_source_count": 0,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "failure",
+      "status": "failed",
+      "exit_code": 1,
+      "expected_failure": true,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 1,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "retry",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 1,
+      "reused_source_count": 1,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    },
+    {
+      "configuration": "explicit-reuse",
+      "scenario": "unchanged",
+      "status": "passed",
+      "exit_code": 0,
+      "expected_failure": false,
+      "audit_matches": true,
+      "executed_source_count": 0,
+      "reused_source_count": 2,
+      "request_measurement_scope": "driver-preflight-through-runner-return",
+      "test_measurement_scope": "executed-source-command-duration-sum"
+    }
+  ],
+  "raw_comparison_samples": [
+    {
+      "baseline": {
+        "duration_ms": 179.328053,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 95.655334,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 83.67271900000001,
+      "delta_percent": 46.65902383939896,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "first-run",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 94.83056,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1357.389794,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1262.5592339999998,
+      "delta_percent": -1331.384349095903,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "first-run",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 189.464314,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 89.289902,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 100.174412,
+      "delta_percent": 52.87244330349198,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "unrelated-code",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 85.554224,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1392.307524,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1306.7533,
+      "delta_percent": -1527.3977588762887,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "unrelated-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 180.267141,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 91.231211,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 89.03593000000001,
+      "delta_percent": 49.391103395820764,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "related-code",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 83.567754,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1377.879828,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1294.3120740000002,
+      "delta_percent": -1548.81759057447,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "related-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 180.356073,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 90.881856,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 89.47421700000001,
+      "delta_percent": 49.60976113069395,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "all-code",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 91.843519,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1395.582219,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1303.7386999999999,
+      "delta_percent": -1419.5217193278493,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "all-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 177.918733,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 88.994302,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 88.924431,
+      "delta_percent": 49.980364349829316,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "environment",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 89.283583,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1424.816297,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1335.5327140000002,
+      "delta_percent": -1495.8323457964275,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "environment",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 87.662022,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "failed"
+      },
+      "click": {
+        "duration_ms": 93.37879,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "failed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": -5.716768000000002,
+      "delta_percent": -6.521373645704867,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "failure",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 89.34069,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "failed"
+      },
+      "click": {
+        "duration_ms": 1437.241532,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "failed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1347.900842,
+      "delta_percent": -1508.7199819029831,
+      "eligible": false,
+      "excluded_reason": "verification-not-passed",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "failure",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 176.090143,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 101.930521,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 74.15962200000001,
+      "delta_percent": 42.114578781391536,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "retry",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 87.546318,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1384.286749,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -1296.7404310000002,
+      "delta_percent": -1481.204990254416,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "retry",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 177.646194,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 0,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "click-default",
+      "delta_ms": 177.646194,
+      "delta_percent": 100.0,
+      "eligible": false,
+      "excluded_reason": "scope-not-equivalent",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "unchanged",
+      "scope_equivalent": false,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 89.156963,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 504.830651,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "click-default",
+      "delta_ms": -415.67368799999997,
+      "delta_percent": -466.2268363717144,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "unchanged",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 169.554789,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 179.4847,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": -9.929911000000004,
+      "delta_percent": -5.8564615358637875,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "first-run",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 92.339319,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1748.291039,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -1655.95172,
+      "delta_percent": -1793.333260341675,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "first-run",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 183.408928,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 89.551818,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": 93.85711,
+      "delta_percent": 51.17368659392634,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "unrelated-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 92.155725,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 2571.498927,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -2479.343202,
+      "delta_percent": -2690.3843488833713,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "unrelated-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 171.848269,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 87.99433,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": 83.85393899999998,
+      "delta_percent": 48.79533526171276,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "related-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 91.335307,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 2519.28359,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -2427.948283,
+      "delta_percent": -2658.280092056843,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "related-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 174.275813,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 188.510619,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": -14.234805999999992,
+      "delta_percent": -8.167975667397972,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "all-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 87.225102,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 2590.797281,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -2503.5721790000002,
+      "delta_percent": -2870.242764519782,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "all-code",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 175.069754,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 181.47703,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": -6.407276000000024,
+      "delta_percent": -3.659841779408695,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "environment",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 89.342028,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 1942.285137,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -1852.943109,
+      "delta_percent": -2073.988189522629,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "environment",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 101.430638,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "failed"
+      },
+      "click": {
+        "duration_ms": 99.413828,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "failed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": 2.0168100000000067,
+      "delta_percent": 1.988363713141592,
+      "eligible": false,
+      "excluded_reason": "verification-not-passed",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "failure",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 88.583065,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "failed"
+      },
+      "click": {
+        "duration_ms": 2661.743821,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "failed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -2573.160756,
+      "delta_percent": -2904.7998689139963,
+      "eligible": false,
+      "excluded_reason": "verification-not-passed",
+      "iteration": 0,
+      "order": [
+        "same-shards",
+        "parent-suite",
+        "click"
+      ],
+      "scenario": "failure",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 193.474724,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 92.058607,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": 101.41611700000001,
+      "delta_percent": 52.41827712854109,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "retry",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 94.310111,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 2404.824883,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -2310.5147720000004,
+      "delta_percent": -2449.9120481365994,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "parent-suite",
+        "click",
+        "same-shards"
+      ],
+      "scenario": "retry",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 181.693743,
+        "measurement_scope": "sequential-shard-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 0,
+        "measurement_scope": "executed-source-command-duration-sum",
+        "status": "passed"
+      },
+      "comparison": "same-shards",
+      "configuration": "explicit-reuse",
+      "delta_ms": 181.693743,
+      "delta_percent": 99.99999999999999,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "unchanged",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    },
+    {
+      "baseline": {
+        "duration_ms": 91.811789,
+        "measurement_scope": "parent-command-dispatch-through-return",
+        "status": "passed"
+      },
+      "click": {
+        "duration_ms": 594.386878,
+        "measurement_scope": "driver-preflight-through-runner-return",
+        "status": "passed"
+      },
+      "comparison": "parent-suite",
+      "configuration": "explicit-reuse",
+      "delta_ms": -502.57508900000005,
+      "delta_percent": -547.3971202107825,
+      "eligible": true,
+      "excluded_reason": "",
+      "iteration": 0,
+      "order": [
+        "click",
+        "same-shards",
+        "parent-suite"
+      ],
+      "scenario": "unchanged",
+      "scope_equivalent": true,
+      "unit": "ms",
+      "warmup": false
+    }
+  ],
+  "finished_at": "2026-09-08T02:01:36.364784+00:00"
+}

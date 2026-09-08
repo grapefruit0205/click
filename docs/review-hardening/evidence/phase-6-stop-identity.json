@@ -1,0 +1,20 @@
+{
+  "input_fingerprint": "42739e8239af6ee2182d65b793df32221fdfde9b3781e2d2a21f398bd9e78b60",
+  "generated_pairs_match": [
+    "click_change_policy.py",
+    "click_evidence.py",
+    "click_gate.py",
+    "click_process.py",
+    "click_verification.py",
+    "click_verification_reuse.py"
+  ],
+  "user_policy_and_version_files_equal_head": true,
+  "active_measurement_harnesses": [],
+  "measurement_status": "Stopped at user request; partial results only.",
+  "complete_local_test_coverage": {
+    "passed": 945,
+    "skipped": 6
+  },
+  "performance_complete_pairs_per_workload": 1,
+  "release_readiness": "Not asserted."
+}

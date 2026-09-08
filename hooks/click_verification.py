@@ -618,7 +618,11 @@ def _prepare_verification(
     try:
         state = _read_contract_state(event)
         verification = state.get("verification")
-        if not click_runtime_state.view(state).execution_authorized or not isinstance(verification, dict):
+        if (
+            not click_runtime_state.view(state).execution_authorized
+            or not isinstance(verification, dict)
+            or not click_evidence.revision_is_valid(verification.get("mutation_revision"))
+        ):
             return result
         tool_id = event.get("tool_use_id")
         request_id = (
@@ -633,7 +637,7 @@ def _prepare_verification(
         previous_batch = click_incremental.current_batch(verification)
         batch = click_incremental.new_batch(
             trace.get("plan"), batch_id=request_id,
-            revision=int(verification.get("mutation_revision", 0)), prepared_ms=elapsed,
+            revision=verification["mutation_revision"], prepared_ms=elapsed,
             requested=trace.get("requested"), labels=trace.get("labels"),
             reuse_origins=trace.get("reuse_origins"),
             command_plans=trace.get("command_plans"),
@@ -663,6 +667,45 @@ def _prepare_verification(
         # Measurements cannot admit/reject a command or grant reuse authority.
         pass
     return result
+
+
+def _invalidate_workspace_evidence(
+    state: dict[str, Any], verification: dict[str, Any],
+    sources: dict[str, Any], revision: int,
+) -> int:
+    """Invalidate receipts after observed out-of-band workspace drift."""
+    revision += 1
+    verification["mutation_revision"] = revision
+    verification["status"] = "ready"
+    verification["verified_revision"] = -1
+    verification["failed_revision"] = -1
+    verification["workspace_changed"] = True
+    for source in sources.values():
+        if not isinstance(source, dict):
+            continue
+        if source.get("status") in {"passed", "observed"}:
+            source["status"] = "stale"
+        else:
+            source["status"] = "ready"
+        source["verified_revision"] = -1
+        source["unchanged_failure_retries"] = 0
+        source["last_exit_code"] = None
+    external = state.get("external_evidence")
+    browser_required = bool(
+        isinstance(external, dict)
+        and external.get("browser_required") is True
+    )
+    browser_source_key = (
+        str(external.get("browser_source_key", ""))
+        if isinstance(external, dict)
+        else ""
+    )
+    state["external_evidence"] = _fresh_external_evidence_state(
+        required=browser_required,
+        source_key=browser_source_key,
+    )
+    state["observations"] = _fresh_observation_state()
+    return revision
 
 
 def _prepare_verification_impl(
@@ -697,6 +740,9 @@ def _prepare_verification_impl(
             "Click verification state is unavailable; stage and approve again.",
             "",
         )
+    revision = verification.get("mutation_revision")
+    if not click_evidence.revision_is_valid(revision):
+        return "", "Click verification mutation revision is malformed.", ""
     prior_verification_changed_workspace = (
         verification.get("workspace_changed") is True
     )
@@ -818,7 +864,6 @@ def _prepare_verification_impl(
         verification["running_host_coverage_digest"] = ""
         verification["runner_claimed_at"] = 0
 
-    revision = int(verification.get("mutation_revision", 0))
     argv_keys = _evidence_keys_for_kind(sources, "argv")
     grouped_checks, grouping_error = _verification_groups(batch)
     if grouping_error:
@@ -963,6 +1008,7 @@ def _prepare_verification_impl(
     safe_change_reused_keys: set[str] = set()
     successor_origins: dict[str, dict[str, Any]] = {}
     successor_imported: dict[str, dict[str, Any]] = {}
+    reuse_rollbacks: dict[str, dict[str, Any]] = {}
     if (
         current_requested
         or dependency_candidates
@@ -1072,37 +1118,9 @@ def _prepare_verification_impl(
                 ):
                     reason_codes[source_key] = "workspace-ambiguous"
                     not_evaluable_keys.add(source_key)
-                revision += 1
-                verification["mutation_revision"] = revision
-                verification["status"] = "ready"
-                verification["verified_revision"] = -1
-                verification["failed_revision"] = -1
-                verification["workspace_changed"] = True
-                for source in sources.values():
-                    if not isinstance(source, dict):
-                        continue
-                    if source.get("status") in {"passed", "observed"}:
-                        source["status"] = "stale"
-                    else:
-                        source["status"] = "ready"
-                    source["verified_revision"] = -1
-                    source["unchanged_failure_retries"] = 0
-                    source["last_exit_code"] = None
-                external = state.get("external_evidence")
-                browser_required = bool(
-                    isinstance(external, dict)
-                    and external.get("browser_required") is True
+                revision = _invalidate_workspace_evidence(
+                    state, verification, sources, revision,
                 )
-                browser_source_key = (
-                    str(external.get("browser_source_key", ""))
-                    if isinstance(external, dict)
-                    else ""
-                )
-                state["external_evidence"] = _fresh_external_evidence_state(
-                    required=browser_required,
-                    source_key=browser_source_key,
-                )
-                state["observations"] = _fresh_observation_state()
             else:
                 for source_key in current_requested:
                     source = sources[source_key]
@@ -1213,6 +1231,7 @@ def _prepare_verification_impl(
                         host_coverage=host_coverage,
                     ):
                         assert isinstance(receipt, dict)
+                        reuse_rollbacks[source_key] = json.loads(json.dumps(source))
                         _promote_dependency_receipt(
                             source,
                             receipt,
@@ -1260,11 +1279,18 @@ def _prepare_verification_impl(
                                 not_evaluable_keys.add(source_key)
                 for source_key in safe_change_candidates - reused_keys:
                     source = sources[source_key]
+                    decision_context = {
+                        "source_key": source_key,
+                        "revision": revision,
+                        "git_root": git_root,
+                        "tree_digest": tree_digest,
+                    }
                     decision = click_change_policy.decide(
                         workspace,
                         grouped_checks[source_key],
                         source.get("verified_safe_change_receipt"),
                         git_capture=git_capture,
+                        decision_context=decision_context,
                     )
                     changed_paths = decision.get("changed_paths", [])
                     evidence_id = str(
@@ -1300,6 +1326,7 @@ def _prepare_verification_impl(
                         environment_digest=environment_digest,
                         executable_digest=executable_digest,
                         host_coverage=host_coverage,
+                        decision_context=decision_context,
                     )
                     if safe_change_matches:
                         confirmed_snapshot = git_workspace_snapshot(workspace)
@@ -1319,11 +1346,13 @@ def _prepare_verification_impl(
                             not_evaluable_keys.add(source_key)
                             continue
                         verification_advisories.append(preflight_advisory)
+                        reuse_rollbacks[source_key] = json.loads(json.dumps(source))
                         _promote_safe_change_receipt(
                             source,
                             decision,
                             revision=revision,
                             tree_digest=tree_digest,
+                            decision_context=decision_context,
                         )
                         reused_keys.add(source_key)
                         safe_change_reused_keys.add(source_key)
@@ -1361,6 +1390,58 @@ def _prepare_verification_impl(
                             reason_codes[source_key] = (
                                 "safe-change-policy-not-covered"
                             )
+
+    if reused_keys:
+        # A successful decision is provisional until this final common boundary.
+        # Fresh collections never reuse executable hashes from the first stage.
+        confirmed_snapshot = git_workspace_snapshot(workspace)
+        workspace_drift = not (
+            isinstance(confirmed_snapshot, dict)
+            and os.path.normcase(str(confirmed_snapshot.get("root", ""))) == git_root
+            and confirmed_snapshot.get("digest") == tree_digest
+        )
+        confirmed_environment = _observer_environment(
+            _verification_environment(cwd=workspace), verification,
+        )
+        confirmed_bindings = click_verification_bindings.collect_group_bindings(
+            grouped_checks, reused_keys, cwd=workspace,
+            environment=confirmed_environment,
+        )
+        if confirmed_bindings is None:
+            return "", "Click could not resolve verification executables before confirming reuse.", ""
+        confirmed_environment_digests, confirmed_executable_digests = confirmed_bindings
+        invalidated = {
+            key for key in reused_keys
+            if workspace_drift
+            or confirmed_environment_digests[key] != current_environment_digests[key]
+            or confirmed_executable_digests[key] != current_executable_digests[key]
+        }
+        for key in invalidated:
+            original = successor_imported.get(key, reuse_rollbacks.get(key))
+            if original is not None:
+                sources[key].clear()
+                sources[key].update(original)
+            sources[key].update(status="ready", verified_revision=-1, last_exit_code=None)
+            reason_codes[key] = (
+                "workspace-ambiguous" if workspace_drift
+                else "environment-binding-changed"
+                if confirmed_environment_digests[key] != current_environment_digests[key]
+                else "executable-binding-changed"
+            )
+            if workspace_drift:
+                not_evaluable_keys.add(key)
+        reused_keys.difference_update(invalidated)
+        dependency_reused_keys.difference_update(invalidated)
+        safe_change_reused_keys.difference_update(invalidated)
+        if workspace_drift:
+            revision = _invalidate_workspace_evidence(state, verification, sources, revision)
+        if invalidated:
+            prepared_environment = confirmed_environment
+            current_environment_digests.update(confirmed_environment_digests)
+            current_executable_digests.update(confirmed_executable_digests)
+            verification_advisories.append(
+                "Click detected changed inputs while confirming reuse; running affected checks."
+            )
 
     for source_key, original in successor_imported.items():
         if source_key not in reused_keys:
@@ -1655,6 +1736,31 @@ def record_outcome(
     )
 
 
+def _verification_claim_binding(state: Any) -> dict[str, Any] | None:
+    """Capture only the live authority facts needed by a claimed invocation."""
+    if not isinstance(state, dict) or not click_runtime_state.view(state).execution_authorized:
+        return None
+    verification = state.get("verification")
+    contract_digest = state.get("contract_digest")
+    if (
+        not isinstance(verification, dict)
+        or not click_evidence.revision_is_valid(verification.get("mutation_revision"))
+        or not isinstance(contract_digest, str)
+        or re.fullmatch(r"[0-9a-f]{64}", contract_digest) is None
+    ):
+        return None
+    identity_fields = (
+        ("contract_id", "staged_turn_id", "approved_turn_id")
+        if state["status"] == "approved" else ("evidence_session_id",)
+    )
+    return {
+        "status": state["status"],
+        "contract_digest": contract_digest,
+        "mutation_revision": verification["mutation_revision"],
+        **{field: state.get(field) for field in identity_fields},
+    }
+
+
 def _record_verification_result(
     path: Path,
     batch: dict[str, Any],
@@ -1686,6 +1792,9 @@ def _record_verification_result(
         state = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return False
+    claim_binding = _verification_claim_binding(state)
+    if claim_binding is None or batch.get("_click_claim_binding") != claim_binding:
+        return False
     verification = state.get("verification")
     if not isinstance(verification, dict):
         return False
@@ -1713,7 +1822,7 @@ def _record_verification_result(
     ):
         return False
 
-    revision = int(verification.get("mutation_revision", 0))
+    revision = claim_binding["mutation_revision"]
     claimed_revision = revision
     verification["runner_token_digest"] = ""
     verification["runner_claimed_at"] = 0
@@ -2223,6 +2332,9 @@ def _claim_verification_run(
         return None, "Click verification runner could not read its contract state."
     if not click_runtime_state.view(state).execution_authorized:
         return None, "Click verification runner is no longer authorized to execute."
+    claim_binding = _verification_claim_binding(state)
+    if claim_binding is None:
+        return None, "Click verification runner authority or revision is malformed."
     verification = state.get("verification")
     if not isinstance(verification, dict):
         return None, "Click verification runner could not read its approved scale."
@@ -2420,7 +2532,7 @@ def _claim_verification_run(
         claim_mode="one-use-runner",
         request_digest=batch_digest,
         token_digest=token_digest,
-        mutation_revision=int(verification.get("mutation_revision", 0)),
+        mutation_revision=claim_binding["mutation_revision"],
         claimed_at=claimed_at,
     )
     if claim_error:
@@ -2430,6 +2542,8 @@ def _claim_verification_run(
     state["verification"] = verification
     state["updated_at"] = int(time.time())
     _write_json(state_path, state)
+    # This stays inside this invocation, outside the persisted receipt schema.
+    batch["_click_claim_binding"] = claim_binding
     batch["_click_verification_environment"] = verification_environment
     batch["_click_verification_environment_rebound"] = environment_rebound
     batch["_click_command_plans"] = runtime_command_plans
@@ -2484,14 +2598,12 @@ def _claim_verification_run(
     batch["_click_authoritative_contexts"] = {
         source_key: {
             **authoritative_current[source_key],
-            "mutation_revision": int(verification.get("mutation_revision", 0)),
+            "mutation_revision": claim_binding["mutation_revision"],
             "contract_digest": str(state.get("contract_digest", "")),
         }
         for source_key in sorted(authoritative_current)
     }
-    batch["_click_mutation_revision"] = int(
-        verification.get("mutation_revision", 0)
-    )
+    batch["_click_mutation_revision"] = claim_binding["mutation_revision"]
     batch["_click_observer_mode"] = click_observer_control.mode(verification)
     return batch, ""
 
@@ -2507,7 +2619,7 @@ def _release_unclaimed_verification_reservation(
         state = json.loads(state_path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return False
-    if not click_runtime_state.view(state).execution_authorized:
+    if _verification_claim_binding(state) is None:
         return False
     verification = state.get("verification")
     if not isinstance(verification, dict) or verification.get("status") != "running":
@@ -2673,6 +2785,7 @@ def _collection_boundary_check(
     batch_digest: str,
     runner_token: str,
     *,
+    expected_claim_binding: dict[str, Any] | None,
     next_source_key: str,
     grouped_checks: dict[str, list[dict[str, Any]]],
     before: dict[str, Any] | None,
@@ -2687,10 +2800,14 @@ def _collection_boundary_check(
         with _state_lock():
             state = json.loads(state_path.read_text(encoding="utf-8"))
         verification = state.get("verification")
+        claim_binding = _verification_claim_binding(state)
         if (
-            not click_runtime_state.view(state).execution_authorized
+            claim_binding is None
+            or claim_binding != expected_claim_binding
             or not isinstance(verification, dict)
             or verification.get("status") != "running"
+            or not click_evidence.revision_is_valid(verification.get("runner_claimed_at"))
+            or verification["runner_claimed_at"] <= 0
             or verification.get("last_batch_digest") != batch_digest
             or not secrets.compare_digest(
                 str(verification.get("runner_token_digest", "")),
@@ -2758,8 +2875,11 @@ def _collection_boundary_check(
             current_state = json.loads(state_path.read_text(encoding="utf-8"))
         current_verification = current_state.get("verification")
         if (
-            not isinstance(current_verification, dict)
+            _verification_claim_binding(current_state) != claim_binding
+            or not isinstance(current_verification, dict)
             or current_verification.get("status") != "running"
+            or not click_evidence.revision_is_valid(current_verification.get("runner_claimed_at"))
+            or current_verification.get("runner_claimed_at") != verification["runner_claimed_at"]
             or current_verification.get("last_batch_digest") != batch_digest
             or current_verification.get("runner_token_digest")
             != verification.get("runner_token_digest")
@@ -2975,6 +3095,7 @@ def _run_verification(
                         state_path,
                         batch_digest,
                         runner_token,
+                        expected_claim_binding=batch.get("_click_claim_binding"),
                         next_source_key=candidate_source_key,
                         grouped_checks=grouped_checks,
                         before=before,

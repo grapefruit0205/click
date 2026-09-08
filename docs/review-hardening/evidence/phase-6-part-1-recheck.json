@@ -1,0 +1,33 @@
+{
+  "name": "phase-6-part-1-recheck",
+  "command": [
+    "/tmp/click-release-pytest-shyO6a/venv/bin/python",
+    "-B",
+    "-m",
+    "scripts.run_ci_tests",
+    "--parts",
+    "4",
+    "--part",
+    "1",
+    "--timings-out",
+    "/tmp/click-review-hardening-20260908/phase-6-part-1-durations.json"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M COMPATIBILITY_SURFACE.md\n M dist/antigravity/hooks/click_change_policy.py\n M dist/antigravity/hooks/click_evidence.py\n M dist/antigravity/hooks/click_gate.py\n M dist/antigravity/hooks/click_process.py\n M dist/antigravity/hooks/click_verification.py\n M dist/antigravity/hooks/click_verification_reuse.py\n M docs/runtime-optimization.md\n M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_gate.py\n M hooks/click_process.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_runner_transport.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n",
+  "input_fingerprint_start": "42739e8239af6ee2182d65b793df32221fdfde9b3781e2d2a21f398bd9e78b60",
+  "exit_code": 0,
+  "elapsed_seconds": 215.411791,
+  "input_fingerprint_end": "42739e8239af6ee2182d65b793df32221fdfde9b3781e2d2a21f398bd9e78b60",
+  "dirty_end": " M COMPATIBILITY_SURFACE.md\n M dist/antigravity/hooks/click_change_policy.py\n M dist/antigravity/hooks/click_evidence.py\n M dist/antigravity/hooks/click_gate.py\n M dist/antigravity/hooks/click_process.py\n M dist/antigravity/hooks/click_verification.py\n M dist/antigravity/hooks/click_verification_reuse.py\n M docs/runtime-optimization.md\n M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_gate.py\n M hooks/click_process.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_gate_verification.py\n M tests/test_click_process.py\n M tests/test_click_runner_transport.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n",
+  "counts": {
+    "ran": 97,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "passed": 97
+  }
+}

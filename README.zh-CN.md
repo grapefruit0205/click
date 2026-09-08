@@ -29,14 +29,14 @@ codex plugin add click@click
 
 重启 Codex 并新建任务，让已安装的 Hook 和技能重新加载。在依赖 Hook 之前，先通过 CLI 的 `/hooks` 页面审阅待确认的 Click Hook；详见 [Hook 故障排查](#hook-故障排查)。
 
-当前版本：**v0.92.0**。更新命令：
+当前版本：**v0.93.0**。更新命令：
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.92.0 减少 Hook 启动及重复绑定开销，拆分验证与仪表板模块，并在 Linux、macOS 和 Windows CI 中分区执行完整测试清单。改动、实测结果及其适用范围见[版本说明](RELEASE_NOTES.md)和[运行时优化记录](docs/runtime-optimization.md)。
+更新后请重启，并使用新任务。v0.93.0 会拒绝格式错误的证据修订值，把 safe-change 与 successor 复用绑定到当前的精确输入，并在复用前再次确认输入；同时加强显式进程终止和临时报告清理。自动分片和经授权的分片复用保持不变。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)和[代码加固记录](docs/review-hardening/reports/phase-6.md)。
 
 ## 从日常工作开始
 

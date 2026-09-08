@@ -1,0 +1,94 @@
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 3.62 ms; 이번 테스트 실행: 3.62 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 5.51 ms; 이번 테스트 실행: 5.51 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click 결과] 1개 샤드 모두 실제 실행 · 실제 재사용 없음; 재사용으로 생략한 테스트 실행시간: 0 ms · 실제 재사용 없음; 동일 샤드 전체 순차 실행 예상: 약 5.36 ms; 이번 테스트 실행: 5.36 ms; 테스트 실행시간 감소: 약 0%; 시간 근거 커버리지 0/0 · 이전 계약 재판정 0개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+[Click verification 1/1:E1:targeted] /tmp/click-release-pytest-shyO6a/venv/bin/python -m unittest verification_fixture.VerificationFixture.test_pass
+
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click verification runner is no longer authorized to execute.
+Click verification runner is no longer authorized to execute.
+Click verification runner is no longer authorized to execute.
+Click verification runner is no longer authorized to execute.
+Click verification runner was already claimed; replay is blocked.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner authority or revision is malformed.
+Click verification runner was already claimed; replay is blocked.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+Click could not record the verification result safely.
+----------------------------------------------------------------------
+Ran 14 tests in 13.322s
+
+OK

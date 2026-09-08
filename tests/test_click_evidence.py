@@ -323,6 +323,110 @@ class ClickEvidenceTests(unittest.TestCase):
             click_evidence.keys_for_kind(sources, "browser"), {browser_key}
         )
 
+    def test_successful_revisions_are_strict_nonnegative_integers(self) -> None:
+        for revision in (0, 1, 19):
+            with self.subTest(revision=revision):
+                source = {"status": "passed", "verified_revision": revision}
+                self.assertTrue(click_evidence.revision_is_valid(revision))
+                self.assertTrue(click_evidence.is_current(source, revision))
+                self.assertFalse(click_evidence.is_current(source, revision + 1))
+        for value in (-1, -2, True, False, 0.0, 1.0, 1.9, "0", "1", None, [], {}, float("nan"), float("inf")):
+            with self.subTest(value=value):
+                self.assertFalse(click_evidence.revision_is_valid(value))
+                self.assertFalse(click_evidence.is_current({"status": "passed", "verified_revision": value}, 0))
+                self.assertFalse(click_evidence.is_current({"status": "passed", "verified_revision": 0}, value))
+        self.assertFalse(click_evidence.is_current({"status": "passed"}, 0))
+        self.assertFalse(click_evidence.is_current({"status": "ready", "verified_revision": -1}, -1))
+
+    def test_ledger_revision_validation_preserves_unverified_sentinel(self) -> None:
+        valid = {"evidence_state": click_evidence.fresh_state(self.contract)}
+        key = click_evidence.evidence_key("E1")
+        self.assertTrue(click_evidence.sources_from_state(valid, expected_contract_schema_version=2))
+        for status, revision, accepted in (
+            ("ready", -1, True), ("running", -1, True), ("failed", -1, True),
+            ("passed", 0, True), ("passed", 1, True),
+            ("passed", -1, False), ("ready", -2, False),
+            *[("passed", value, False) for value in (True, False, 0.0, 1.0, 1.9, "0", "1", None, [], {}, float("nan"), float("inf"))],
+        ):
+            with self.subTest(status=status, revision=revision):
+                state = copy.deepcopy(valid)
+                state["evidence_state"]["sources"][key].update(status=status, verified_revision=revision)
+                self.assertEqual(bool(click_evidence.sources_from_state(state, expected_contract_schema_version=2)), accepted)
+        missing = copy.deepcopy(valid)
+        missing["evidence_state"]["sources"][key].pop("verified_revision")
+        self.assertEqual(click_evidence.sources_from_state(missing, expected_contract_schema_version=2), {})
+
+    def test_dynamic_registration_rejects_malformed_existing_ledger_without_mutation(self) -> None:
+        valid = {"status": "evidence", "evidence_state": click_evidence.fresh_state(self.contract)}
+        key = click_evidence.evidence_key("E1")
+        for field, value in (
+            *[("verified_revision", value) for value in (-1, True, False, 0.0, 1.9, "0", None, [], {}, float("nan"), float("inf"))],
+            ("status", []), ("status", {}), ("attempts", "0"),
+        ):
+            with self.subTest(field=field, value=value):
+                state = copy.deepcopy(valid)
+                source = state["evidence_state"]["sources"][key]
+                source.update(status="passed", verified_revision=0)
+                source[field] = value
+                before = json.dumps(state, sort_keys=True)
+                sources, error = click_evidence.register_runtime_sources(state, ["E1", "E_NEW"])
+                self.assertIsNone(sources)
+                self.assertIn("malformed", error)
+                self.assertEqual(json.dumps(state, sort_keys=True), before)
+        for field, value in (("source_count", 99), ("registry_digest", "0" * 64)):
+            state = copy.deepcopy(valid)
+            state["evidence_state"][field] = value
+            before = copy.deepcopy(state)
+            sources, error = click_evidence.register_runtime_sources(state, ["E_NEW"])
+            self.assertIsNone(sources)
+            self.assertIn("malformed", error)
+            self.assertEqual(state, before)
+
+    def test_successor_initializer_preserves_current_declaration_and_normal_defaults(self) -> None:
+        key = click_evidence.evidence_key("E1")
+        current_contract = copy.deepcopy(self.contract)
+        current_contract["verification"]["evidence"][0]["dependencies"] = ["current/"]
+        current = click_evidence.fresh_state(current_contract)["sources"][key]
+        previous = click_evidence.fresh_state(self.contract)["sources"][key]
+        previous.update(status="passed", verified_revision=7, verified_at=123,
+                        attempts=8, reserved_units=99, reserved_check_digest="a" * 64,
+                        locked_check_digest="b" * 64, verified_contract_digest="c" * 64)
+        previous["future_extension"] = object()
+        previous["verified_future_authority"] = True
+        # This helper constructs candidates, not authority. The public
+        # requalification boundary separately checks matching kind/declarations.
+        current["kind"] = "hosted"
+        candidate = click_evidence.fresh_successor_source(current, previous)
+        self.assertEqual(candidate["kind"], "hosted")
+        self.assertEqual(candidate["dependency_patterns"], ["current/"])
+        self.assertEqual(candidate["dependency_declaration_digest"], current["dependency_declaration_digest"])
+        self.assertEqual(candidate["status"], "ready")
+        self.assertEqual(candidate["verified_revision"], -1)
+        self.assertEqual(candidate["verified_at"], 123)
+        for field in ("attempts", "unchanged_failure_retries", "reserved_units", "successor_reuse_count"):
+            self.assertEqual(candidate[field], 0)
+        for field in ("reserved_check_digest", "locked_check_digest", "verified_contract_digest"):
+            self.assertEqual(candidate[field], "")
+        self.assertNotIn("future_extension", candidate)
+        self.assertNotIn("verified_future_authority", candidate)
+        self.assertEqual(previous["attempts"], 8)
+        self.assertEqual(current["status"], "ready")
+
+    def test_successor_initializer_copies_only_explicit_nested_fact_and_measurement_fields(self) -> None:
+        key = click_evidence.evidence_key("E1")
+        current = click_evidence.fresh_state(self.contract)["sources"][key]
+        previous = copy.deepcopy(current)
+        previous["verified_dependency_observation"] = {"paths": ["old.py"], "nested": {"value": 1}}
+        previous["last_success_duration_baseline"] = {"origin_task": {"mode": "evidence", "id": "original"}}
+        previous["last_success_duration_ms"] = 42
+        before = copy.deepcopy(previous)
+        candidate = click_evidence.fresh_successor_source(current, previous)
+        self.assertEqual(candidate["last_success_duration_ms"], 42)
+        self.assertEqual(candidate["last_success_duration_baseline"], before["last_success_duration_baseline"])
+        candidate["verified_dependency_observation"]["nested"]["value"] = 2
+        candidate["last_success_duration_baseline"]["origin_task"]["id"] = "changed"
+        self.assertEqual(previous, before)
+
     def test_lifecycle_sources_helper_passes_the_contract_schema_version(self) -> None:
         state = {
             "state_schema_version": click_lifecycle.CONTRACT_STATE_SCHEMA_VERSION,

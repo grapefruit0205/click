@@ -1,0 +1,33 @@
+{
+  "name": "phase-2-hook-green",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.test_click_review_hardening.ReviewHardeningGateTests.test_evidence_changed_decision_runs_real_check",
+    "tests.test_click_review_hardening.ReviewHardeningGateTests.test_guarded_changed_decision_runs_real_check",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_committed_safe_change_policy_reuses_without_runtime_observer",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_each_shard_can_use_existing_committed_safe_change_authority",
+    "tests.test_click_gate_verification.ClickGateVerificationTests.test_guarded_successor_partial_code_reuse_new_check_and_relevant_rerun",
+    "-q"
+  ],
+  "cwd": "/home/grapefruit/Documents/Codex/2026-09-06/click-live-0-81-0-codex/work/click-release",
+  "python": "3.12.3 (main, Jul 15 2026, 23:46:41) [GCC 13.3.0]",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+  "test_target_overrides": {},
+  "head": "d48d327c7a6836dbe11b3d331b49420b4bb1058c",
+  "dirty_start": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "input_fingerprint_start": "fb37d71e9d728a3f16b5e081b6f6703e012b31d8d935a1fbe03319780de7e34b",
+  "exit_code": 1,
+  "elapsed_seconds": 24.774489,
+  "input_fingerprint_end": "fb37d71e9d728a3f16b5e081b6f6703e012b31d8d935a1fbe03319780de7e34b",
+  "dirty_end": " M hooks/click_change_policy.py\n M hooks/click_evidence.py\n M hooks/click_verification.py\n M hooks/click_verification_reuse.py\n M tests/test_click_change_policy.py\n M tests/test_click_evidence.py\n M tests/test_click_verification.py\n?? docs/review-hardening/\n?? tests/test_click_review_hardening.py\n",
+  "counts": {
+    "ran": 5,
+    "skipped": 0,
+    "failures": 1,
+    "errors": 0,
+    "passed": 4
+  }
+}

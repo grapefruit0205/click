@@ -92,6 +92,10 @@ _validate_contract = click_contract.validate_contract
 JSON_REPORT_FILE_PREFIX = ".click-json-report-"
 JSON_REPORT_MAX_BYTES = 2 * 1024 * 1024
 JSON_REPORT_MAX_AGE_SECONDS = 60 * 60
+JSON_REPORT_MAX_CLEANUP_DELETIONS = 128
+_JSON_REPORT_FILENAME = re.compile(
+    re.escape(JSON_REPORT_FILE_PREFIX) + r"[0-9a-f]{32}\.json"
+)
 
 
 STATE_LOCK_STALE_SECONDS = click_state.STATE_LOCK_STALE_SECONDS
@@ -514,6 +518,36 @@ def _prepare_verification(
     )
 
 
+def _prune_json_reports(root: Path, report_path: Path) -> None:
+    # Stream the exceptional file-fallback cleanup without retaining a directory
+    # list. Fresh files do not consume the deletion budget or starve older files.
+    # Enumeration and metadata work can still be O(N); only deletions are capped.
+    deleted = 0
+    now = time.time()
+    try:
+        with os.scandir(root) as candidates:
+            for candidate in candidates:
+                if (
+                    candidate.name == report_path.name
+                    or _JSON_REPORT_FILENAME.fullmatch(candidate.name) is None
+                ):
+                    continue
+                try:
+                    metadata = candidate.stat(follow_symlinks=False)
+                    if (
+                        stat.S_ISREG(metadata.st_mode)
+                        and now - metadata.st_mtime > JSON_REPORT_MAX_AGE_SECONDS
+                    ):
+                        Path(candidate.path).unlink()
+                        deleted += 1
+                        if deleted >= JSON_REPORT_MAX_CLEANUP_DELETIONS:
+                            break
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+
 def _json_report_command(report: dict[str, Any]) -> str:
     inline = click_runner_transport.render_runner_shell_command(
         [
@@ -532,19 +566,7 @@ def _json_report_command(report: dict[str, Any]) -> str:
     root = click_state.state_root()
     report_path = root / f"{JSON_REPORT_FILE_PREFIX}{secrets.token_hex(16)}.json"
     click_state.write_json(report_path, report)
-    now = time.time()
-    try:
-        candidates = list(root.glob(f"{JSON_REPORT_FILE_PREFIX}*.json"))[:128]
-    except OSError:
-        candidates = []
-    for candidate in candidates:
-        if candidate == report_path:
-            continue
-        try:
-            if now - candidate.stat().st_mtime > JSON_REPORT_MAX_AGE_SECONDS:
-                candidate.unlink()
-        except OSError:
-            pass
+    _prune_json_reports(root, report_path)
     bounded = click_runner_transport.render_runner_shell_command(
         [
             *_stateful_runner_prefix("run-json-report"),
