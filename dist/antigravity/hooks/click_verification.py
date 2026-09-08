@@ -160,6 +160,7 @@ def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
         "running_environment_binding": [],
         "running_environment_binding_digest": "",
         "running_executable_digests": {},
+        "running_executable_component_digests": {},
         "running_host_coverage": {},
         "running_host_coverage_digest": "",
         "workspace_changed": False,
@@ -929,6 +930,7 @@ def _prepare_verification_impl(
         verification["running_environment_binding"] = []
         verification["running_environment_binding_digest"] = ""
         verification["running_executable_digests"] = {}
+        verification["running_executable_component_digests"] = {}
         verification["running_host_coverage"] = {}
         verification["running_host_coverage_digest"] = ""
         verification["runner_claimed_at"] = 0
@@ -1752,8 +1754,10 @@ def _prepare_verification_impl(
             running_environment_binding, runner_token
         )
     )
+    running_executable_component_digests: dict[str, dict[str, str]] = {}
     running_bindings = click_verification_bindings.collect_group_bindings(
         grouped_checks, requested_keys, cwd=workspace, environment=prepared_environment,
+        executable_component_bindings=running_executable_component_digests,
     )
     if running_bindings is None:
         return (
@@ -1831,6 +1835,9 @@ def _prepare_verification_impl(
                 running_environment_binding_digest
             ),
             "running_executable_digests": running_executable_digests,
+            "running_executable_component_digests": (
+                running_executable_component_digests
+            ),
             "running_host_coverage": host_coverage,
             "running_host_coverage_digest": running_host_coverage_digest,
             "started_at": int(time.time()),
@@ -2223,6 +2230,7 @@ def _record_verification_result(
     verification["running_environment_binding"] = []
     verification["running_environment_binding_digest"] = ""
     verification["running_executable_digests"] = {}
+    verification["running_executable_component_digests"] = {}
     verification["running_host_coverage"] = {}
     verification["running_host_coverage_digest"] = ""
     if workspace_changed:
@@ -2617,6 +2625,9 @@ def _claim_verification_run(
         runtime_command_plans = persisted_command_plans
     prepared_environment_digests = verification.get("running_environment_digests")
     prepared_executable_digests = verification.get("running_executable_digests")
+    prepared_executable_components = verification.get(
+        "running_executable_component_digests"
+    )
     for prepared in (prepared_environment_digests, prepared_executable_digests):
         if (
             not isinstance(prepared, dict)
@@ -2628,6 +2639,21 @@ def _claim_verification_run(
             )
         ):
             return None, "Click verification runner context binding was malformed."
+    if (
+        not isinstance(prepared_executable_components, dict)
+        or set(prepared_executable_components) != running_keys
+        or any(
+            not isinstance(components, dict)
+            or set(components) != {"selection", "content", "runtime"}
+            or any(
+                not isinstance(value, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", value)
+                for value in components.values()
+            )
+            for components in prepared_executable_components.values()
+        )
+    ):
+        return None, "Click verification runner context binding was malformed."
     running_environment_binding = verification.get("running_environment_binding")
     if not _verification_environment_binding_is_authentic(
         running_environment_binding,
@@ -2695,7 +2721,25 @@ def _claim_verification_run(
             str(prepared_executable_digests.get(source_key, "")),
             current_executable_digest,
         ):
-            return None, "Click verification executable changed before execution."
+            current_components = (
+                click_verification_bindings.verification_executable_component_digests(
+                    executable_records
+                )
+            )
+            prepared_components = prepared_executable_components[source_key]
+            changed_components = [
+                name
+                for name in ("selection", "content", "runtime")
+                if not secrets.compare_digest(
+                    str(prepared_components.get(name, "")),
+                    str(current_components.get(name, "")),
+                )
+            ]
+            changed = ", ".join(changed_components) or "aggregate"
+            return None, (
+                "Click verification executable changed before execution "
+                f"({changed} binding)."
+            )
         if not secrets.compare_digest(
             str(prepared_environment_digests.get(source_key, "")),
             current_environment_digest,
@@ -2856,6 +2900,7 @@ def _release_unclaimed_verification_reservation(
             "running_environment_binding": [],
             "running_environment_binding_digest": "",
             "running_executable_digests": {},
+            "running_executable_component_digests": {},
             "running_host_coverage": {},
             "running_host_coverage_digest": "",
             "started_at": 0,

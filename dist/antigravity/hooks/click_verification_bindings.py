@@ -361,6 +361,37 @@ def verification_executable_payload(
     ]
 
 
+def verification_executable_component_digests(
+    executables: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Return content-free diagnostics for executable binding drift."""
+
+    components = {
+        "selection": [
+            {
+                key: executable.get(key)
+                for key in ("name", "selected_path", "path")
+            }
+            for executable in executables
+        ],
+        "content": [
+            {
+                key: executable.get(key)
+                for key in ("size", "content_digest")
+            }
+            for executable in executables
+        ],
+        "runtime": [
+            executable.get("runtime_identity")
+            for executable in executables
+        ],
+    }
+    return {
+        name: click_capability.digest({"executables": payload})
+        for name, payload in components.items()
+    }
+
+
 def _environment_context(cwd: Path, environment: dict[str, str]) -> dict[str, Any]:
     environment_payload = json.dumps(
         sorted(
@@ -424,6 +455,7 @@ def collect_group_bindings(
     digest_file: Callable[[Path], str] = hash_file_content,
     input_bindings: dict[str, dict[str, Any]] | None = None,
     runtime_bindings: dict[str, dict[str, Any]] | None = None,
+    executable_component_bindings: dict[str, dict[str, str]] | None = None,
 ) -> tuple[dict[str, str], dict[str, str]] | None:
     """Collect all source fingerprints with one strictly local digest stage."""
     stage = FileDigestStage(digest_file)
@@ -449,6 +481,10 @@ def collect_group_bindings(
             input_bindings[source_key] = input_binding
         if runtime_bindings is not None:
             runtime_bindings[source_key] = click_runtime_identity.group_binding(records)
+        if executable_component_bindings is not None:
+            executable_component_bindings[source_key] = (
+                verification_executable_component_digests(records)
+            )
         executables[source_key] = click_capability.digest(
             {"executables": executable_payload}
         )
