@@ -35,8 +35,10 @@ STATUSES = frozenset({"complete", "incomplete", "unsafe"})
 
 def _path_key(root: Path, path: Path) -> str:
     try:
-        value = path.relative_to(root).as_posix()
-    except ValueError:
+        canonical_root = root.resolve(strict=True)
+        canonical_path = path.resolve(strict=False)
+        value = canonical_path.relative_to(canonical_root).as_posix()
+    except (OSError, RuntimeError, ValueError):
         value = path.name
     return click_capability.digest({"path": value})
 

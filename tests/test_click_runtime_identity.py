@@ -10,6 +10,23 @@ from hooks import click_runtime_identity as identity
 
 
 class RuntimeIdentityTests(unittest.TestCase):
+    def test_path_keys_normalize_root_aliases_before_relativizing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            canonical_root = Path(directory) / "canonical"
+            target = canonical_root / "node_modules" / "vitest" / "vitest.mjs"
+            target.parent.mkdir(parents=True)
+            target.write_text("export {};\n", encoding="utf-8")
+            alias_root = Path(directory) / "alias"
+            try:
+                alias_root.symlink_to(canonical_root, target_is_directory=True)
+            except OSError:
+                self.skipTest("directory symlinks are unavailable")
+
+            self.assertEqual(
+                identity._path_key(alias_root, target.resolve(strict=True)),
+                identity._path_key(canonical_root, target.resolve(strict=True)),
+            )
+
     @staticmethod
     def digest(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
