@@ -608,6 +608,14 @@ def parse_command(argv: list[str], root: Path, cwd: Path) -> dict:
 
 
 def workspace_snapshot(root: Path, limits: Limits) -> dict[str, str]:
+    try:
+        # macOS exposes temporary directories through both /var and
+        # /private/var.  Compare symlink targets against the physical project
+        # root so an internal link does not become an apparent escape merely
+        # because the caller used the public alias.
+        root = root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise AnalysisError("project-boundary") from None
     result: dict[str, str] = {}
     total = 0
     for directory, dirs, names in os.walk(root, followlinks=False):

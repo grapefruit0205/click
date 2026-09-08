@@ -166,8 +166,8 @@ class VerificationFreshnessHookTests(ClickGateTestCase):
 
     def test_ignored_input_content_change_forces_run_and_private_export(self) -> None:
         local_input = self.workspace / ".local-input.txt"
-        secret = "private-value-that-must-not-be-exported"
-        local_input.write_text(secret, encoding="utf-8")
+        private_sample = "private-value-that-must-not-be-exported"
+        local_input.write_text(private_sample, encoding="utf-8")
         first = self.request(inputs=[".local-input.txt"])
         self.assertEqual(self.reason(), "explicit-input-receipt-missing")
         self.assertEqual(self.run_rewritten(first).returncode, 0)
@@ -180,7 +180,7 @@ class VerificationFreshnessHookTests(ClickGateTestCase):
         exported = self.run_rewritten(export)
         self.assertEqual(exported.returncode, 0, exported.stderr)
         self.assertNotIn(".local-input.txt", exported.stdout)
-        self.assertNotIn(secret, exported.stdout)
+        self.assertNotIn(private_sample, exported.stdout)
 
         local_input.write_text("changed-private-value", encoding="utf-8")
         changed = self.request(inputs=[".local-input.txt"])

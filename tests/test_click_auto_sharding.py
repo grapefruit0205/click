@@ -179,6 +179,24 @@ class CommandParsingTests(unittest.TestCase):
             write(root, "new.txt", "new content")
             self.assertNotEqual(first, inventory.workspace_snapshot(root, inventory.Limits()))
 
+    def test_workspace_snapshot_resolves_project_alias_before_symlink_boundary(self):
+        with tempfile.TemporaryDirectory(prefix="click-snapshot-alias-") as directory:
+            base = Path(directory)
+            physical = base / "physical"
+            physical.mkdir()
+            write(physical, "value.txt", "value")
+            (physical / "linked.txt").symlink_to("value.txt")
+            alias = base / "alias"
+            try:
+                alias.symlink_to(physical, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                self.skipTest("directory symlinks are unavailable on this host")
+            git_fixture(physical)
+
+            snapshot = inventory.workspace_snapshot(alias, inventory.Limits())
+
+            self.assertIn("linked.txt", snapshot)
+
     def test_missing_command_requires_selection_without_importing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

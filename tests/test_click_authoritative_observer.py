@@ -660,6 +660,20 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
         ):
             self.assertEqual(module._path_key(value), expected)
 
+    def test_linux_external_runtime_root_keeps_hosted_distribution_bounded(self) -> None:
+        module = authoritative.click_observation_inputs
+        with tempfile.TemporaryDirectory(prefix="click-hosted-python-") as raw:
+            version_root = Path(raw) / "3.12.3"
+            platform_prefix = version_root / "x64"
+            (platform_prefix / "lib").mkdir(parents=True)
+            (version_root / "lib").mkdir()
+
+            self.assertEqual(
+                module._linux_external_runtime_root(platform_prefix),
+                version_root,
+            )
+        self.assertIsNone(module._linux_external_runtime_root(Path("/usr")))
+
     def test_windows_bootstrap_restores_and_chains_existing_customization(self) -> None:
         with tempfile.TemporaryDirectory(prefix="click-bootstrap-") as raw:
             root = Path(raw)

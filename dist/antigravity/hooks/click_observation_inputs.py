@@ -168,6 +168,29 @@ def _portable_runtime_roots(project: Path, artifact: Path) -> dict[str, Path]:
     return candidates
 
 
+def _linux_external_runtime_root(base_prefix: Path) -> Path | None:
+    """Return one bounded non-system CPython distribution root.
+
+    GitHub's setup-python layout keeps the executable under a platform child
+    such as ``<version>/x64`` while a zip probe and supporting libraries live
+    beside it under ``<version>/lib``.  Index that version directory as one
+    runtime unit.  Custom interpreters without that layout stay bounded to
+    their own prefix, and normal /usr or /usr/local installs need no extra
+    root.
+    """
+    base_prefix = base_prefix.resolve()
+    system_prefixes = (Path("/usr"), Path("/usr/local"))
+    if any(
+        base_prefix == prefix or prefix in base_prefix.parents
+        for prefix in system_prefixes
+    ):
+        return None
+    sibling_lib = base_prefix.parent / "lib"
+    if base_prefix.name in {"x64", "arm64", "x86", "universal2"} and sibling_lib.is_dir():
+        return base_prefix.parent
+    return base_prefix
+
+
 def runtime_roots(
     project: Path, artifact_id: str, *, profile: str = PROFILE
 ) -> dict[str, Path]:
@@ -227,6 +250,9 @@ def runtime_roots(
     environment_prefix = Path(sys.prefix).resolve()
     if environment_prefix != Path(sys.base_prefix).resolve():
         result["environment-prefix"] = environment_prefix
+    external_runtime = _linux_external_runtime_root(Path(sys.base_prefix))
+    if external_runtime is not None:
+        result["external-runtime"] = external_runtime
     for role, path in result.items():
         if role == "project":
             continue

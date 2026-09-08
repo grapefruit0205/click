@@ -63,14 +63,14 @@ class VerificationInputBindingTests(unittest.TestCase):
         self.assertEqual(reason, "explicit-input-sensitive-path")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            secret = "CLICK_PRIVATE_VALUE_47"
-            (root / ".env").write_text(secret, encoding="utf-8")
+            private_sample = "CLICK_PRIVATE_VALUE_47"
+            (root / ".env").write_text(private_sample, encoding="utf-8")
             binding = inputs.snapshot(root, ("**",))
             rendered = json.dumps(binding, sort_keys=True)
             self.assertEqual(binding["status"], "unavailable")
             self.assertEqual(binding["reason"], "explicit-input-sensitive-match")
             self.assertNotIn(".env", rendered)
-            self.assertNotIn(secret, rendered)
+            self.assertNotIn(private_sample, rendered)
 
     def test_pattern_boundaries_reject_external_and_traversal_paths(self) -> None:
         for pattern in ("/tmp/input.txt", "../input.txt", r"C:\\input.txt"):
