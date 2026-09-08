@@ -127,6 +127,33 @@ class VerificationBindingStageTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(digest.call_count, 2 * per_stage)
 
+    def test_executable_payload_uses_content_instead_of_volatile_mtime(self):
+        baseline = {
+            "name": "npx.cmd",
+            "selected_path": "c:/node/npx.cmd",
+            "path": "c:/node/npx.cmd",
+            "size": 12,
+            "mtime_ns": 1,
+            "content_digest": "a" * 64,
+            "runtime_identity": {
+                "status": "complete",
+                "digest": "b" * 64,
+                "reason_codes": [],
+            },
+            "_execution_path": "C:/node/npx.cmd",
+        }
+        touched = {**baseline, "mtime_ns": 2}
+
+        self.assertEqual(
+            bindings.verification_executable_payload([baseline]),
+            bindings.verification_executable_payload([touched]),
+        )
+        changed = {**baseline, "content_digest": "c" * 64}
+        self.assertNotEqual(
+            bindings.verification_executable_payload([baseline]),
+            bindings.verification_executable_payload([changed]),
+        )
+
     def test_windows_equal_metadata_cannot_hide_an_executable_content_change(self):
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "verifier"

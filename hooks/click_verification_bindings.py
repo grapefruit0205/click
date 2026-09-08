@@ -336,7 +336,11 @@ def verification_executable_payload(
         {
             key: value
             for key, value in executable.items()
-            if key != "_execution_path"
+            # Content, size, selected path, and the runtime/install-tree
+            # identity already bind execution semantics. Windows can expose
+            # launcher timestamp churn across short-lived Hook and runner
+            # processes even when those content bindings are unchanged.
+            if key not in {"_execution_path", "mtime_ns"}
         }
         for executable in executables
     ]
