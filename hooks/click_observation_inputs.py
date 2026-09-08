@@ -20,7 +20,7 @@ import tempfile
 MAX_INPUTS = 4096
 MAX_INDEX_FILES = 100_000
 MAX_INPUT_BYTES = 64 * 1024 * 1024
-MAX_FILE_BYTES = 16 * 1024 * 1024
+MAX_FILE_BYTES = 64 * 1024 * 1024
 PROFILE = "linux-cpython3123-strace68-v1"
 DARWIN_PROFILE = "darwin-cpython3123-fsusage-v1"
 WINDOWS_PROFILE = "windows-cpython3123-etw-v1"
@@ -185,10 +185,49 @@ def _linux_external_runtime_root(base_prefix: Path) -> Path | None:
         for prefix in system_prefixes
     ):
         return None
-    sibling_lib = base_prefix.parent / "lib"
-    if base_prefix.name in {"x64", "arm64", "x86", "universal2"} and sibling_lib.is_dir():
-        return base_prefix.parent
+    if base_prefix.name in {"x64", "arm64", "x86", "universal2"}:
+        version_root = base_prefix.parent
+        hosted_cache = version_root.parent.parent
+        if (
+            version_root.parent.name == "Python"
+            and hosted_cache.name == "hostedtoolcache"
+            and re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}(?:[-+][a-zA-Z0-9._-]+)?", version_root.name)
+        ):
+            # setup-python may not create ``<version>/lib`` even though
+            # CPython probes it.  Recognize the stable hosted-toolcache
+            # structure instead of relying on that optional directory.
+            return version_root
+        if (version_root / "lib").is_dir():
+            return version_root
     return base_prefix
+
+
+def _linux_hosted_runtime_probe_roots(runtime_root: Path) -> dict[str, Path]:
+    """Return only the lib directories CPython probes above setup-python.
+
+    These roots can be absent.  They are intentionally rooted at ``lib`` so
+    the generic ``*-root`` lookup rule permits one filename without granting
+    recursive access to the hosted tool cache or its installation prefix.
+    """
+    runtime_root = runtime_root.resolve()
+    python_root = runtime_root.parent
+    cache_root = python_root.parent
+    install_root = cache_root.parent
+    if (
+        python_root.name != "Python"
+        or cache_root.name != "hostedtoolcache"
+        or not re.fullmatch(
+            r"[0-9]+(?:\.[0-9]+){2}(?:[-+][a-zA-Z0-9._-]+)?",
+            runtime_root.name,
+        )
+    ):
+        return {}
+    return {
+        "runtime-version-lib-root": runtime_root / "lib",
+        "runtime-channel-lib-root": python_root / "lib",
+        "runtime-cache-lib-root": cache_root / "lib",
+        "runtime-prefix-lib-root": install_root / "lib",
+    }
 
 
 def runtime_roots(
@@ -253,6 +292,7 @@ def runtime_roots(
     external_runtime = _linux_external_runtime_root(Path(sys.base_prefix))
     if external_runtime is not None:
         result["external-runtime"] = external_runtime
+        result.update(_linux_hosted_runtime_probe_roots(external_runtime))
     for role, path in result.items():
         if role == "project":
             continue

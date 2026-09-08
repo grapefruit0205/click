@@ -663,14 +663,23 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
     def test_linux_external_runtime_root_keeps_hosted_distribution_bounded(self) -> None:
         module = authoritative.click_observation_inputs
         with tempfile.TemporaryDirectory(prefix="click-hosted-python-") as raw:
-            version_root = Path(raw) / "3.12.3"
+            cache_root = Path(raw) / "hostedtoolcache"
+            version_root = cache_root / "Python" / "3.12.3"
             platform_prefix = version_root / "x64"
             (platform_prefix / "lib").mkdir(parents=True)
-            (version_root / "lib").mkdir()
 
             self.assertEqual(
                 module._linux_external_runtime_root(platform_prefix),
                 version_root.resolve(),
+            )
+            self.assertEqual(
+                module._linux_hosted_runtime_probe_roots(version_root),
+                {
+                    "runtime-version-lib-root": version_root / "lib",
+                    "runtime-channel-lib-root": cache_root / "Python" / "lib",
+                    "runtime-cache-lib-root": cache_root / "lib",
+                    "runtime-prefix-lib-root": Path(raw) / "lib",
+                },
             )
         self.assertIsNone(module._linux_external_runtime_root(Path("/usr")))
 
