@@ -46,7 +46,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
             (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "click")
-        self.assertEqual(manifest["version"], "0.94.0")
+        self.assertEqual(manifest["version"], "0.94.1")
         self.assertEqual(manifest["license"], "MIT")
         combined_copy = " ".join(
             (
@@ -72,7 +72,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         self.assertEqual(marketplace["name"], "click")
         self.assertEqual(marketplace["plugins"][0]["name"], "click")
         self.assertEqual(
-            marketplace["plugins"][0]["source"]["ref"], "v0.94.0"
+            marketplace["plugins"][0]["source"]["ref"], "v0.94.1"
         )
 
     def test_readmes_preserve_modes_references_and_reproducible_evidence_boundaries(self) -> None:

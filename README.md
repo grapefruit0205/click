@@ -30,14 +30,14 @@ codex plugin add click@click
 
 Restart Codex and start a new task so the installed Hooks and skill reload. Review pending Click Hooks in the CLI's `/hooks` view before relying on them; see [Hook troubleshooting](#hook-troubleshooting).
 
-Current release: **v0.94.0**. To update:
+Current release: **v0.94.1**. To update:
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.94.0 adds bounded automatic inventory and exact-file sharding for pinned Vitest 5 and Jest 30 profiles, extends exact runtime and input binding to Node, npm, Go, and content validation, and uses a resident Hook worker to reduce repeated Python startup. The dashboard now separates execution, automatic sharding, exact reuse, owner-policy reuse, and authoritative observation in Korean, English, and Simplified Chinese. Unsupported or ambiguous discovery still runs the parent command; automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and the [multilingual expansion record](docs/history/multilang-expansion/FINAL_REPORT.md) for validation, measurements, and their limits.
+Restart and use a fresh task after updating. v0.94.1 separates maintained architecture and canonical prompts from completed implementation history, while preserving the v0.94.0 runtime behavior. Automatic sharding `init/status/refresh`, authorized shard reuse, and conservative parent fallback remain required regressions. See [release notes](RELEASE_NOTES.md), the [documentation map](docs/README.md), and the [multilingual expansion record](docs/history/multilang-expansion/FINAL_REPORT.md) for validation, measurements, and their limits.
 
 ## Start with everyday work
 

@@ -29,14 +29,14 @@ codex plugin add click@click
 
 重启 Codex 并新建任务，让已安装的 Hook 和技能重新加载。在依赖 Hook 之前，先通过 CLI 的 `/hooks` 页面审阅待确认的 Click Hook；详见 [Hook 故障排查](#hook-故障排查)。
 
-当前版本：**v0.94.0**。更新命令：
+当前版本：**v0.94.1**。更新命令：
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.94.0 为固定版本的 Vitest 5 和 Jest 30 配置增加了有界自动 inventory 与精确文件分片，将精确运行时和输入绑定扩展到 Node、npm、Go 与内容验证，并通过常驻 Hook worker 减少重复的 Python 启动开销。仪表板以韩语、英语和简体中文分别显示执行、自动分片、同状态精确复用、仓库所有者策略复用和权威观察。遇到不支持或不明确的发现过程时仍执行原始 parent 命令；自动分片 `init/status/refresh` 与经授权的分片复用仍是必须满足的回归标准。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)和[多语言扩展记录](docs/history/multilang-expansion/FINAL_REPORT.md)。
+更新后请重启，并使用新任务。v0.94.1 将持续维护的架构文档和规范提示词与已完成的实现历史分开，同时保留 v0.94.0 的运行时行为。自动分片 `init/status/refresh`、经授权的分片复用和保守的 parent fallback 仍是必须满足的回归标准。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)、[文档索引](docs/README.md)和[多语言扩展记录](docs/history/multilang-expansion/FINAL_REPORT.md)。
 
 ## 从日常工作开始
 

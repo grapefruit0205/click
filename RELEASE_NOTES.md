@@ -1,5 +1,20 @@
 # Release notes
 
+## v0.94.1 — 2026-09-09
+
+- Maintained architecture documents, canonical prompts, completed phase packages,
+  and historical evidence now have explicit entry points under `docs/README.md`,
+  `docs/architecture/`, and `docs/history/`. Historical records keep their original
+  contents and literal paths where those paths are part of the evidence.
+- The canonical Click skill reference and generated Antigravity package now point
+  to the reorganized multilingual expansion record. Relative Markdown links and
+  generated distribution parity were validated after the move.
+- Runtime behavior is unchanged. Automatic sharding `init/status/refresh`,
+  complete-inventory enforcement, authorized shard reuse, and conservative parent
+  fallback remain required regressions. The focused local suites passed 87 tests
+  with 2 platform-only skips, and pull request #99 passed the Linux, macOS, and
+  Windows matrix after one transient Windows native-observation job was rerun.
+
 ## v0.94.0 — 2026-09-08
 
 - Automatic inventory and exact-file sharding now cover bounded, pinned Vitest

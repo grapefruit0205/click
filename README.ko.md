@@ -76,14 +76,14 @@ codex plugin add click@click
 
 Codex를 재시작하고 새 작업을 시작해 설치된 Hook과 스킬을 다시 불러옵니다. CLI의 `/hooks`에서 검토 대기 중인 Click Hook을 확인한 뒤 사용하세요. 자세한 내용은 [Hook 문제 확인](#hook-문제-확인)을 참고하세요.
 
-현재 릴리스는 **v0.94.0**입니다. 업데이트 명령은 다음과 같습니다.
+현재 릴리스는 **v0.94.1**입니다. 업데이트 명령은 다음과 같습니다.
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.94.0은 고정된 Vitest 5와 Jest 30 프로필에 제한된 자동 inventory와 정확한 파일 샤딩을 추가하고, Node·npm·Go·콘텐츠 검증까지 정확한 런타임 및 입력 결합을 확장합니다. 상주 Hook worker는 반복되는 Python 시작 비용을 줄입니다. 대시보드는 실행, 자동 샤딩, 같은 상태의 정확 재사용, 저장소 소유자 정책 재사용, 권위 있는 관찰을 한국어·영어·중국어 간체로 구분합니다. 지원하지 않거나 불명확한 탐색은 원래 parent 명령을 실행하며, 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준으로 유지합니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md)와 [다국어 확장 기록](docs/history/multilang-expansion/FINAL_REPORT.md)에 있습니다.
+업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.94.1은 유지 중인 아키텍처 문서와 canonical 프롬프트를 완료된 구현 이력에서 분리하며, v0.94.0의 런타임 동작을 그대로 유지합니다. 자동 샤딩 `init/status/refresh`, 권한 있는 샤드 재사용, 보수적인 parent fallback은 필수 회귀 기준입니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md), [문서 안내](docs/README.md), [다국어 확장 기록](docs/history/multilang-expansion/FINAL_REPORT.md)에 있습니다.
 
 설치와 재사용 준비 상태는 서로 다릅니다.
 
