@@ -2644,7 +2644,12 @@ def _claim_verification_run(
         or set(prepared_executable_components) != running_keys
         or any(
             not isinstance(components, dict)
-            or set(components) != {"selection", "content", "runtime"}
+            or not {"selection", "content", "runtime"}.issubset(components)
+            or any(
+                not isinstance(name, str)
+                or not re.fullmatch(r"[a-z0-9:._/-]{1,160}", name)
+                for name in components
+            )
             or any(
                 not isinstance(value, str)
                 or not re.fullmatch(r"[0-9a-f]{64}", value)
@@ -2729,12 +2734,19 @@ def _claim_verification_run(
             prepared_components = prepared_executable_components[source_key]
             changed_components = [
                 name
-                for name in ("selection", "content", "runtime")
+                for name in sorted(
+                    set(prepared_components) | set(current_components)
+                )
                 if not secrets.compare_digest(
                     str(prepared_components.get(name, "")),
                     str(current_components.get(name, "")),
                 )
             ]
+            detailed_runtime_components = [
+                name for name in changed_components if name.startswith("runtime:")
+            ]
+            if detailed_runtime_components:
+                changed_components = detailed_runtime_components
             changed = ", ".join(changed_components) or "aggregate"
             return None, (
                 "Click verification executable changed before execution "

@@ -609,6 +609,12 @@ def collect(
         "status": status,
         "digest": click_capability.digest(payload),
         "reason_codes": unsafe or reasons,
+        "component_digests": {
+            f"{index}:{record.get('role', 'unknown')}": click_capability.digest(
+                {"record": record}
+            )
+            for index, record in enumerate(records)
+        },
     }
 
 

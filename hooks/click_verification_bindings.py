@@ -386,6 +386,18 @@ def verification_executable_component_digests(
             for executable in executables
         ],
     }
+    for executable_index, executable in enumerate(executables):
+        runtime_identity = executable.get("runtime_identity")
+        runtime_components = (
+            runtime_identity.get("component_digests")
+            if isinstance(runtime_identity, dict)
+            else None
+        )
+        if not isinstance(runtime_components, dict):
+            continue
+        for role, digest in runtime_components.items():
+            if isinstance(role, str) and isinstance(digest, str):
+                components[f"runtime:{executable_index}:{role}"] = [digest]
     return {
         name: click_capability.digest({"executables": payload})
         for name, payload in components.items()
