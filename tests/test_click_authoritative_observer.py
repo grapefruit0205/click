@@ -670,7 +670,7 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
 
             self.assertEqual(
                 module._linux_external_runtime_root(platform_prefix),
-                version_root,
+                version_root.resolve(),
             )
         self.assertIsNone(module._linux_external_runtime_root(Path("/usr")))
 
