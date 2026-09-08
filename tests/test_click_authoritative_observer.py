@@ -675,10 +675,12 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
             self.assertEqual(
                 module._linux_hosted_runtime_probe_roots(version_root),
                 {
-                    "runtime-version-lib-root": version_root / "lib",
-                    "runtime-channel-lib-root": cache_root / "Python" / "lib",
-                    "runtime-cache-lib-root": cache_root / "lib",
-                    "runtime-prefix-lib-root": Path(raw) / "lib",
+                    "runtime-version-lib-root": (version_root / "lib").resolve(),
+                    "runtime-channel-lib-root": (
+                        cache_root / "Python" / "lib"
+                    ).resolve(),
+                    "runtime-cache-lib-root": (cache_root / "lib").resolve(),
+                    "runtime-prefix-lib-root": (Path(raw) / "lib").resolve(),
                 },
             )
         self.assertIsNone(module._linux_external_runtime_root(Path("/usr")))
