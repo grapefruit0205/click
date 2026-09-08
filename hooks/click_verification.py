@@ -2672,7 +2672,7 @@ def _claim_verification_run(
             file_content_digest=claim_file_digests,
         )
         if executable_records is None:
-            return None, "Click verification executable changed before execution."
+            return None, "Click verification executable fingerprint was unstable before execution."
         current_executable_digest = _capability_digest(
             {
                 "executables": _verification_executable_payload(

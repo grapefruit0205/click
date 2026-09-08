@@ -168,6 +168,27 @@ class VerificationBindingStageTests(unittest.TestCase):
                 self.assertNotEqual(first, stage(executable))
                 self.assertEqual(stage(executable), hashlib.sha256(b"other").hexdigest())
 
+    def test_windows_metadata_only_transition_gets_one_stable_content_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "verifier"
+            executable.write_bytes(b"stable")
+            stage = bindings.FileDigestStage()
+            before = ("verifier", 1)
+            after = ("verifier", 2)
+            with (
+                mock.patch.object(bindings.os, "name", "nt"),
+                mock.patch.object(
+                    stage, "_identity", side_effect=[before, after, after]
+                ),
+                mock.patch.object(
+                    stage, "_digest_file", wraps=bindings.hash_file_content
+                ) as digest,
+            ):
+                self.assertEqual(
+                    stage(executable), hashlib.sha256(b"stable").hexdigest()
+                )
+            self.assertEqual(digest.call_count, 2)
+
     def test_in_stage_replacement_invalidates_the_file_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "verifier"
@@ -196,7 +217,7 @@ class VerificationBindingStageTests(unittest.TestCase):
             stage = bindings.FileDigestStage(digest)
             self.assertEqual(stage(executable), "")
             self.assertEqual(stage(executable), hashlib.sha256(b"replacement").hexdigest())
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 3 if os.name == "nt" else 2)
 
     def test_typed_result_keeps_every_legacy_record_field_and_avoids_copying(self):
         signature = inspect.signature(verification.record_result)

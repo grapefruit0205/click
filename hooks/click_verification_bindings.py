@@ -49,7 +49,9 @@ class FileDigestStage:
     source boundary. Stat identity avoids reusing a digest after an ordinary
     in-stage replacement; every new authority boundary always hashes afresh.
     Windows ctime is a creation timestamp on supported Python versions, so
-    Windows retains a content read for every record, even within one stage.
+    Windows retains a content read for every record, even within one stage. A
+    Windows metadata-only transition gets one stable-content retry; a content
+    transition or a second metadata transition still fails closed.
     """
 
     def __init__(self, digest_file: Callable[[Path], str] = hash_file_content):
@@ -72,8 +74,21 @@ class FileDigestStage:
                 return self._digests[identity]
             digest = self._digest_file(path)
             # A write during hashing must not establish a reusable stage entry.
-            if not digest or self._identity(path) != identity:
+            if not digest:
                 return ""
+            after = self._identity(path)
+            if after != identity:
+                if os.name != "nt":
+                    return ""
+                retry_digest = self._digest_file(path)
+                if (
+                    not retry_digest
+                    or retry_digest != digest
+                    or self._identity(path) != after
+                ):
+                    return ""
+                digest = retry_digest
+                identity = after
         except OSError:
             return ""
         if os.name != "nt":
