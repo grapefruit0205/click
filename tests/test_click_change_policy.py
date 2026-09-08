@@ -363,9 +363,15 @@ class ClickChangePolicyTests(unittest.TestCase):
     def bound_decision(self):
         baseline = self.baseline()
         (self.root / "README.md").write_text("after\n", encoding="utf-8")
+        git_root_output = self.git_capture(
+            self.root, ["rev-parse", "--show-toplevel"]
+        )
+        self.assertIsNotNone(git_root_output)
+        assert git_root_output is not None
         context = {
             "source_key": "1" * 64, "revision": 1,
-            "git_root": os.path.normcase(str(self.root)), "tree_digest": "2" * 64,
+            "git_root": os.path.normcase(os.fsdecode(git_root_output.strip())),
+            "tree_digest": "2" * 64,
         }
         decision = click_change_policy.decide(
             self.root, self.checks, baseline,

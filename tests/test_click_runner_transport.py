@@ -234,7 +234,10 @@ class ClickJsonReportCleanupTests(unittest.TestCase):
 
     def test_empty_directory_preserves_new_report(self) -> None:
         self.assertEqual(self._fallback(), "bounded-report")
-        self.assertEqual(list(self.root.iterdir()), self.report_paths)
+        self.assertEqual(
+            [path.resolve() for path in self.root.iterdir()],
+            [path.resolve() for path in self.report_paths],
+        )
 
     def test_exact_writer_names_and_strict_ttl_preserve_other_state(self) -> None:
         stale, boundary, fresh = self._report(1), self._report(2, 3600), self._report(3, 3599)
