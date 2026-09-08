@@ -46,7 +46,7 @@ Node test/check, npm test, Go test, pinned Vitest 5, and pinned Jest 30.
 Automatic inventory and exact file splitting are profile-limited to unittest,
 pytest, Vitest, and Jest. JSON, YAML, Markdown, SVG, and jq validation have real
 local fixtures; other direct content linters remain recognized or untested as
-recorded in `docs/multilang-expansion/`.
+recorded in `docs/history/multilang-expansion/`.
 
 Cargo, Gradle/Maven, .NET, TypeScript/CMake/CTest, SQL, and XML command profiles
 do not become verified merely because the adapter recognizes their argv. Their

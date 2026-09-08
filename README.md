@@ -37,7 +37,7 @@ codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.94.0 adds bounded automatic inventory and exact-file sharding for pinned Vitest 5 and Jest 30 profiles, extends exact runtime and input binding to Node, npm, Go, and content validation, and uses a resident Hook worker to reduce repeated Python startup. The dashboard now separates execution, automatic sharding, exact reuse, owner-policy reuse, and authoritative observation in Korean, English, and Simplified Chinese. Unsupported or ambiguous discovery still runs the parent command; automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and the [multilingual expansion record](docs/multilang-expansion/FINAL_REPORT.md) for validation, measurements, and their limits.
+Restart and use a fresh task after updating. v0.94.0 adds bounded automatic inventory and exact-file sharding for pinned Vitest 5 and Jest 30 profiles, extends exact runtime and input binding to Node, npm, Go, and content validation, and uses a resident Hook worker to reduce repeated Python startup. The dashboard now separates execution, automatic sharding, exact reuse, owner-policy reuse, and authoritative observation in Korean, English, and Simplified Chinese. Unsupported or ambiguous discovery still runs the parent command; automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and the [multilingual expansion record](docs/history/multilang-expansion/FINAL_REPORT.md) for validation, measurements, and their limits.
 
 ## Start with everyday work
 
@@ -118,7 +118,7 @@ For an eligible proposal, the normal sequence is:
 
 Read `status` between steps and follow its next action. Status separates command execution, automatic inventory/split, exact reuse, committed-policy reuse, and authoritative-observation reuse; one ready route does not imply the others are ready. Later discovery changes produce a bounded diff; refresh updates only policy matching Click's previously committed lineage and does not overwrite user-owned or modified policy.
 
-Automatic inventory and exact splitting are locally verified for bounded unittest, pinned Vitest 5, and pinned Jest 30 profiles. The conservative pytest collect-only profile is implemented and assigned to pinned pytest CI; this checkout has no pytest runtime. Vitest and Jest use profile-limited static configuration; unsupported or ambiguous collection retains the parent command. See the [automatic sharding guide](skills/click/references/automatic-sharding-setup.md) and [two-project E2E record](docs/auto-sharding-e2e.md).
+Automatic inventory and exact splitting are locally verified for bounded unittest, pinned Vitest 5, and pinned Jest 30 profiles. The conservative pytest collect-only profile is implemented and assigned to pinned pytest CI; this checkout has no pytest runtime. Vitest and Jest use profile-limited static configuration; unsupported or ambiguous collection retains the parent command. See the [automatic sharding guide](skills/click/references/automatic-sharding-setup.md) and [two-project E2E record](docs/history/auto-sharding/e2e.md).
 
 Support is tracked by tool profile rather than by language name alone:
 
@@ -131,7 +131,7 @@ Support is tracked by tool profile rather than by language name alone:
 | JSON/YAML/Markdown/SVG project validators, jq | Verified fixtures | Parent execution only |
 | Cargo, Gradle/Maven, .NET, TypeScript/CMake/CTest, direct SQL/XML linters | Command/runtime profile recognized; native execution still unverified in this checkout | None |
 
-A recognized-only profile is not a claim that its native toolchain passed. Runtime and CI evidence by phase is recorded in [`docs/multilang-expansion/`](docs/multilang-expansion/).
+A recognized-only profile is not a claim that its native toolchain passed. Runtime and CI evidence by phase is recorded in the [multilanguage expansion history](docs/history/multilang-expansion/README.md).
 
 ## Can Observer stay off?
 
@@ -249,7 +249,7 @@ Protocol details and implementation boundaries:
 - [Verification profiles](skills/click/references/verification-profiles.md) and [capability protocol](skills/click/references/capability-protocol.md)
 - [Automatic sharding setup](skills/click/references/automatic-sharding-setup.md) and [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), and [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)
-- [Verification efficiency](skills/click/references/verification-efficiency.md), [anti-loop policy](skills/click/references/anti-loop-policy.md), and [runtime architecture and optimization](docs/runtime-optimization.md)
+- [Documentation map](docs/README.md), [verification efficiency](skills/click/references/verification-efficiency.md), [anti-loop policy](skills/click/references/anti-loop-policy.md), and [runtime architecture and optimization](docs/architecture/runtime-optimization.md)
 
 ## License
 

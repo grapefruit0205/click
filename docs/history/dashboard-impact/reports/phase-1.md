@@ -9,4 +9,4 @@
 
 검증: `tests.test_click_efficiency`와 `tests.test_click_dashboard_projection` 합계 35개 통과. 부분/전체 재사용, 전부 실행, 0 분모, 누락 시간, 계측 조건 불일치, 실패·중단·거부·미완료, 구버전, 중복 및 별도 요청을 포함한다. 다른 Observer 조건의 표본은 시간 비율을 숨기되 재사용 사실을 바꾸지 않는 것을 확인했다.
 
-변경: `hooks/click_incremental.py`, `hooks/click_dashboard_projection.py`, 관련 테스트 및 생성된 dist 사본. 수식과 범위는 [METRICS.md](../METRICS.md)에 기록했다.
+변경: `hooks/click_incremental.py`, `hooks/click_dashboard_projection.py`, 관련 테스트 및 생성된 dist 사본. 수식과 범위는 [METRICS.md](../prompts/METRICS.md)에 기록했다.

@@ -4,8 +4,8 @@ Click **0.90.0**의 기존 대시보드에 참고 이미지의 민트·청록색
 
 - [최종 보고서](reports/final.md): 변경 내용, 검증 결과와 제한
 - [다국어 선택 추가](reports/languages.md): 한국어·영어·중국어 간체, 언어 저장 및 공유 일치
-- [원본 프롬프트](SOURCE-PROMPT.md), [참고 이미지](reference-dashboard.png)
-- [공통 규칙](COMMON.md), [계획](PLAN.md), [지표 계약](METRICS.md), [진행 기록](progress.json)
+- [원본 프롬프트](prompts/PROMPT.md), [참고 이미지](reference-dashboard.png)
+- [공통 규칙](prompts/COMMON.md), [계획](prompts/PLAN.md), [지표 계약](prompts/METRICS.md), [진행 기록](progress.json)
 - [Phase 0](reports/phase-0.md), [Phase 1](reports/phase-1.md), [Phase 2](reports/phase-2.md), [Phase 3](reports/phase-3.md), [Phase 4](reports/phase-4.md), [Phase 5](reports/phase-5.md)
 - [검증 자료의 출처](evidence/README.md)
 
