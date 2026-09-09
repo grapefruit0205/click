@@ -19,6 +19,27 @@ ROOT = Path(__file__).parents[1]
 BENCHMARK = ROOT / "benchmarks" / "incremental_verification.py"
 
 
+class ScopedSessionBenchmarkTests(unittest.TestCase):
+    def test_real_scoped_sessions_preserve_failures_and_count_all_costs(self):
+        result = benchmark.run_scoped_session_benchmark(iterations=1, workload_rounds=20)
+        self.assertEqual(result["summaries"]["eligible_samples"], 1)
+        sample = result["samples"][0]
+        for arm in sample["arms"].values():
+            self.assertEqual(arm["total_ms"], arm["setup_ms"]
+                             + sum(step["wall_ms"] for step in arm["steps"])
+                             + arm["final_full_audit"]["wall_ms"])
+            self.assertEqual(arm["final_full_audit"]["status"], "passed")
+        steps = {step["scenario"]: step for step in sample["arms"]["scoped-inputs"]["steps"]}
+        self.assertEqual((steps["unrelated-code"]["executed"], steps["unrelated-code"]["reused"]), (1, 1))
+        self.assertEqual((steps["related-code"]["executed"], steps["related-code"]["reused"]), (1, 1))
+        self.assertEqual(steps["all-code"]["executed"], 2)
+        self.assertEqual(steps["environment"]["executed"], 2)
+        self.assertEqual(steps["failure"]["status"], "failed")
+        self.assertEqual(steps["retry"]["status"], "passed")
+        self.assertEqual(steps["unchanged"]["reused"], 2)
+        self.assertNotIn("runner_token", json.dumps(result))
+
+
 class IncrementalVerificationBenchmarkTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

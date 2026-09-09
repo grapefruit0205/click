@@ -68,6 +68,16 @@ def verification_receipt_matches(
         and source.get("verified_executable_digest") == executable_digest
         and click_host_coverage.receipt_is_current(host_coverage)
         and source.get("verified_host_coverage") == host_coverage
+        and (
+            not click_change_policy.requires_input_receipt(Path(git_root), group_digest)
+            or (
+                source.get("verified_safe_change_receipt", {}).get("provider")
+                == click_change_policy.INPUT_PROVIDER_NAME
+                and click_change_policy.inputs_are_current(
+                    Path(git_root), source["verified_safe_change_receipt"]
+                )
+            )
+        )
     )
 
 

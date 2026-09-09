@@ -1,0 +1,37 @@
+{
+  "inventory": 1080,
+  "passed": 1075,
+  "skipped": {
+    "tests.test_antigravity_adapter.AntigravityAdapterTests.test_windows_encoded_runner_round_trips_without_shell_expansion": {
+      "status": "skipped 'Windows argv parser regression'",
+      "log": "regression"
+    },
+    "tests.test_click_observer_macos.MacOSNativeSmokeTests.test_native_fs_usage_reads_input_without_workspace_artifacts": {
+      "status": "skipped 'native smoke is macOS-only'",
+      "log": "regression"
+    },
+    "tests.test_click_observer_windows.WindowsNativeSmokeTests.test_native_etw_observes_child_input_without_workspace_artifacts": {
+      "status": "skipped 'native smoke is Windows-only'",
+      "log": "regression"
+    },
+    "tests.test_windows_hook_commands.WindowsHookCommandTests.test_broken_py_launcher_falls_back_to_python": {
+      "status": "skipped 'Windows Python launcher fallback test'",
+      "log": "regression"
+    },
+    "tests.test_windows_hook_commands.WindowsHookCommandTests.test_hooks_execute_via_cmd_and_exec_aliases_rewrite": {
+      "status": "skipped 'Windows cmd integration test'",
+      "log": "regression"
+    }
+  },
+  "unresolved_failures": {},
+  "missing": [],
+  "attempt_log_counts": {
+    "regression": 1079,
+    "corrections": 53,
+    "setup-final": 3,
+    "setup-final-2": 3,
+    "status-final": 1,
+    "pytest": 2
+  },
+  "verification_method": "Complete suite followed by affected-module corrections and isolated pinned pytest checks; earlier failures retained in logs."
+}

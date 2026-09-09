@@ -47,7 +47,7 @@ class Limits:
     output_bytes: int = 256 * 1024
     result_bytes: int = 1024 * 1024
     timeout: float = 30.0
-    modules: int = 128
+    modules: int = 2048
 
 
 VITEST_VERSION = "5.0.0"
@@ -349,10 +349,11 @@ def _parse_vitest_command(argv: list[str], root: Path, cwd: Path) -> dict:
     ):
         raise AnalysisError("unsupported-vitest-command")
     trailing = arguments[target_index + 2 :]
-    if len(trailing) > 1 or any(value.startswith("-") for value in trailing):
+    if len(trailing) > 48 or len(set(trailing)) != len(trailing) or any(value.startswith("-") for value in trailing):
         raise AnalysisError("unsupported-vitest-option")
     _vitest_project_is_supported(root)
-    selected = _vitest_target(cwd, root, trailing[0]) if trailing else ""
+    selected_files = [_vitest_target(cwd, root, value) for value in trailing]
+    selected = selected_files[0] if len(selected_files) == 1 else ""
     runner_prefix = list(argv[: target_index + 3])
     return {
         "adapter": VITEST_ADAPTER,
@@ -368,6 +369,7 @@ def _parse_vitest_command(argv: list[str], root: Path, cwd: Path) -> dict:
         "child_options": [],
         "arguments": list(arguments),
         "selected_file": selected,
+        "selected_files": selected_files,
         "exclude_directories": sorted(
             click_verification_adapters.VITEST_EXCLUDED_DIRECTORIES
         ),
@@ -391,13 +393,17 @@ def _parse_jest_command(argv: list[str], root: Path, cwd: Path) -> dict:
         raise AnalysisError("unsupported-jest-command")
     trailing = arguments[target_index + 1 :]
     selected = ""
+    selected_files = []
     if trailing == ["--runInBand"]:
         pass
     elif (
-        len(trailing) == 3
+        3 <= len(trailing) <= 50
         and trailing[:2] == ["--runInBand", "--runTestsByPath"]
     ):
-        selected = _jest_target(cwd, root, trailing[2])
+        if len(set(trailing[2:])) != len(trailing[2:]):
+            raise AnalysisError("unsupported-jest-option")
+        selected_files = [_jest_target(cwd, root, value) for value in trailing[2:]]
+        selected = selected_files[0] if len(selected_files) == 1 else ""
     else:
         raise AnalysisError("unsupported-jest-option")
     _, referenced = _jest_project_is_supported(root)
@@ -415,6 +421,7 @@ def _parse_jest_command(argv: list[str], root: Path, cwd: Path) -> dict:
         "child_options": [],
         "arguments": list(arguments),
         "selected_file": selected,
+        "selected_files": selected_files,
         "config_input_paths": referenced,
         "exclude_directories": sorted(click_verification_adapters.JEST_EXCLUDED_DIRECTORIES),
     }
@@ -763,7 +770,7 @@ def _vitest_collection(
     )
     if match is None or match.group(1).decode() != VITEST_VERSION:
         raise AnalysisError("unsupported-vitest-version")
-    selected = [spec["selected_file"]] if spec.get("selected_file") else []
+    selected = spec.get("selected_files", [spec["selected_file"]] if spec.get("selected_file") else [])
     collect_argv = [
         str(executable), *spec["collector_prefix"][1:], *selected, "--json", "--run"
     ]
@@ -822,9 +829,11 @@ def _vitest_collection(
         files.add(relative)
     tests.sort(key=lambda item: item["id"])
     if selected:
-        selected_absolute = (cwd / selected[0]).resolve(strict=True)
-        selected_relative = selected_absolute.relative_to(root).as_posix()
-        if files != {selected_relative}:
+        selected_relative = {
+            (cwd / path).resolve(strict=True).relative_to(root).as_posix()
+            for path in selected
+        }
+        if files != selected_relative:
             raise AnalysisError("vitest-selector-not-exact")
     reasons = [] if tests else ["zero-tests"]
     return {
@@ -867,8 +876,9 @@ def _jest_collection(
     if node_error.strip() or node_match is None:
         raise AnalysisError("unsupported-node-version")
     collect_argv = [str(executable), *spec["collector_prefix"][1:]]
-    if spec.get("selected_file"):
-        collect_argv.extend(("--runTestsByPath", spec["selected_file"]))
+    selected_files = spec.get("selected_files", [spec["selected_file"]] if spec.get("selected_file") else [])
+    if selected_files:
+        collect_argv.extend(("--runTestsByPath", *selected_files))
     output, error_output = _capture_bounded_command(
         collect_argv, cwd, environment, limits
     )
@@ -899,9 +909,10 @@ def _jest_collection(
     files = sorted(files)
     if len(files) != len(set(files)):
         raise AnalysisError("duplicate-id")
-    if spec.get("selected_file"):
-        selected = (cwd / spec["selected_file"]).resolve(strict=True).relative_to(root).as_posix()
-        if files != [selected]:
+    if selected_files:
+        selected = sorted((cwd / path).resolve(strict=True).relative_to(root).as_posix()
+                          for path in selected_files)
+        if files != selected:
             raise AnalysisError("jest-selector-not-exact")
     tests = [
         {

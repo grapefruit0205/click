@@ -203,6 +203,44 @@ class ProposalTests(unittest.TestCase):
             {child["inventory"][0]["file"] for child in value["children"]},
         )
 
+    def test_large_file_groups_preserve_unaffected_ownership_on_refresh(self):
+        files = [f"tests/test_{i:03}.test.js" for i in range(130)]
+        parent = {"command": {"argv": ["npx", "--no-install", "vitest", "run"]}}
+        first = proposal.file_groups(self.root, parent, files)
+        self.assertEqual(len(first), 64)
+        self.assertEqual(sorted(item for group in first for item in group), files)
+        write(self.root, ".click/evidence-shards.json", json.dumps({"entries": [{
+            "checks": [parent["command"]["argv"]],
+            "shards": [{"covers": group} for group in first],
+        }]}))
+        added = proposal.file_groups(self.root, parent, [*files, "tests/zzz.test.js"])
+        stable = set(map(tuple, first)) & set(map(tuple, added))
+        self.assertEqual(len(stable), 63)
+        self.assertEqual(len(added), 64)
+        removed = proposal.file_groups(self.root, parent, files[1:])
+        self.assertEqual(len(set(map(tuple, first)) & set(map(tuple, removed))), 63)
+        with patch.object(proposal, "MAX_SHARDS", 2):
+            with self.assertRaisesRegex(inventory.AnalysisError, "shard-file-capacity-limit"):
+                proposal.file_groups(self.root, parent, files)
+
+    @unittest.skipUnless(VITEST_AVAILABLE, "pinned Vitest fixture is unavailable")
+    def test_vitest_grouped_children_collect_the_exact_parent_inventory(self):
+        command = vitest_project(self.root)
+        with patch.object(proposal, "MAX_SHARDS", 2):
+            value = self.generate(command)
+        self.assert_ready(value, 3)
+        self.assertEqual(len(value["children"]), 2)
+        self.assertTrue(any(len(row["files"]) == 2 for row in value["layout"]))
+
+    @unittest.skipUnless(JEST_AVAILABLE, "pinned Jest fixture is unavailable")
+    def test_jest_grouped_children_collect_the_exact_parent_inventory(self):
+        command = jest_project(self.root)
+        with patch.object(proposal, "MAX_SHARDS", 2):
+            value = self.generate(command)
+        self.assert_ready(value, 5)
+        self.assertEqual(len(value["children"]), 2)
+        self.assertTrue(all("--runTestsByPath" in child["argv"] for child in value["children"]))
+
     def test_pytest_child_command_keeps_the_full_nested_module_path(self):
         parent = {
             "adapter": inventory.PYTEST_ADAPTER,

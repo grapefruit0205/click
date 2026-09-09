@@ -71,6 +71,24 @@ def git(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def stable_setup_durations(case: unittest.TestCase) -> None:
+    """Run real checks but isolate lifecycle assertions from timing noise.
+
+    Parent-relative arithmetic is covered independently with adverse timings.
+    These fixture durations must never be published as benchmark measurements.
+    """
+    execute = setup._run_check
+    def run(root, argv):
+        result = execute(root, argv)
+        parent = getattr(case, "command", [])
+        if isinstance(parent, str):
+            parent = shlex.split(parent)
+        return {**result, "duration_ms": 1000.0 if argv == parent else 100.0}
+    patcher = mock.patch.object(setup, "_run_check", side_effect=run)
+    patcher.start()
+    case.addCleanup(patcher.stop)
+
+
 class ShardingControlParsingTests(unittest.TestCase):
     def test_public_commands_need_no_json_and_keep_argv_exact(self) -> None:
         action, raw, error = click_lifecycle.control_request(
@@ -113,6 +131,7 @@ class ShardingControlParsingTests(unittest.TestCase):
 @unittest.skipUnless(SUPPORTED, "setup profile requires CPython 3.10-3.14")
 class ShardingSetupStateMachineTests(unittest.TestCase):
     def setUp(self) -> None:
+        stable_setup_durations(self)
         temporary = tempfile.TemporaryDirectory(prefix="click-sharding-setup-")
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name)
@@ -275,6 +294,32 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
             projection["comparison_net_ms"], metrics["comparison_net_ms"]
         )
         self.assertFalse(projection["reuse_ready"])
+
+    def test_evidence_bootstrap_defers_children_and_survives_source_only_commit(self) -> None:
+        authority = "evs_" + "3" * 32
+        generated = setup.generate(self.root, self.command, authority, runtime_mode="evidence")
+        self.assertEqual(generated["status"], "application-ready", generated)
+        setup.apply(self.root, authority, runtime_mode="evidence")
+        self.commit_policy()
+        with mock.patch.object(setup, "_run_check", wraps=setup._run_check) as execute:
+            report = setup.bootstrap(self.root, authority, runtime_mode="evidence")
+        self.assertEqual(execute.call_count, 1)
+        self.assertEqual(execute.call_args.args[1], self.command)
+        self.assertEqual(report["status"], "baseline-required")
+        self.assertFalse(report["reuse_ready"])
+        self.assertTrue(all(child["status"] == "baseline-pending"
+                            for child in report["bootstrap"]["children"]))
+        projected = setup.dashboard_setup_projection(report)
+        self.assertIsNone(projected["comparison_net_ms"])
+        self.assertEqual(projected["comparison_scope"], "parent-bootstrap-children-pending-not-savings")
+        write(self.root, "app/value.py", "VALUE = 2\n# source-only revision\n")
+        git(self.root, "add", "app/value.py")
+        git(self.root, "commit", "-qm", "source-only revision")
+        with mock.patch.object(setup, "_run_check", side_effect=AssertionError("status executed")):
+            report = setup.status(self.root)
+            action = setup.plan(self.root, "refresh", [], {}, runtime_mode="evidence", authority_id=authority)
+        self.assertNotIn("bootstrap-validation-required", report["reasons"])
+        self.assertEqual(action["action"], "verify")
 
     def test_user_policy_is_never_overwritten_and_discovery_drift_needs_review(self) -> None:
         proposal = setup.generate(self.root, self.command, self.analysis_contract)
@@ -754,6 +799,11 @@ class JestShardingSetupTests(unittest.TestCase):
     "setting-free automatic-sharding E2E requires Linux CPython 3.12.3",
 )
 class ShardingGateIntegrationTests(ClickGateTestCase):
+    """Real child runners with deterministic per-case CPU fixture cost.
+
+    This margin makes lifecycle selection independent of startup noise. These
+    synthetic timings are not benchmark evidence or production savings.
+    """
     hook_in_process = True
 
     def setUp(self) -> None:
@@ -795,13 +845,13 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
             import unittest
             from app.one import value
             class One(unittest.TestCase):
-                def test_one(self): self.assertEqual(value(), 3)
+                def test_one(self): self.assertEqual(sum(range(50_000_000)), 1_249_999_975_000_000); self.assertEqual(value(), 3)
         """)
         write(self.workspace, "tests/test_two.py", """
             import unittest
             from app.two import value
             class Two(unittest.TestCase):
-                def test_two(self): self.assertEqual(value(), 6)
+                def test_two(self): self.assertEqual(sum(range(50_000_000)), 1_249_999_975_000_000); self.assertEqual(value(), 6)
         """)
         git(self.workspace, "add", ".")
         git(self.workspace, "commit", "-qm", "fixture")
@@ -958,20 +1008,20 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
             import unittest
             from science.distance import convert
             class DistanceCase(unittest.TestCase):
-                def test_distance(self): self.assertEqual(convert(2), 21)
+                def test_distance(self): self.assertEqual(sum(range(50_000_000)), 1_249_999_975_000_000); self.assertEqual(convert(2), 21)
         """)
         write(self.workspace, "checks/unit/case_mass.py", """
             import unittest
             from science.mass import convert
             class MassCase(unittest.TestCase):
-                def test_positive_mass(self): self.assertEqual(convert(3), 31)
-                def test_zero_mass(self): self.assertEqual(convert(0), 1)
+                def test_positive_mass(self): self.assertEqual(sum(range(50_000_000)), 1_249_999_975_000_000); self.assertEqual(convert(3), 31)
+                def test_zero_mass(self): self.assertEqual(sum(range(50_000_000)), 1_249_999_975_000_000); self.assertEqual(convert(0), 1)
         """)
         write(self.workspace, "checks/unit/case_time.py", """
             import unittest
             from science.time_unit import convert
             class TimeCase(unittest.TestCase):
-                def test_time(self): self.assertEqual(convert(4), 41)
+                def test_time(self): self.assertEqual(sum(range(50_000_000)), 1_249_999_975_000_000); self.assertEqual(convert(4), 41)
         """)
         git(self.workspace, "add", "-A")
         git(self.workspace, "commit", "-qm", "nested science fixture")
@@ -1094,6 +1144,19 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         assert batch is not None
         self.assertEqual(batch["status"], "passed")
         self.assertEqual(len(batch["sources"]), 2)
+
+        write(self.workspace, "app/settings.py", "SCALE = 3\n# source-only commit outside Hook\n")
+        git(self.workspace, "add", "app/settings.py")
+        git(self.workspace, "commit", "-qm", "source-only edit")
+        with mock.patch.dict(os.environ, {
+            "PLUGIN_DATA": str(self.plugin_data), "CLICK_CONFIG_HOME": str(self.plugin_data),
+        }):
+            stale = setup.status(self.workspace, state)
+        self.assertEqual(stale["status"], "baseline-required", stale)
+        self.assertFalse(stale["reuse_ready"])
+        self.run_control("click-gate sharding refresh", "turn-e1")
+        refreshed = json.loads(self.run_control("click-gate sharding status", "turn-e1").stdout)
+        self.assertEqual(refreshed["status"], "sharding-ready", refreshed)
 
     def run_setting_free_end_to_end(self) -> dict[str, object]:
         self.assertFalse((self.workspace / ".click").exists())

@@ -303,6 +303,13 @@ class ClickObservationStorageRecoveryTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == "linux", "Linux subreaper reaps the isolated orphan")
     def test_orphaned_read_child_keeps_claim_active(self):
+        self.assert_read_child_interruption(hard_kill=True)
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux subreaper checks child cleanup")
+    def test_sigterm_read_child_records_interruption_and_releases_claim(self):
+        self.assert_read_child_interruption(hard_kill=False)
+
+    def assert_read_child_interruption(self, *, hard_kill):
         fifo = self.root / "blocking-read"
         os.mkfifo(fifo)
         self.request = {"version": 1, "commands": [["cat", str(fifo)]]}
@@ -318,7 +325,11 @@ class ClickObservationStorageRecoveryTests(unittest.TestCase):
             original_spawn = p.spawn_argv
             def spawn(*args, **kwargs):
                 child = original_spawn(*args, **kwargs)
-                Path(sys.argv[1]).write_text(str(child.pid), encoding="utf-8")
+                communicate = child.communicate
+                def waiting(*args, **kwargs):
+                    Path(sys.argv[1]).write_text(str(child.pid), encoding="utf-8")
+                    return communicate(*args, **kwargs)
+                child.communicate = waiting
                 return child
             p.spawn_argv = spawn
             def execute(request, state_result):
@@ -332,7 +343,7 @@ class ClickObservationStorageRecoveryTests(unittest.TestCase):
             libc = ctypes.CDLL(None, use_errno=True)
             if libc.prctl(36, 1, 0, 0, 0):
                 raise OSError(ctypes.get_errno(), "could not enable test subreaper")
-            arguments, event, request, marker_name, wrapper_code = json.loads(sys.argv[1])
+            arguments, event, request, marker_name, wrapper_code, hard_kill = json.loads(sys.argv[1])
             marker = Path(marker_name)
             child_pid = None
             wrapper = subprocess.Popen(
@@ -346,18 +357,34 @@ class ClickObservationStorageRecoveryTests(unittest.TestCase):
                         raise AssertionError("read wrapper exited before launching its child")
                     time.sleep(0.01)
                 child_pid = int(marker.read_text(encoding="utf-8"))
-                wrapper.terminate()
+                wrapper.kill() if hard_kill else wrapper.terminate()
                 wrapper.wait(timeout=5)
-                assert os.waitpid(child_pid, os.WNOHANG) == (0, 0), "read child must still be alive"
                 state = json.loads(Path(arguments[0]).read_text(encoding="utf-8"))
                 entry = state["observations"]["entries"][arguments[1]]
-                assert o.is_running(entry), "dead wrapper PID does not prove its read child stopped"
+                if hard_kill:
+                    assert os.waitpid(child_pid, os.WNOHANG) == (0, 0), "read child must still be alive"
+                    assert o.is_running(entry), "dead wrapper PID does not prove its read child stopped"
+                else:
+                    assert wrapper.returncode == 130, "interruption must be recorded as failure"
+                    try:
+                        os.waitpid(child_pid, os.WNOHANG)
+                    except ChildProcessError:
+                        pass
+                    else:
+                        raise AssertionError("wrapper must reap its child before recording interruption")
+                    assert not o.is_running(entry)
+                    assert state["capability_ledger"]["entries"][0]["result"]["exit_code"] == 130
+                    marker.unlink()
+                    child_pid = None
                 command, error, _ = o.prepare(
                     event, request, False, mutation_is_running=lambda _: False,
                     fresh_mutation_state=lambda: {}, runner_script=Path(g.__file__),
                     render_command=json.dumps,
                 )
-                assert command == "" and "already active" in error, "fresh token must remain blocked"
+                if hard_kill:
+                    assert command == "" and "already active" in error, "fresh token must remain blocked"
+                else:
+                    assert "already active" not in error, "completed interruption must release the active claim"
                 assert len(state["capability_ledger"]["entries"]) == 1
             finally:
                 if wrapper.poll() is None:
@@ -377,7 +404,7 @@ class ClickObservationStorageRecoveryTests(unittest.TestCase):
         """)
         result = subprocess.run(
             [sys.executable, "-B", "-c", harness_code,
-             json.dumps([arguments, self.event, self.request, str(child_marker), wrapper_code])],
+             json.dumps([arguments, self.event, self.request, str(child_marker), wrapper_code, hard_kill])],
             cwd=Path(__file__).resolve().parents[1],
             capture_output=True, text=True, encoding="utf-8", timeout=15,
         )

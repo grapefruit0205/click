@@ -57,6 +57,7 @@ def cpython_supported(implementation: str, version: Sequence[int]) -> bool:
     )
 
 
+@click_process.termination_as_interrupt()
 def supervise(
     argv: Sequence[str],
     cwd: Path,

@@ -523,7 +523,12 @@ def run_request(
                 stderr_file.write(cache_hit["stderr_data"])
                 exit_code = 0
             else:
-                exit_code = execute_commands(commands, stdout_file, stderr_file)
+                try:
+                    exit_code = execute_commands(commands, stdout_file, stderr_file)
+                except KeyboardInterrupt:
+                    # The managed process wait has already terminated its
+                    # child group. Record interruption with the existing claim.
+                    exit_code = 130
             output_bytes = stdout_file.tell() + stderr_file.tell()
             incomplete = output_bytes > MAX_OUTPUT_BYTES
             cache_key = ""

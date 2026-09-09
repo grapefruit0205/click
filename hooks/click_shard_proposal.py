@@ -25,6 +25,46 @@ MAX_PROPOSAL_SECONDS = 120.0
 POLICY_NAMES = ("evidence-shards.json", "evidence-dependencies.json", "evidence-reuse.json")
 
 
+def file_groups(root: Path, parent: dict, selected: list[str]) -> list[list[str]]:
+    """Preserve exact prior file ownership; only changed groups lose identity.
+
+    Existing bytes are candidate layout hints, never execution/reuse authority.
+    All resulting groups still go through fresh collection and equivalence.
+    """
+    remaining = set(selected)
+    groups: list[list[str]] = []
+    target = root / ".click/evidence-shards.json"
+    if target.is_file() and not target.is_symlink() and target.stat().st_size <= shards.MAX_CONFIG_BYTES:
+        try:
+            value = json.loads(target.read_bytes())
+            entries = value.get("entries", []) if isinstance(value, dict) else []
+            for entry in entries:
+                if not isinstance(entry, dict) or entry.get("checks") != [parent["command"]["argv"]]:
+                    continue
+                for shard in entry.get("shards", []):
+                    covers = shard.get("covers") if isinstance(shard, dict) else None
+                    if not isinstance(covers, list) or any(not isinstance(path, str) for path in covers):
+                        continue
+                    members = sorted(remaining.intersection(covers))
+                    if members and len(members) <= 48 and len(groups) < MAX_SHARDS:
+                        groups.append(members)
+                        remaining.difference_update(members)
+        except (OSError, ValueError, TypeError):
+            pass
+    for path in sorted(remaining):
+        if len(groups) < MAX_SHARDS:
+            groups.append([path])
+            continue
+        available = [group for group in groups if len(group) < 48]
+        if not available:
+            raise inventory.AnalysisError("shard-file-capacity-limit")
+        # Keep existing groups fixed. New members affect just one group.
+        group = min(available, key=lambda item: (len(item), inventory.digest([path, item[0]])))
+        group.append(path)
+        group.sort()
+    return sorted(groups)
+
+
 def child_command(parent: dict, filename: str) -> list[str]:
     """Delegate exact child selection to the statically registered adapter."""
     argv = adapters.split_child_command(parent, filename)
@@ -177,12 +217,20 @@ def propose(project: Path, argv: list[str] | None, *, cwd: Path | None = None,
             groups.setdefault(key, []).append(path)
         if len(groups) < 2:
             raise inventory.AnalysisError("no-useful-module-split")
-        if len(groups) > MAX_SHARDS:
+        file_batching = parent.get("adapter") in {adapters.VITEST_ADAPTER, adapters.JEST_ADAPTER}
+        if file_batching:
+            groups = {str(index): files for index, files in enumerate(file_groups(root, parent, selected))}
+        elif len(groups) > MAX_SHARDS:
             raise inventory.AnalysisError("shard-count-limit")
         children, definitions, dependency_entries, explanations = [], [], [], []
         child_analysis_ms: list[float] = []
         for filename, files in sorted(groups.items()):
-            child_argv = child_command(parent, filename)
+            child_argv = (
+                adapters.split_file_command(parent, files)
+                if file_batching else child_command(parent, filename)
+            )
+            if child_argv is None:
+                raise inventory.AnalysisError("adapter-split-unsupported")
             validate_command(child_argv, root, execution_cwd)
             child_started = time.perf_counter_ns()
             child = inventory.analyze(

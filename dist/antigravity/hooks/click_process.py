@@ -139,6 +139,22 @@ def isolated_subprocess_kwargs() -> dict[str, Any]:
     return {"start_new_session": True}
 
 
+@contextmanager
+def termination_as_interrupt():
+    """Let runner cleanup record SIGTERM as interruption, not a stranded claim."""
+    active = threading.current_thread() is threading.main_thread()
+    previous = signal.getsignal(signal.SIGTERM) if active else None
+    def interrupted(_signum, _frame):
+        raise KeyboardInterrupt
+    if active:
+        signal.signal(signal.SIGTERM, interrupted)
+    try:
+        yield
+    finally:
+        if active:
+            signal.signal(signal.SIGTERM, previous)
+
+
 def run_argv(
     argv: Sequence[str],
     *,
@@ -163,7 +179,8 @@ def run_argv(
     if target:
         target_started()
     try:
-        captured_stdout, captured_stderr = child.communicate(timeout=timeout)
+        with termination_as_interrupt():
+            captured_stdout, captured_stderr = child.communicate(timeout=timeout)
     except BaseException:
         terminate_process_group(child)
         raise
@@ -225,7 +242,8 @@ def run_argv_captured(
     for reader in threads:
         reader.start()
     try:
-        child.wait(timeout=timeout)
+        with termination_as_interrupt():
+            child.wait(timeout=timeout)
     except BaseException:
         terminate_process_group(child)
         for reader in threads:

@@ -124,6 +124,7 @@
               "-m",
               "unittest",
               "tests.test_click_change_policy",
+              "tests.test_click_scoped_input_policy",
               "tests.test_click_content_validation",
               "tests.test_click_dependency_cache",
               "tests.test_click_diagnostics",
@@ -145,6 +146,7 @@
           ],
           "covers": [
             "tests/test_click_change_policy.py",
+            "tests/test_click_scoped_input_policy.py",
             "tests/test_click_content_validation.py",
             "tests/test_click_dependency_cache.py",
             "tests/test_click_diagnostics.py",
@@ -235,11 +237,13 @@
               "-m",
               "unittest",
               "tests.test_click_sharding_setup",
+              "tests.test_click_verification_economics",
               "-q"
             ]
           ],
           "covers": [
-            "tests/test_click_sharding_setup.py"
+            "tests/test_click_sharding_setup.py",
+            "tests/test_click_verification_economics.py"
           ]
         },
         {

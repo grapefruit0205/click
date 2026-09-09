@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, fields
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -163,6 +164,8 @@ def _fresh_verification_state(contract: dict[str, Any]) -> dict[str, Any]:
         "running_executable_component_digests": {},
         "running_host_coverage": {},
         "running_host_coverage_digest": "",
+        "running_input_policy_receipts": {},
+        "running_input_policy_binding": "",
         "workspace_changed": False,
         "mutation_boundary": _fresh_mutation_boundary(),
         "started_at": 0,
@@ -940,6 +943,8 @@ def _prepare_verification_impl(
         verification["running_executable_component_digests"] = {}
         verification["running_host_coverage"] = {}
         verification["running_host_coverage_digest"] = ""
+        verification["running_input_policy_receipts"] = {}
+        verification["running_input_policy_binding"] = ""
         verification["runner_claimed_at"] = 0
 
     argv_keys = _evidence_keys_for_kind(sources, "argv")
@@ -1443,7 +1448,18 @@ def _prepare_verification_impl(
                                 "external-input-unmodeled",
                             }:
                                 not_evaluable_keys.add(source_key)
-                for source_key in safe_change_candidates - reused_keys:
+                policy_keys = safe_change_candidates - reused_keys
+                policy_contexts = {
+                    key: {"source_key": key, "revision": revision,
+                          "git_root": git_root, "tree_digest": tree_digest}
+                    for key in policy_keys
+                }
+                policy_decisions = click_change_policy.decide_groups(
+                    workspace, {key: grouped_checks[key] for key in policy_keys},
+                    {key: sources[key].get("verified_safe_change_receipt") for key in policy_keys},
+                    git_capture=git_capture, decision_contexts=policy_contexts,
+                ) if policy_keys else {}
+                for source_key in policy_keys:
                     source = sources[source_key]
                     decision_context = {
                         "source_key": source_key,
@@ -1451,13 +1467,7 @@ def _prepare_verification_impl(
                         "git_root": git_root,
                         "tree_digest": tree_digest,
                     }
-                    decision = click_change_policy.decide(
-                        workspace,
-                        grouped_checks[source_key],
-                        source.get("verified_safe_change_receipt"),
-                        git_capture=git_capture,
-                        decision_context=decision_context,
-                    )
+                    decision = policy_decisions[source_key]
                     changed_paths = decision.get("changed_paths", [])
                     evidence_id = str(
                         grouped_checks[source_key][0].get("evidence_id", "argv")
@@ -1581,6 +1591,13 @@ def _prepare_verification_impl(
             if workspace_drift
             or confirmed_environment_digests[key] != current_environment_digests[key]
             or confirmed_executable_digests[key] != current_executable_digests[key]
+            or (
+                sources[key].get("verified_safe_change_receipt", {}).get("provider")
+                == click_change_policy.INPUT_PROVIDER_NAME
+                and not click_change_policy.inputs_are_current(
+                    Path(git_root), sources[key]["verified_safe_change_receipt"]
+                )
+            )
         }
         for key in invalidated:
             original = successor_imported.get(key, reuse_rollbacks.get(key))
@@ -1593,6 +1610,8 @@ def _prepare_verification_impl(
                 else "environment-binding-changed"
                 if confirmed_environment_digests[key] != current_environment_digests[key]
                 else "executable-binding-changed"
+                if confirmed_executable_digests[key] != current_executable_digests[key]
+                else "dependency-changed"
             )
             if workspace_drift:
                 not_evaluable_keys.add(key)
@@ -1827,6 +1846,12 @@ def _prepare_verification_impl(
         source["status"] = "running"
         source["last_check_digest"] = group_digest
 
+    input_policy_receipts = {
+        key: receipt for key, receipt in click_change_policy.receipts_for_groups(
+            workspace, {key: grouped_checks[key] for key in requested_keys},
+            git_capture=git_capture, scoped_only=True,
+        ).items() if receipt.get("provider") == click_change_policy.INPUT_PROVIDER_NAME
+    }
     verification.update(
         {
             "status": "running",
@@ -1847,6 +1872,11 @@ def _prepare_verification_impl(
             ),
             "running_host_coverage": host_coverage,
             "running_host_coverage_digest": running_host_coverage_digest,
+            "running_input_policy_receipts": input_policy_receipts,
+            "running_input_policy_binding": hmac.new(
+                runner_token.encode(), json.dumps(input_policy_receipts, sort_keys=True).encode(),
+                hashlib.sha256,
+            ).hexdigest(),
             "started_at": int(time.time()),
         }
     )
@@ -2232,6 +2262,23 @@ def _record_verification_result(
         if not workspace_changed and workspace_root and workspace_digest
         else {}
     )
+    prepared_inputs = verification.pop("running_input_policy_receipts", {})
+    prepared_binding = verification.pop("running_input_policy_binding", "")
+    valid_input_binding = bool(
+        isinstance(prepared_inputs, dict)
+        and isinstance(prepared_binding, str)
+        and hmac.compare_digest(prepared_binding, hmac.new(
+            runner_token.encode(), json.dumps(prepared_inputs, sort_keys=True).encode(),
+            hashlib.sha256,
+        ).hexdigest())
+    )
+    safe_change_receipts = {
+        key: receipt for key, receipt in safe_change_receipts.items()
+        if receipt.get("provider") != click_change_policy.INPUT_PROVIDER_NAME
+        or (valid_input_binding and click_change_policy.same_policy_inputs(
+            prepared_inputs.get(key), receipt
+        ))
+    }
     verification["running_evidence_keys"] = []
     verification["running_environment_digests"] = {}
     verification["running_environment_binding"] = []
@@ -2922,6 +2969,8 @@ def _release_unclaimed_verification_reservation(
             "running_executable_component_digests": {},
             "running_host_coverage": {},
             "running_host_coverage_digest": "",
+            "running_input_policy_receipts": {},
+            "running_input_policy_binding": "",
             "started_at": 0,
             "last_exit_code": None,
         }

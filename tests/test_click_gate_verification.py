@@ -4541,6 +4541,96 @@ class ClickGateVerificationTests(ClickGateTestCase):
             )
         )
 
+    def _scoped_shard_fixture(self) -> list[str]:
+        parent = self.install_evidence_shard_fixture()
+        shard_map = json.loads((self.workspace / ".click/evidence-shards.json").read_text())
+        entries = []
+        for index, shard in enumerate(shard_map["entries"][0]["shards"]):
+            entries.append({
+                "checks": shard["checks"],
+                "reuse_if_only_changed": ["*_shard.py", "README.md"],
+                "inputs": [*shard["covers"], *([".shard-attempt"] if index == 0 else [])],
+            })
+        (self.workspace / ".click/evidence-reuse.json").write_text(
+            json.dumps({"version": 2, "entries": entries}), encoding="utf-8",
+        )
+        self.initialize_git(".click/evidence-reuse.json")
+        self.prompt_submit("Verify scoped child inputs in Evidence", "turn-2")
+        return parent
+
+    def test_scoped_inputs_execute_changed_child_and_preserve_sibling(self) -> None:
+        parent = self._scoped_shard_fixture()
+        self.assertEqual(self.run_rewritten(self.verify_gate([parent])).returncode, 0)
+        self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-2")
+        path = self.workspace / "a_shard.py"
+        path.write_text(path.read_text().replace("assertTrue(True)", "assertTrue(False)"))
+        self.tool_hook("post-tool", "apply_patch", {"patch": "alpha failure"}, tool_use_id="tool-1")
+        prepared = self.verify_gate([parent])
+        batch = self.decoded_verification_batch(prepared)
+        self.assertEqual(len(batch["checks"]), 1)
+        self.assertIn("a_shard.AlphaShard.test_pass", batch["checks"][0]["argv"])
+        self.assertNotEqual(self.run_rewritten(prepared).returncode, 0)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        state = json.loads(state_path.read_text())
+        statuses = sorted(source["status"] for source in state["evidence_state"]["sources"].values())
+        self.assertEqual(statuses, ["failed", "passed"])
+
+    def test_vitest_scoped_inputs_rerun_only_the_changed_assertion(self) -> None:
+        from tests import test_click_auto_sharding as fixtures
+        if not fixtures.VITEST_AVAILABLE:
+            self.skipTest("pinned Vitest fixture is unavailable")
+        parent = fixtures.vitest_project(self.workspace)
+        files = ["tests/integration/shared.test.js", "tests/types/value.test.ts", "tests/unit/shared.test.js"]
+        directory = self.workspace / ".click"
+        directory.mkdir(exist_ok=True)
+        children = [{"id": f"file-{index}", "checks": [[*parent, path]], "covers": [path]}
+                    for index, path in enumerate(files)]
+        (directory / "evidence-shards.json").write_text(json.dumps({
+            "version": 1, "entries": [{"checks": [parent], "inventory": files, "shards": children}],
+        }))
+        (directory / "evidence-reuse.json").write_text(json.dumps({
+            "version": 2, "entries": [{
+                "checks": child["checks"], "reuse_if_only_changed": ["tests/"],
+                "inputs": [*child["covers"], "src/", "package.json", "package-lock.json"],
+            } for child in children],
+        }))
+        self.initialize_git(".")
+        self.prompt_submit("Verify the independent Vitest fixture in Evidence", "turn-2")
+        self.assertEqual(self.run_rewritten(self.verify_gate([parent])).returncode, 0)
+        self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-2")
+        target = self.workspace / files[-1]
+        changed = target.read_text().replace("toBe(4)", "toBe(5)")
+        target.unlink()  # The fixture copier may use hardlinks.
+        target.write_text(changed)
+        self.tool_hook("post-tool", "apply_patch", {"patch": "unit assertion failure"}, tool_use_id="tool-1")
+        prepared = self.verify_gate([parent])
+        checks = self.decoded_verification_batch(prepared)["checks"]
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0]["argv"], [*parent, files[-1]])
+        self.assertNotEqual(self.run_rewritten(prepared).returncode, 0)
+
+    def test_scoped_ignored_input_drift_invalidates_same_revision_exact_reuse(self) -> None:
+        parent = self._scoped_shard_fixture()
+        self.assertEqual(self.run_rewritten(self.verify_gate([parent])).returncode, 0)
+        (self.workspace / ".shard-attempt").write_text("new input")
+        prepared = self.verify_gate([parent])
+        self.assertEqual(len(self.decoded_verification_batch(prepared)["checks"]), 1)
+        self.assertEqual(self.run_rewritten(prepared).returncode, 0)
+
+    def test_scoped_input_drift_during_run_cannot_mint_reusable_baseline(self) -> None:
+        parent = self._scoped_shard_fixture()
+        prepared = self.verify_gate([parent])
+        (self.workspace / ".shard-attempt").write_text("changed after preparation")
+        self.assertEqual(self.run_rewritten(prepared).returncode, 0)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        state = json.loads(state_path.read_text())
+        receipts = [source.get("verified_safe_change_receipt", {})
+                    for source in state["evidence_state"]["sources"].values()]
+        self.assertEqual(sum(bool(receipt) for receipt in receipts), 1)
+        repeated = self.verify_gate([parent])
+        self.assertEqual(len(self.decoded_verification_batch(repeated)["checks"]), 1)
+        self.assertEqual(self.run_rewritten(repeated).returncode, 0)
+
     def test_edited_shard_map_runs_original_parent_suite(self) -> None:
         parent = self.install_evidence_shard_fixture()
         shard_map = self.workspace / ".click" / "evidence-shards.json"
