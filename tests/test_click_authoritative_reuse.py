@@ -576,7 +576,13 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
         baseline = json.loads(state_path.read_text())
         old_sources = baseline["evidence_state"]["sources"]
         for source in old_sources.values():
-            self.assertEqual(source["verified_dependency_observation"]["status"], "complete")
+            observation = source["verified_dependency_observation"]
+            self.assertEqual(observation["status"], "complete", {
+                "source": source.get("evidence_id"),
+                "observation": {key: observation.get(key) for key in (
+                    "ineligibility_reasons", "process_tree_complete", "child_processes", "paths")},
+                "runner_stderr": first.stderr[-4000:],
+            })
 
         # A reviewed layout change affects alpha's identity, while beta's
         # command, coverage, shared inputs and observed dependencies stay exact.
