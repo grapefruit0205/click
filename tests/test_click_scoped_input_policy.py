@@ -95,6 +95,30 @@ class ScopedInputPolicyTests(unittest.TestCase):
             decision_context={**context, "revision": 3},
         ))
 
+    def test_git_root_path_alias_is_treated_as_the_same_repository(self):
+        alias = self.root.parent / "repository-alias"
+        try:
+            os.symlink(self.root, alias, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("directory symlinks are unavailable")
+        (self.root / "src/other.py").write_text("OTHER = 2\n")
+        context = {
+            "source_key": "a" * 64,
+            "revision": 2,
+            "git_root": str(alias),
+            "tree_digest": "b" * 64,
+        }
+        decision = policy.decide(
+            self.root, self.fixture.checks, self.baseline,
+            git_capture=self.fixture.git_capture, decision_context=context,
+        )
+        self.assertEqual(decision["status"], "reuse")
+        self.assertTrue(policy.reuse_decision_matches(
+            decision, self.baseline,
+            check_digest=policy.group_digest(self.fixture.checks),
+            decision_context=context,
+        ))
+
     def test_shared_preflight_reuses_git_diff_only_within_one_request(self):
         path = self.root / policy.CONFIG_RELATIVE_PATH
         value = json.loads(path.read_text())

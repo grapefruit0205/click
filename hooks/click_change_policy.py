@@ -646,6 +646,13 @@ def _decision_context_is_valid(value: Any) -> bool:
     )
 
 
+def _same_git_root(left: str, right: Path) -> bool:
+    """Treat platform path aliases as one root without weakening isolation."""
+    return os.path.normcase(os.path.realpath(left)) == os.path.normcase(
+        os.path.realpath(right)
+    )
+
+
 def _decision_payload(
     baseline: dict[str, Any], current: dict[str, Any], changed_paths: list[str],
     check_digest: str, decision_context: dict[str, Any] | None,
@@ -749,7 +756,9 @@ def decide(
         root = loaded[0]
     else:
         root = shared["root"]
-    if decision_context is not None and decision_context["git_root"] != os.path.normcase(str(root)):
+    if decision_context is not None and not _same_git_root(
+        decision_context["git_root"], root
+    ):
         return fallback
     cache_key = (baseline_receipt["baseline"]["digest"], current["baseline"]["digest"])
     changes = shared["changes"] if shared is not None else {}
