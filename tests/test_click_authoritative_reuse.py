@@ -565,7 +565,8 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
             target.parent.mkdir(exist_ok=True)
             target.write_text(json.dumps(value))
         subprocess.run(["git", "add", ".click"], cwd=self.workspace, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "accept automatic child plan"],
+        subprocess.run(["git", "-c", "user.name=Click Tests",
+                        "-c", "user.email=click-tests@example.invalid", "commit", "-qm", "accept automatic child plan"],
                        cwd=self.workspace, check=True, capture_output=True)
         self.approve_contract()
         self.enable_authoritative("turn-2")
@@ -590,7 +591,8 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
         alpha["id"] = "alpha-refreshed"
         path.write_text(json.dumps(manifest))
         subprocess.run(["git", "add", "."], cwd=self.workspace, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "accept refreshed child plan"],
+        subprocess.run(["git", "-c", "user.name=Click Tests",
+                        "-c", "user.email=click-tests@example.invalid", "commit", "-qm", "accept refreshed child plan"],
                        cwd=self.workspace, check=True, capture_output=True)
         self.tool_hook("post-tool", "apply_patch", {"patch": "alpha and plan"},
                        turn_id="turn-2", tool_use_id=tool_id)

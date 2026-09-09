@@ -4578,7 +4578,8 @@ class ClickGateVerificationTests(ClickGateTestCase):
         })
         target.write_text(json.dumps(manifest), encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=self.workspace, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "refresh complete child plan"],
+        subprocess.run(["git", "-c", "user.name=Click Tests",
+                        "-c", "user.email=click-tests@example.invalid", "commit", "-qm", "refresh complete child plan"],
                        cwd=self.workspace, check=True, capture_output=True)
         self.tool_hook("post-tool", "apply_patch", {"patch": "new child"}, tool_use_id="tool-1")
         prepared = self.verify_gate([parent])
