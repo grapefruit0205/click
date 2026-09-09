@@ -51,6 +51,7 @@ else:
     state_runtime,
     inventory,
     verification_adapters,
+    verification_bindings,
 ) = click_import_bootstrap.load_siblings(
     __package__,
     "click_auto_sharding",
@@ -62,6 +63,7 @@ else:
     "click_state",
     "click_test_inventory",
     "click_verification_adapters",
+    "click_verification_bindings",
 )
 
 
@@ -87,6 +89,10 @@ COST_ENVIRONMENT = {
     "min_parent_ms": "CLICK_SHARDING_MIN_PARENT_MS",
     "min_avoidable_ms": "CLICK_SHARDING_MIN_AVOIDABLE_MS",
     "management_reserve_ms": "CLICK_SHARDING_MANAGEMENT_RESERVE_MS",
+}
+EXECUTION_ENVIRONMENT = {
+    "timeout_seconds": ("CLICK_SHARDING_EXECUTION_TIMEOUT_SECONDS", 1800.0, 7200.0),
+    "output_bytes": ("CLICK_SHARDING_EXECUTION_OUTPUT_BYTES", 8 * 1024 * 1024, 64 * 1024 * 1024),
 }
 PERSISTED_STATUSES = frozenset(
     {
@@ -1013,6 +1019,9 @@ def _condition_reasons(root: Path, state: dict[str, Any]) -> list[str]:
         expected_thresholds = state.get("cost_policy", {}).get("thresholds")
         if isinstance(expected_thresholds, dict) and expected_thresholds != _cost_thresholds():
             reasons.append("cost-policy-changed")
+        expected_budget = state.get("cost_policy", {}).get("execution_budget")
+        if expected_budget is not None and expected_budget != _execution_budget():
+            reasons.append("cost-policy-changed")
         payload = _artifact(state)
         if state["application_contract_id"]:
             for relative in POLICY_PATHS:
@@ -1029,10 +1038,10 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
     report = _report_from_state(root, setup, "baseline-required", ["baseline-required"])
     if not isinstance(contract_state, dict):
         return report
-    verification = contract_state.get("verification")
+    verification_state = contract_state.get("verification")
     evidence_state = contract_state.get("evidence_state")
     sources = evidence_state.get("sources") if isinstance(evidence_state, dict) else None
-    if not isinstance(verification, dict) or not isinstance(sources, dict):
+    if not isinstance(verification_state, dict) or not isinstance(sources, dict):
         return report
     parent_key = evidence.evidence_key(BASELINE_EVIDENCE_ID)
     shard_set = evidence_shards.active_set(evidence_state, parent_key)
@@ -1045,7 +1054,7 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
     if shard_set.get("parent_check_digest") != expected_parent:
         report["reasons"] = ["baseline-check-changed"]
         return report
-    revision = verification.get("mutation_revision")
+    revision = verification_state.get("mutation_revision")
     children = shard_set.get("children", [])
     child_sources = [
         sources.get(child.get("source_key"))
@@ -1072,6 +1081,24 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
         if isinstance(source, dict)
     )
     if not current:
+        return report
+    # Readiness is a projection of current evidence, not just a lifecycle flag.
+    # A commit made outside the Hook must not display old passes as current.
+    snapshot = verification_bindings.git_workspace_snapshot(root)
+    if not isinstance(snapshot, dict) or any(
+        source.get("verified_root") != os.path.normcase(str(snapshot.get("root", "")))
+        or source.get("verified_tree_digest") != snapshot.get("digest")
+        or (
+            change_policy.requires_input_receipt(root, source.get("verified_check_digest", ""))
+            and (
+                source.get("verified_safe_change_receipt", {}).get("provider")
+                != change_policy.INPUT_PROVIDER_NAME
+                or not change_policy.inputs_are_current(root, source.get("verified_safe_change_receipt"))
+            )
+        )
+        for source in child_sources
+    ):
+        report["reasons"] = ["baseline-inputs-changed"]
         return report
     report.update(
         status="sharding-ready",
@@ -1163,7 +1190,10 @@ def status(project: Path, contract_state: Any = None) -> dict[str, Any]:
             "then": "Run click-gate sharding refresh; Click will verify HEAD, index, and worktree content.",
         }
         return report
-    if setup["bootstrap"].get("status") != "passed" or setup["bootstrap"].get("commit") != commit:
+    # Policy bytes, current discovery, configuration and runtime were checked
+    # above. A later source-only commit requires current child verification,
+    # not another parent/bootstrap run.
+    if setup["bootstrap"].get("status") != "passed":
         report = _report_from_state(root, setup, "baseline-required", ["bootstrap-validation-required"])
         report["sharding_ready"] = False
         report["next_action"] = "Run click-gate sharding refresh in the approved application contract to compare the parent and generated children."
@@ -1491,6 +1521,22 @@ def apply(
         return status(root)
 
 
+def _execution_budget() -> dict[str, float | int]:
+    """Separate long test execution from short, output-sensitive collection."""
+    budget: dict[str, float | int] = {}
+    for key, (variable, default, maximum) in EXECUTION_ENVIRONMENT.items():
+        try:
+            value = float(os.environ.get(variable, default))
+        except (TypeError, ValueError):
+            raise SetupError("invalid-execution-budget") from None
+        if not math.isfinite(value) or not 1 <= value <= maximum:
+            raise SetupError("invalid-execution-budget")
+        if key == "output_bytes" and value != int(value):
+            raise SetupError("invalid-execution-budget")
+        budget[key] = int(value) if key == "output_bytes" else value
+    return budget
+
+
 def _run_check(root: Path, argv: list[str]) -> dict[str, Any]:
     inventory.parse_command(argv, root, root)
     executable = inventory.trusted_executable(argv[0], root)
@@ -1511,12 +1557,16 @@ def _run_check(root: Path, argv: list[str]) -> dict[str, Any]:
     environment = dict(os.environ)
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     started = time.perf_counter_ns()
+    budget = _execution_budget()
     try:
         inventory.run_bounded_command(
             command,
             root,
             environment,
-            inventory.Limits(timeout=120.0),
+            inventory.Limits(
+                timeout=float(budget["timeout_seconds"]),
+                output_bytes=int(budget["output_bytes"]),
+            ),
         )
         return {
             "status": "passed",
@@ -1605,6 +1655,7 @@ def _measure_cost_policy(root: Path, proposal: dict[str, Any]) -> dict[str, Any]
         "strategy": "whole-suite",
         "reason": "parent-validation-failed",
         "thresholds": thresholds,
+        "execution_budget": _execution_budget(),
         "measurement_scope": "setup-probe-not-savings",
         "parent": parent,
         "startup": None,
@@ -1646,6 +1697,12 @@ def _measure_cost_policy(root: Path, proposal: dict[str, Any]) -> dict[str, Any]
     durations = [float(item["duration_ms"]) for item in children]
     sequential = sum(durations)
     eligible = max(0.0, sequential - max(durations))
+    # Child durations already include process startup. Compare the actual
+    # selected execution with the original parent, not with an artificially
+    # expensive run of every child. Never count setup probes as saved work.
+    selected_ms = max(durations)
+    estimated_net_ms = parent_ms - selected_ms - thresholds["management_reserve_ms"]
+    setup_probe_ms = parent_ms + float(startup["duration_ms"]) + sequential
     required = max(
         thresholds["min_avoidable_ms"],
         float(startup["duration_ms"]) + thresholds["management_reserve_ms"],
@@ -1655,12 +1712,23 @@ def _measure_cost_policy(root: Path, proposal: dict[str, Any]) -> dict[str, Any]
         estimated_eligible_reuse_ms=eligible,
         estimated_reusable_shards=max(0, len(children) - 1),
         required_avoidable_ms=required,
+        estimated_selected_execution_ms=selected_ms,
+        estimated_net_per_repeat_ms=estimated_net_ms,
+        setup_probe_total_ms=setup_probe_ms,
+        estimated_probe_break_even_repeats=(
+            math.ceil(setup_probe_ms / estimated_net_ms)
+            if estimated_net_ms > 0 else None
+        ),
         measurement_status="measured",
     )
-    if eligible >= required:
+    if eligible >= required and estimated_net_ms > 0 and estimated_net_ms >= thresholds["min_avoidable_ms"]:
         result.update(strategy="sharded", reason="measured-reuse-exceeds-cost-floor")
     else:
-        result["reason"] = "estimated-reuse-below-cost-floor"
+        result["reason"] = (
+            "selected-children-not-cheaper-than-parent"
+            if estimated_net_ms <= 0
+            else "estimated-reuse-below-cost-floor"
+        )
     return result
 
 
@@ -1729,9 +1797,17 @@ def bootstrap(
         if inventory.workspace_snapshot(root, inventory.Limits()) != before:
             raise SetupError("baseline-mutated-project")
         child_results = []
+        # Evidence's following baseline already executes each exact child
+        # through the one-use runner. Do not execute those children here too.
+        # These pending records are setup metadata, never passing receipts.
+        deferred = runtime_mode == "evidence"
         for child in proposal_record.get("children", []):
-            child_results.append(_run_check(root, child["argv"]))
-            if inventory.workspace_snapshot(root, inventory.Limits()) != before:
+            child_results.append(
+                {"status": "baseline-pending", "duration_ms": 0.0,
+                 "reason": "execute-through-verification-runner"}
+                if deferred else _run_check(root, child["argv"])
+            )
+            if not deferred and inventory.workspace_snapshot(root, inventory.Limits()) != before:
                 raise SetupError("baseline-mutated-project")
         total_ms = (time.perf_counter_ns() - started) / 1_000_000
         sharded_ms = sum(float(item["duration_ms"]) for item in child_results)
@@ -1739,7 +1815,8 @@ def bootstrap(
             inventories_match
             and parent_result["status"] == "passed"
             and child_results
-            and all(item["status"] == "passed" for item in child_results)
+            and all(item["status"] == ("baseline-pending" if deferred else "passed")
+                    for item in child_results)
         )
         setup["bootstrap"] = {
             "status": "passed" if passed else "failed",
@@ -1747,6 +1824,8 @@ def bootstrap(
             "inventory_equal": inventories_match,
             "parent": parent_result,
             "children": child_results,
+            "children_execution": "verification-baseline" if deferred else "bootstrap",
+            "execution_budget": _execution_budget(),
             "analysis_ms": analysis_ms,
             "analysis_workspace_snapshot_scans": 3 * (1 + len(child_analyses)),
             "avoided_initial_analysis_scans": 1 + len(child_analyses),
@@ -1757,8 +1836,11 @@ def bootstrap(
                 total_ms - float(parent_result["duration_ms"]) - sharded_ms,
             ),
             "initial_setup_ms": total_ms + float(setup["review"].get("analysis_ms", 0.0)),
-            "comparison_net_ms": float(parent_result["duration_ms"]) - sharded_ms,
-            "comparison_scope": "first-bootstrap-parent-vs-sequential-children-not-savings",
+            "comparison_net_ms": None if deferred else float(parent_result["duration_ms"]) - sharded_ms,
+            "comparison_scope": (
+                "parent-bootstrap-children-pending-not-savings" if deferred
+                else "first-bootstrap-parent-vs-sequential-children-not-savings"
+            ),
         }
         setup["status"] = "baseline-required" if passed else "blocked"
         setup["reasons"] = ["baseline-required" if passed else "bootstrap-validation-failed"]
@@ -1808,6 +1890,7 @@ def dashboard_setup_projection(report: Any) -> dict[str, Any]:
             if item
             in {
                 "first-bootstrap-parent-vs-sequential-children-not-savings",
+                "parent-bootstrap-children-pending-not-savings",
                 "unmeasured",
             }
             else "unmeasured"

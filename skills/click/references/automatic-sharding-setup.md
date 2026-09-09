@@ -83,21 +83,26 @@ the separate approval contract described below.
 The initial cost rule measures the parent once. When that run is below 250 ms,
 Click selects `whole-suite-preferred` and skips child and startup probes. For a
 longer parent it measures one isolated interpreter startup and each proposed
-child, then selects sharding only when the estimated duration of reusable
-siblings is at least both 100 ms and the measured startup plus a 25 ms
-management reserve. The estimate assumes one worst-duration shard changes and
+child. Reusable siblings must clear both 100 ms and startup plus a 25 ms reserve.
+The selected child's measured duration plus reserve must also be cheaper than
+the parent by at least 100 ms. The estimate assumes one worst-duration shard changes and
 is labeled as setup measurement, not savings. The three thresholds can be
 tuned with `CLICK_SHARDING_MIN_PARENT_MS`,
 `CLICK_SHARDING_MIN_AVOIDABLE_MS`, and
 `CLICK_SHARDING_MANAGEMENT_RESERVE_MS`; their effective values are recorded in
-status and a change causes reevaluation.
+status and a change causes reevaluation. Probe payback is separate from total
+setup cost; it never proves a saving. Setup execution defaults to 1,800 seconds
+(maximum 7,200), independently of collection, via
+`CLICK_SHARDING_EXECUTION_TIMEOUT_SECONDS`.
 
-Collection remains bounded at 50,000 workspace files, 64 MiB of snapshot input,
-128 discovered modules, 64 generated shards, and a 16 MiB persisted review
+Collection remains bounded at 50,000 workspace files, 128 MiB of snapshot input,
+2,048 discovered modules, 64 generated shards, and a 16 MiB persisted review
 artifact. Proposal status records parent and per-child analysis wall time, file
 record count, and snapshot scan count. Child analysis reuses the already checked
 proposal snapshot as its initial baseline, avoiding one full workspace scan per
-child while retaining the post-collection mutation checks.
+child while retaining the post-collection mutation checks. Vitest/Jest group
+at most 48 exact files per child and preserve unaffected file ownership during
+refresh. Other adapters retain their existing grouping limits.
 
 In Evidence mode, the next explicit `refresh` applies a proposal produced in
 Evidence mode. Applying it in Guarded requires a fresh approved contract whose human-readable
@@ -118,12 +123,19 @@ stages it, commits it, pushes it, or modifies the Git index. The report remains
 reviewed bytes. The user owns that exact Git action.
 
 After the commit, the next authorized `refresh` collects the parent and every
-generated child again, compares their inventories, and runs the parent and
-children once. A mismatch or failure is not ready. This bootstrap is setup
-cost, never saved time. The next `refresh` sends the declared parent evidence
+generated child again, compares their inventories, and runs the parent.
+Guarded additionally runs the children for its approved bootstrap comparison.
+Evidence leaves the children explicitly baseline-pending so the following
+runner executes them once. A mismatch or failure is not ready. Bootstrap is
+setup cost, never saved time. The next `refresh` sends the declared parent evidence
 through the ordinary Click verification runner. The committed shard map may
 expand it into children, but all usual runner, receipt, and fallback checks
 still apply.
+
+A source-only commit with unchanged policy, discovery and runtime does not
+repeat bootstrap. Its current child results still require ordinary verification.
+See [verification economics](../../../docs/architecture/verification-economics.md)
+for the six-stage implementation, input policy and measurement limits.
 
 A successful baseline reports `sharding-ready` and makes same-revision exact
 receipts available for unchanged bindings. Status reports exact,

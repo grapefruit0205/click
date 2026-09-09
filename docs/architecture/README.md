@@ -1,5 +1,8 @@
 # Maintained architecture documents
 
+- [Verification economics and file inputs](verification-economics.md) records
+  parent-relative costs, scoped owner policy, stable file groups and paired sessions.
+
 - [Runtime optimization](runtime-optimization.md) records the current runtime
   boundaries and measured optimization work.
 - [Revalidation savings](revalidation-savings.md) describes the design used to

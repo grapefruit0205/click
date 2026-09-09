@@ -1,0 +1,208 @@
+{
+  "kind": "click-scoped-session-benchmark",
+  "limitations": [
+    "Owner policy and layout are committed before baseline in an isolated fixture.",
+    "Policy preparation and initial baseline count; automatic inventory/bootstrap is not exercised by this fixture.",
+    "Fixed CPU workload is synthetic; no extrapolated production or tens-of-minutes claim.",
+    "Whole-agent implementation time, user wait time and host token usage are unmeasured.",
+    "Negative deltas are retained; only equivalent outcomes qualify."
+  ],
+  "samples": [
+    {
+      "arms": {
+        "baseline": {
+          "final_full_audit": {
+            "executed_source_count": 1,
+            "exit_code": 0,
+            "grouping": "parent-suite",
+            "not_run_source_count": 0,
+            "request_measurement_scope": "parent-command-dispatch-through-return",
+            "reused_source_count": 0,
+            "status": "passed",
+            "wall_ms": 71.562846
+          },
+          "setup_ms": 22.299078,
+          "steps": [
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "326d1847db0c3e51482b32df83a6e741bcfe30fe4547dece6fa2b3897ddeab52",
+              "reused": 0,
+              "scenario": "first-run",
+              "status": "passed",
+              "wall_ms": 69.95282
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "c2334172922f3c2e79df07cb11b9d2fd44a26c6c64ec09a84f5b28e3d5b09ef5",
+              "reused": 0,
+              "scenario": "unrelated-code",
+              "status": "passed",
+              "wall_ms": 64.475112
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "ae206ca39422f7438e75f3b8a528357449756eff11e7348502ab6da868db09c6",
+              "reused": 0,
+              "scenario": "related-code",
+              "status": "passed",
+              "wall_ms": 81.527796
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "5cb358f37b9ef2aa1746507b117e96bfd4997615b942096295c6a7746e3bcacf",
+              "reused": 0,
+              "scenario": "all-code",
+              "status": "passed",
+              "wall_ms": 79.057285
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "5cb358f37b9ef2aa1746507b117e96bfd4997615b942096295c6a7746e3bcacf",
+              "reused": 0,
+              "scenario": "environment",
+              "status": "passed",
+              "wall_ms": 81.110095
+            },
+            {
+              "executed": 1,
+              "exit_code": 1,
+              "input_digest": "2a0087c2ab7a454ec07dcc91de2729e48f26eb60149bf117993ac0e219ea6012",
+              "reused": 0,
+              "scenario": "failure",
+              "status": "failed",
+              "wall_ms": 75.822132
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "a9d62b94228957fe89c33421894fed86194dcd769cfd9db2d652d41487699709",
+              "reused": 0,
+              "scenario": "retry",
+              "status": "passed",
+              "wall_ms": 83.758119
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "a9d62b94228957fe89c33421894fed86194dcd769cfd9db2d652d41487699709",
+              "reused": 0,
+              "scenario": "unchanged",
+              "status": "passed",
+              "wall_ms": 81.392322
+            }
+          ],
+          "total_ms": 710.9576050000001
+        },
+        "scoped-inputs": {
+          "final_full_audit": {
+            "executed_source_count": 1,
+            "exit_code": 0,
+            "grouping": "parent-suite",
+            "not_run_source_count": 0,
+            "request_measurement_scope": "parent-command-dispatch-through-return",
+            "reused_source_count": 0,
+            "status": "passed",
+            "wall_ms": 74.486727
+          },
+          "setup_ms": 125.315574,
+          "steps": [
+            {
+              "executed": 2,
+              "exit_code": 0,
+              "input_digest": "326d1847db0c3e51482b32df83a6e741bcfe30fe4547dece6fa2b3897ddeab52",
+              "reused": 0,
+              "scenario": "first-run",
+              "status": "passed",
+              "wall_ms": 1107.064675
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "c2334172922f3c2e79df07cb11b9d2fd44a26c6c64ec09a84f5b28e3d5b09ef5",
+              "reused": 1,
+              "scenario": "unrelated-code",
+              "status": "passed",
+              "wall_ms": 1893.594415
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "ae206ca39422f7438e75f3b8a528357449756eff11e7348502ab6da868db09c6",
+              "reused": 1,
+              "scenario": "related-code",
+              "status": "passed",
+              "wall_ms": 2026.192818
+            },
+            {
+              "executed": 2,
+              "exit_code": 0,
+              "input_digest": "5cb358f37b9ef2aa1746507b117e96bfd4997615b942096295c6a7746e3bcacf",
+              "reused": 0,
+              "scenario": "all-code",
+              "status": "passed",
+              "wall_ms": 2069.070363
+            },
+            {
+              "executed": 2,
+              "exit_code": 0,
+              "input_digest": "5cb358f37b9ef2aa1746507b117e96bfd4997615b942096295c6a7746e3bcacf",
+              "reused": 0,
+              "scenario": "environment",
+              "status": "passed",
+              "wall_ms": 1403.70435
+            },
+            {
+              "executed": 1,
+              "exit_code": 1,
+              "input_digest": "2a0087c2ab7a454ec07dcc91de2729e48f26eb60149bf117993ac0e219ea6012",
+              "reused": 1,
+              "scenario": "failure",
+              "status": "failed",
+              "wall_ms": 2058.997568
+            },
+            {
+              "executed": 1,
+              "exit_code": 0,
+              "input_digest": "a9d62b94228957fe89c33421894fed86194dcd769cfd9db2d652d41487699709",
+              "reused": 1,
+              "scenario": "retry",
+              "status": "passed",
+              "wall_ms": 2020.680316
+            },
+            {
+              "executed": 0,
+              "exit_code": 0,
+              "input_digest": "a9d62b94228957fe89c33421894fed86194dcd769cfd9db2d652d41487699709",
+              "reused": 2,
+              "scenario": "unchanged",
+              "status": "passed",
+              "wall_ms": 510.661191
+            }
+          ],
+          "total_ms": 13289.767996999999
+        }
+      },
+      "delta_ms": -12578.810392,
+      "delta_percent": -1769.277141637721,
+      "equivalent": true,
+      "iteration": 0
+    }
+  ],
+  "scope": "isolated-verification-workflow-including-setup-failure-and-final-audit",
+  "summaries": {
+    "delta_ms": {
+      "max": -12578.810392,
+      "median": -12578.810392,
+      "min": -12578.810392
+    },
+    "eligible_samples": 1
+  },
+  "unit": "ms",
+  "version": 1,
+  "workload_rounds": 40000
+}

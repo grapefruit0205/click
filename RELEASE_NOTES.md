@@ -1,5 +1,23 @@
 # Release notes
 
+## v0.96.0 — 2026-09-09
+
+- Parent-relative cost selection rejects splits whose selected child plus
+  management cost is slower than the full parent. Probe cost and payback remain
+  estimates, separate from total setup and measured savings.
+- Evidence bootstrap defers children to the normal one-use baseline runner;
+  ordinary source commits retain validated setup. Setup execution now has its
+  own bounded budget for long tests. SIGTERM during managed waits reaches
+  interruption cleanup; hard process termination still requires recovery.
+- Optional committed reuse policy v2 binds each exact check to owner-declared
+  file inputs, including ignored content, missing paths and directory membership.
+  Policy v1, complete observation precedence and current execution bindings remain.
+- Bounded Vitest/Jest inventories support stable groups beyond 64 files.
+  Policy preflight shares Git work within one request without caching authority.
+- Paired Evidence sessions include setup, failures, retries and final full audits.
+  No whole-agent time, token or production minutes-saving claim is established.
+  See [implementation and limits](docs/architecture/verification-economics.md).
+
 ## v0.95.0 — 2026-09-09
 
 - Automatic shard proposals preserve the exact parent's dependency declarations

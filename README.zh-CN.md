@@ -11,6 +11,11 @@ Click 为编码代理提供**增量验证（incremental verification）**，通�
 
 目标是在完成同样约定工作的前提下，减少时间、Token 消耗和人工介入。复用检查只是其中一环，不能单凭复用数量就认定整个任务完成得更快。
 
+当前源码新增相对于 parent 的成本判断、减少重复初始化验证、稳定的
+Vitest/Jest 文件分组，以及由仓库所有者声明的文件输入复用策略。
+配置和成对会话比较方法见[验证成本与输入策略](docs/architecture/verification-economics.md)。
+尚未证实实际项目能够节省数十分钟。
+
 - **说明复用依据：** 只有执行条件和复用规则仍成立时，才保留先前的有效结果。
 - **自动分片：** 为受支持的测试套件提出并维护分组；无法拆分或拆分不划算时，保留完整套件执行路径。
 - **实用的验证反馈：** 展示实际执行、复用、失败和待完成的检查，并可选择汇总失败原因。
@@ -29,14 +34,14 @@ codex plugin add click@click
 
 重启 Codex 并新建任务，让已安装的 Hook 和技能重新加载。在依赖 Hook 之前，先通过 CLI 的 `/hooks` 页面审阅待确认的 Click Hook；详见 [Hook 故障排查](#hook-故障排查)。
 
-当前版本：**v0.95.0**。更新命令：
+当前版本：**v0.96.0**。更新命令：
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.95.0 保留各子验证的依赖范围，并在完整分片刷新后保留兼容的验证证据。受支持的 Vitest/Jest 测试正文修改保持文件级分片；受影响或证据不足的子验证会执行，分片不完整时回退到 parent。复用仍需当前有效的授权。自动分片 `init/status/refresh` 和经授权的分片复用仍是必须满足的回归标准。详情见[版本说明](RELEASE_NOTES.md)、[子验证证据保留](docs/architecture/child-verification-continuity.md)和 [CI 变更范围](docs/architecture/ci-scope.md)。
+更新后请重启，并使用新任务。v0.96.0 会拒绝得不偿失的分片，减少 Evidence bootstrap 中重复执行子验证，并支持稳定的大型 Vitest/Jest 分组和由仓库所有者声明的文件输入策略 v2。受影响或不确定的子验证仍会执行，分片不完整时回退到 parent。自动分片 `init/status/refresh` 和经授权的分片复用仍是必须满足的回归标准。详情见[版本说明](RELEASE_NOTES.md)和[验证成本与输入策略](docs/architecture/verification-economics.md)。
 
 ## 从日常工作开始
 

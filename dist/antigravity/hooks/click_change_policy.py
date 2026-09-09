@@ -9,6 +9,7 @@ policy entry.  Missing, malformed, racing, or unsupported state fails closed.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -19,13 +20,16 @@ from typing import Any
 
 if __package__:
     from . import click_dependency_cache
+    from . import click_input_policy
 else:  # Executed directly from the bundled hooks directory.
     import click_dependency_cache
+    import click_input_policy
 
 
 CONFIG_RELATIVE_PATH = ".click/evidence-reuse.json"
 CONFIG_VERSION = 1
 PROVIDER_NAME = "repository-safe-change-policy-v1"
+INPUT_PROVIDER_NAME = "repository-scoped-input-policy-v2"
 SNAPSHOT_PROVIDER_NAME = "git-effective-workspace-v1"
 MAX_CONFIG_BYTES = 256 * 1024
 MAX_DIRTY_PATHS = 512
@@ -46,6 +50,7 @@ OVERRIDE_FIELDS = frozenset({"path", "identity"})
 DECISION_CONTEXT_FIELDS = frozenset({"source_key", "revision", "git_root", "tree_digest"})
 
 GitCapture = Callable[[Path, list[str]], bytes | None]
+_preflight = ContextVar("click_owner_policy_preflight", default=None)
 
 
 def _digest(value: Any) -> str:
@@ -134,7 +139,7 @@ def _policy_file_matches(root: Path, committed: bytes) -> bool:
 
 def _load_policy(
     cwd: Path, git_capture: GitCapture
-) -> tuple[Path, str, str, dict[str, tuple[str, ...]], bytes] | None:
+) -> tuple[Path, str, str, dict[str, dict[str, Any]], bytes] | None:
     root_output = git_capture(cwd, ["rev-parse", "--show-toplevel"])
     if root_output is None:
         return None
@@ -159,18 +164,18 @@ def _load_policy(
         return None
     if not isinstance(value, dict) or set(value) != {"version", "entries"}:
         return None
-    if value.get("version") != CONFIG_VERSION:
+    if type(value.get("version")) is not int or value["version"] not in {1, 2}:
         return None
     raw_entries = value.get("entries")
     if not isinstance(raw_entries, list) or not raw_entries:
         return None
 
-    entries: dict[str, tuple[str, ...]] = {}
+    entries: dict[str, dict[str, Any]] = {}
     for entry in raw_entries:
-        if not isinstance(entry, dict) or set(entry) != {
-            "checks",
-            "reuse_if_only_changed",
-        }:
+        expected = {"checks", "reuse_if_only_changed"}
+        if value["version"] == 2:
+            expected.add("inputs")
+        if not isinstance(entry, dict) or set(entry) != expected:
             return None
         group_digest = _manifest_group_digest(entry.get("checks"))
         patterns, error = click_dependency_cache.normalize_patterns(
@@ -188,7 +193,13 @@ def _load_policy(
             )
         ):
             return None
-        entries[group_digest] = patterns
+        descriptor: dict[str, Any] = {"patterns": patterns}
+        if value["version"] == 2:
+            inputs, input_error = click_dependency_cache.normalize_patterns(entry["inputs"])
+            if input_error or inputs is None:
+                return None
+            descriptor["inputs"] = inputs
+        entries[group_digest] = descriptor
     return root, head, hashlib.sha256(canonical_raw).hexdigest(), entries, committed
 
 
@@ -421,11 +432,19 @@ def snapshot_is_valid(value: Any) -> bool:
 
 
 def receipt_is_valid(value: Any) -> bool:
-    if not isinstance(value, dict) or set(value) != RECEIPT_FIELDS:
+    if not isinstance(value, dict):
         return False
+    scoped = value.get("provider") == INPUT_PROVIDER_NAME
+    fields = RECEIPT_FIELDS | {"inputs", "inputs_digest"} if scoped else RECEIPT_FIELDS
+    if set(value) != fields:
+        return False
+    if scoped:
+        inputs, input_error = click_dependency_cache.normalize_patterns(value.get("inputs"))
+        if input_error or inputs is None or list(inputs) != value.get("inputs") or not _is_digest(value.get("inputs_digest")):
+            return False
     patterns, error = click_dependency_cache.normalize_patterns(value.get("patterns"))
     return bool(
-        value.get("provider") == PROVIDER_NAME
+        value.get("provider") in {PROVIDER_NAME, INPUT_PROVIDER_NAME}
         and _is_digest(value.get("config_digest"))
         and _is_digest(value.get("entry_digest"))
         and not error
@@ -438,6 +457,40 @@ def receipt_is_valid(value: Any) -> bool:
         )
         and snapshot_is_valid(value.get("baseline"))
     )
+
+
+def inputs_are_current(root: Path, receipt: Any) -> bool:
+    if not receipt_is_valid(receipt):
+        return False
+    if receipt["provider"] != INPUT_PROVIDER_NAME:
+        return True
+    return click_input_policy.snapshot(root, receipt["inputs"]) == receipt["inputs_digest"]
+
+
+def requires_input_receipt(root: Path, check_digest: str) -> bool:
+    """A scoped check with an incomplete baseline must not take exact reuse."""
+    target = root / CONFIG_RELATIVE_PATH
+    try:
+        if target.stat().st_size > MAX_CONFIG_BYTES or target.is_symlink():
+            return True
+        value = json.loads(target.read_bytes())
+        return bool(
+            isinstance(value, dict) and value.get("version") == 2
+            and any(isinstance(entry, dict)
+                    and _manifest_group_digest(entry.get("checks")) == check_digest
+                    for entry in value.get("entries", []))
+        )
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError, TypeError):
+        return True
+
+
+def same_policy_inputs(first: Any, second: Any) -> bool:
+    return bool(receipt_is_valid(first) and receipt_is_valid(second) and all(
+        first.get(field) == second.get(field)
+        for field in ("provider", "config_digest", "entry_digest", "patterns", "inputs", "inputs_digest")
+    ))
 
 
 def changed_paths_are_valid(value: Any, *, maximum: int = MAX_CHANGED_PATHS) -> bool:
@@ -454,21 +507,27 @@ def receipts_for_groups(
     grouped_checks: dict[str, list[dict[str, Any]]],
     *,
     git_capture: GitCapture,
+    scoped_only: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Capture the current policy and effective Git baseline for exact groups."""
     loaded = _load_policy(cwd, git_capture)
     if loaded is None:
         return {}
     root, head, config_digest, entries, committed = loaded
+    if scoped_only:
+        entries = {key: value for key, value in entries.items() if "inputs" in value}
+        if not entries:
+            return {}
     baseline = _snapshot(root, expected_head=head, git_capture=git_capture)
     if baseline is None or not _policy_file_matches(root, committed):
         return {}
     receipts: dict[str, dict[str, Any]] = {}
     for source_key, checks in grouped_checks.items():
         group_digest = _group_digest(checks)
-        patterns = entries.get(group_digest)
-        if not isinstance(source_key, str) or patterns is None:
+        descriptor = entries.get(group_digest)
+        if not isinstance(source_key, str) or descriptor is None:
             continue
+        patterns = descriptor["patterns"]
         entry_payload = {
             "checks": [check["argv"] for check in checks],
             "reuse_if_only_changed": list(patterns),
@@ -480,6 +539,17 @@ def receipts_for_groups(
             "patterns": list(patterns),
             "baseline": baseline,
         }
+        if "inputs" in descriptor:
+            inputs = list(descriptor["inputs"])
+            fingerprint = click_input_policy.snapshot(root, inputs)
+            if fingerprint is None or click_input_policy.snapshot(root, inputs) != fingerprint:
+                receipts.pop(source_key)
+                continue
+            entry_payload["inputs"] = inputs
+            receipts[source_key].update(
+                provider=INPUT_PROVIDER_NAME, inputs=inputs, inputs_digest=fingerprint,
+                entry_digest=_digest(entry_payload),
+            )
     return receipts
 
 
@@ -581,7 +651,7 @@ def _decision_payload(
     check_digest: str, decision_context: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
-        "provider": PROVIDER_NAME,
+        "provider": current["provider"],
         "entry_digest": current["entry_digest"],
         "from_snapshot": baseline["baseline"]["digest"],
         "to_snapshot": current["baseline"]["digest"],
@@ -614,9 +684,7 @@ def reuse_decision_matches(
         return False
     current = decision["receipt"]
     changed = decision["changed_paths"]
-    if any(current[field] != baseline_receipt[field] for field in (
-        "config_digest", "entry_digest", "patterns",
-    )) or any(
+    if not same_policy_inputs(current, baseline_receipt) or any(
         path in PROTECTED_POLICY_PATHS
         or not any(click_dependency_cache.path_matches(pattern, path) for pattern in current["patterns"])
         for path in changed
@@ -647,14 +715,21 @@ def decide(
         decision_context is not None and not _decision_context_is_valid(decision_context)
     ):
         return fallback
-    current_receipts = receipts_for_groups(
-        cwd, {"candidate": checks}, git_capture=git_capture
-    )
-    current = current_receipts.get("candidate")
+    shared = _preflight.get()
+    if shared is not None and shared["cwd"] == cwd.resolve():
+        current = shared["receipts"].get(_group_digest(checks))
+    else:
+        shared = None
+        current = receipts_for_groups(
+            cwd, {"candidate": checks}, git_capture=git_capture
+        ).get("candidate")
     if not receipt_is_valid(current):
         return fallback
     assert isinstance(current, dict)
     if (
+        current["provider"] != baseline_receipt["provider"]
+        or current.get("inputs") != baseline_receipt.get("inputs")
+        or
         current["config_digest"] != baseline_receipt["config_digest"]
         or current["entry_digest"] != baseline_receipt["entry_digest"]
         or current["patterns"] != baseline_receipt["patterns"]
@@ -665,18 +740,25 @@ def decide(
             "reason": "policy-changed",
             "receipt": current,
         }
-    loaded = _load_policy(cwd, git_capture)
-    if loaded is None:
-        return fallback
-    root = loaded[0]
+    if current.get("inputs_digest") != baseline_receipt.get("inputs_digest"):
+        return {**fallback, "status": "rerun", "reason": "declared-input-changed", "receipt": current}
+    if shared is None:
+        loaded = _load_policy(cwd, git_capture)
+        if loaded is None:
+            return fallback
+        root = loaded[0]
+    else:
+        root = shared["root"]
     if decision_context is not None and decision_context["git_root"] != os.path.normcase(str(root)):
         return fallback
-    changed = _changed_paths(
-        root,
-        baseline_receipt["baseline"],
-        current["baseline"],
-        git_capture=git_capture,
-    )
+    cache_key = (baseline_receipt["baseline"]["digest"], current["baseline"]["digest"])
+    changes = shared["changes"] if shared is not None else {}
+    if cache_key not in changes:
+        changes[cache_key] = _changed_paths(
+            root, baseline_receipt["baseline"], current["baseline"],
+            git_capture=git_capture,
+        )
+    changed = changes[cache_key]
     if changed is None:
         return fallback
     decision_digest = _digest(_decision_payload(
@@ -706,6 +788,37 @@ def decide(
         "decision_digest": decision_digest,
         "receipt": current,
     }
+
+
+def decide_groups(
+    cwd: Path,
+    grouped_checks: dict[str, list[dict[str, Any]]],
+    baselines: dict[str, Any],
+    *,
+    git_capture: GitCapture,
+    decision_contexts: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Share one policy/Git preflight, never a persistent reuse authorization.
+
+    The verification caller still confirms workspace, runtime and scoped input
+    fingerprints after all provisional promotions.
+    """
+    loaded = _load_policy(cwd, git_capture)
+    receipts = receipts_for_groups(cwd, grouped_checks, git_capture=git_capture)
+    shared = {
+        "cwd": cwd.resolve(), "root": loaded[0] if loaded else cwd.resolve(),
+        "receipts": {_group_digest(grouped_checks[key]): value for key, value in receipts.items()},
+        "changes": {},
+    }
+    token = _preflight.set(shared)
+    try:
+        return {
+            key: decide(cwd, checks, baselines.get(key), git_capture=git_capture,
+                        decision_context=decision_contexts[key])
+            for key, checks in grouped_checks.items()
+        }
+    finally:
+        _preflight.reset(token)
 
 
 group_digest = _group_digest

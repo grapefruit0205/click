@@ -131,6 +131,37 @@ def _probe_group_termination(case: str) -> dict:
 
 
 class ClickProcessTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "SIGTERM process fixture needs POSIX")
+    def test_sigterm_during_child_wait_interrupts_and_reaps_the_child(self):
+        script = """
+import json, os, signal, subprocess, sys
+from hooks import click_process
+previous = signal.getsignal(signal.SIGTERM)
+children = []
+spawn = click_process.spawn_argv
+def tracked(*args, **kwargs):
+    child = spawn(*args, **kwargs)
+    children.append(child)
+    return child
+click_process.spawn_argv = tracked
+try:
+    click_process.run_argv([sys.executable, '-c',
+        'import os, signal, time; os.kill(os.getppid(), signal.SIGTERM); time.sleep(60)'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+except KeyboardInterrupt:
+    print(json.dumps({'interrupted': True, 'reaped': children[0].poll() is not None,
+        'restored': signal.getsignal(signal.SIGTERM) == previous}))
+else:
+    raise AssertionError('SIGTERM was not converted to interruption')
+"""
+        result = subprocess.run([sys.executable, "-c", script],
+                                cwd=Path(__file__).resolve().parents[1],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {
+            "interrupted": True, "reaped": True, "restored": True,
+        })
+
     def _assert_real_group_terminated(self, case: str, returncode: int) -> None:
         # A separate supervisor owns subreaper state; it cannot adopt children
         # belonging to this unittest process or other concurrently running work.

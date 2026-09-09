@@ -639,6 +639,24 @@ def split_child_command(parent: dict[str, Any], filename: str) -> list[str] | No
     return None
 
 
+def split_file_command(parent: dict[str, Any], files: list[str]) -> list[str] | None:
+    """Run a whole-file group in one process, preserving the parent options."""
+    if not files or len(files) > 48 or files != sorted(set(files)):
+        return None
+    if len(files) == 1:
+        return split_child_command(parent, files[0])
+    if parent.get("adapter") not in {VITEST_ADAPTER, JEST_ADAPTER}:
+        return None
+    import posixpath
+    command = parent["command"]
+    targets = [posixpath.relpath(path, command.get("cwd", ".")) for path in files]
+    return [
+        *command["runner_prefix"], *command["child_options"],
+        *(["--runTestsByPath"] if parent["adapter"] == JEST_ADAPTER else []),
+        *targets,
+    ]
+
+
 def is_vitest_test_path(path: str) -> bool:
     parts = PurePosixPath(path).parts
     return bool(

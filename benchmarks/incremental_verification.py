@@ -109,7 +109,7 @@ class Fixture:
         partial_policy: bool = False,
         configuration: str = "legacy",
     ):
-        if configuration not in {"legacy", *WORKFLOW_CONFIGS}:
+        if configuration not in {"legacy", "scoped-inputs", *WORKFLOW_CONFIGS}:
             raise ValueError("invalid-workflow-configuration")
         self.configuration = configuration
         self.rounds = rounds
@@ -175,7 +175,15 @@ class Fixture:
             # imports only its own component; a sibling code change is allowed.
             for entry, sibling in zip(policy["entries"], ("beta", "alpha")):
                 entry["reuse_if_only_changed"] = [f"component_{sibling}.py"]
-        if configuration in {"legacy", "explicit-reuse"}:
+        if configuration == "scoped-inputs":
+            policy["version"] = 2
+            for entry, name in zip(policy["entries"], ("alpha", "beta")):
+                entry["reuse_if_only_changed"] = ["component_*.py", "implementation.py", "tests/"]
+                entry["inputs"] = [
+                    f"component_{name}.py", f"tests/test_{name}.py",
+                    "tests/__init__.py", "implementation.py",
+                ]
+        if configuration in {"legacy", "explicit-reuse", "scoped-inputs"}:
             self._write(".click/evidence-shards.json", json.dumps(shards))
             self._write(".click/evidence-reuse.json", json.dumps(policy))
         for args in (["git", "init", "-q"], ["git", "add", "."],
@@ -186,7 +194,7 @@ class Fixture:
                 raise RuntimeError("fixture-git-preparation-failed")
         if configuration == "baseline":
             return  # Ordinary validation: no Hook, policy, or receipt ledger.
-        if configuration != "legacy":
+        if configuration not in {"legacy", "scoped-inputs"}:
             self.begin_contract("A · 최초 기준 검증")
             self._control("default guarded")  # Isolated fixture configuration only.
             return
@@ -615,6 +623,77 @@ def _cumulative_summaries(comparisons: list[dict[str, Any]], iterations: int) ->
                                                 if item["delta_percent"] is not None]),
             })
     return summaries
+
+
+def run_scoped_session_benchmark(*, iterations: int = 1,
+                                 workload_rounds: int = DEFAULT_WORKLOAD_ROUNDS) -> dict[str, Any]:
+    """Paired Evidence sessions; setup, failed attempts and final audit all count.
+
+    This exercises real hooks and signed runners. It is a verification fixture,
+    not a measurement of agent implementation time, host tokens or production.
+    """
+    if not 1 <= iterations <= MAX_ITERATIONS or not 1 <= workload_rounds <= MAX_WORKLOAD_ROUNDS:
+        raise ValueError("invalid-scoped-session-configuration")
+    samples = []
+    for index in range(iterations):
+        arms = {}
+        with tempfile.TemporaryDirectory(prefix="click-scoped-session-") as directory:
+            for configuration in _rotated(("baseline", "scoped-inputs"), index):
+                started = time.perf_counter_ns()
+                fixture = Fixture(Path(directory) / configuration, workload_rounds,
+                                  configuration=configuration)
+                setup_ms = (time.perf_counter_ns() - started) / 1_000_000
+                steps = []
+                for position, scenario in enumerate(WORKFLOW_STEPS):
+                    started = time.perf_counter_ns()
+                    if configuration == "scoped-inputs" and position:
+                        fixture.event["turn_id"] = f"scoped-step-{position}"
+                        fixture._hook("prompt-submit", {
+                            "hook_event_name": "UserPromptSubmit",
+                            "prompt": "Continue the next fixed Evidence fixture change and verification.",
+                        })
+                    fixture.workflow_change(scenario)
+                    result = fixture.full("parent-suite") if configuration == "baseline" else fixture.verify()
+                    wall_ms = (time.perf_counter_ns() - started) / 1_000_000
+                    steps.append({
+                        "scenario": scenario, "wall_ms": wall_ms,
+                        "exit_code": result["exit_code"], "status": result["status"],
+                        "executed": result["executed_source_count"],
+                        "reused": result["reused_source_count"],
+                        "input_digest": fixture.input_digest(),
+                    })
+                audit = fixture.full("parent-suite")
+                arms[configuration] = {
+                    "setup_ms": setup_ms, "steps": steps,
+                    "final_full_audit": audit,
+                    "total_ms": setup_ms + sum(step["wall_ms"] for step in steps) + audit["wall_ms"],
+                }
+        baseline, incremental = arms["baseline"], arms["scoped-inputs"]
+        equivalent = all(
+            left["input_digest"] == right["input_digest"]
+            and (left["exit_code"] == 0) == (right["exit_code"] == 0)
+            for left, right in zip(baseline["steps"], incremental["steps"])
+        ) and all(arm["final_full_audit"]["exit_code"] == 0 for arm in arms.values())
+        samples.append({
+            "iteration": index, "arms": arms, "equivalent": equivalent,
+            **(comparison_delta(baseline["total_ms"], incremental["total_ms"])
+               if equivalent else {"delta_ms": None, "delta_percent": None}),
+        })
+    return {
+        "version": 1, "kind": "click-scoped-session-benchmark", "unit": "ms",
+        "scope": "isolated-verification-workflow-including-setup-failure-and-final-audit",
+        "workload_rounds": workload_rounds, "samples": samples,
+        "summaries": {"eligible_samples": sum(sample["equivalent"] for sample in samples),
+                      "delta_ms": distribution([sample["delta_ms"] for sample in samples if sample["equivalent"]])},
+        "limitations": [
+            "Owner policy and layout are committed before baseline in an isolated fixture.",
+            "Policy preparation and initial baseline count; automatic inventory/bootstrap is not exercised by this fixture.",
+            "Fixed CPU workload is synthetic; no extrapolated production or tens-of-minutes claim.",
+            "Each Hook is a fresh CLI process; this does not measure the installed resident host worker.",
+            "Whole-agent implementation time, user wait time and host token usage are unmeasured.",
+            "Negative deltas are retained; only equivalent outcomes qualify.",
+        ],
+    }
 
 
 def run_guarded_workflow_benchmark(*, iterations: int = DEFAULT_ITERATIONS, warmups: int = 1,
@@ -1288,6 +1367,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("evidence", "guarded"), default="evidence")
     parser.add_argument("--output", type=Path, help="Write a new local JSON file (never overwrite).")
     parser.add_argument("--guarded-workflow", action="store_true", help="Compare baseline, Guarded defaults, and explicit reuse through completed contracts.")
+    parser.add_argument("--scoped-session", action="store_true",
+                        help="Paired Evidence file-input policy sessions; use --warmups 0. Includes setup, failures and final full audits.")
     parser.add_argument("--html-output", type=Path, help="New offline three-configuration workflow report (requires --guarded-workflow).")
     parser.add_argument("--repository-bundle", action="store_true",
                         help="Also run one non-warmup reference of the committed repository test bundle.")
@@ -1299,6 +1380,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
+        if args.scoped_session and (args.guarded_workflow or args.scenario or args.html_output
+                                    or args.repository_bundle or args.warmups != 0 or args.mode != "evidence"):
+            raise ValueError("scoped-session-requires-fixed-evidence-workflow-and-zero-warmups")
         if (args.html_output and not args.guarded_workflow
                 or args.repository_bundle and not args.guarded_workflow
                 or args.guarded_workflow and args.scenario):
@@ -1306,7 +1390,9 @@ def main(argv: list[str] | None = None) -> int:
         for target in (args.output, args.html_output):
             if target is not None and target.exists():
                 raise ValueError("output-already-exists")
-        if args.guarded_workflow:
+        if args.scoped_session:
+            result = run_scoped_session_benchmark(iterations=args.iterations, workload_rounds=args.workload_rounds)
+        elif args.guarded_workflow:
             result = run_guarded_workflow_benchmark(iterations=args.iterations, warmups=args.warmups, workload_rounds=args.workload_rounds)
             if args.repository_bundle:
                 result["repository_reference"] = run_repository_bundle_reference(

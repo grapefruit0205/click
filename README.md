@@ -12,6 +12,11 @@ Click provides **incremental verification** for coding agents. It records which 
 
 The goal is to complete the same agreed work with less time, token use, and intervention. Reused checks are one part of that result; they do not by themselves demonstrate a faster completed task.
 
+The current source adds parent-relative cost checks, fewer duplicate setup runs,
+stable Vitest/Jest file groups, and owner-declared file-input reuse policies.
+See [verification economics](docs/architecture/verification-economics.md) for
+configuration, the paired-session comparison, and the limits of time-saving claims.
+
 - **Reuse with an explanation:** retain a valid result only when its execution bindings and reuse rules still hold.
 - **Automatic sharding:** propose and maintain groups for supported suites, retaining the full-suite fallback when splitting is unsupported or not worthwhile.
 - **Useful verification feedback:** show executed, reused, failed, and outstanding checks; optionally summarize failures.
@@ -30,14 +35,14 @@ codex plugin add click@click
 
 Restart Codex and start a new task so the installed Hooks and skill reload. Review pending Click Hooks in the CLI's `/hooks` view before relying on them; see [Hook troubleshooting](#hook-troubleshooting).
 
-Current release: **v0.95.0**. To update:
+Current release: **v0.96.0**. To update:
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.95.0 preserves each child's dependency scope and compatible evidence across complete shard refreshes. Supported Vitest/Jest test-body edits retain file-based splits; changed or insufficiently justified children run, and an incomplete split falls back to the parent. Reuse still requires current authority. Automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md), [child verification continuity](docs/architecture/child-verification-continuity.md), and [CI change scopes](docs/architecture/ci-scope.md).
+Restart and use a fresh task after updating. v0.96.0 rejects uneconomic splits, avoids duplicate Evidence bootstrap child runs, supports stable large Vitest/Jest groups, and adds owner-declared file-input policy v2 for child-specific cross-revision reuse. Affected or uncertain children run, and an incomplete split falls back to the parent. Automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and [verification economics](docs/architecture/verification-economics.md).
 
 ## Start with everyday work
 

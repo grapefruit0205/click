@@ -39,6 +39,7 @@ HOOK_FILES = (
     "click_dashboard_projection.py",
     "click_dashboard_server.py",
     "click_change_policy.py",
+    "click_input_policy.py",
     "click_dependency_cache.py",
     "click_dependency_trace.py",
     "click_diagnostics.py",
