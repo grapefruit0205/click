@@ -239,11 +239,24 @@ class CIWorkflowGateTests(unittest.TestCase):
         self.assertNotIn("paths-ignore:", workflow)
         self.assertIn("tags: ['v*']", workflow)
 
-    @unittest.skipUnless(shutil.which("bash"), "required-check gate uses bash")
+    @unittest.skipUnless(os.name == "nt" or shutil.which("bash"), "required-check gate uses bash")
     def test_actual_required_gate_rejects_failures_cancellation_and_missing_jobs(self):
+        bash = shutil.which("bash")
+        if os.name == "nt":
+            # GitHub's `shell: bash` uses Git Bash; System32/bash.exe may be
+            # the WSL launcher and cannot run this native Windows fixture.
+            git = Path(shutil.which("git") or "")
+            bash = next((str(path) for path in (
+                git.parent / "bash.exe", git.parent.parent / "bin/bash.exe",
+            ) if path.is_file()), None)
+        self.assertIsNotNone(bash, "The CI required-check fixture needs Git Bash on Windows")
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         block = workflow.split("  deterministic-tests:\n", 1)[1].split("\n  native-authoritative:", 1)[0]
         script = textwrap.dedent(block.rsplit("        run: |\n", 1)[1])
+        temporary = tempfile.TemporaryDirectory(prefix="click-ci-gate-")
+        self.addCleanup(temporary.cleanup)
+        script_path = Path(temporary.name) / "required-check.sh"
+        script_path.write_text(script, encoding="utf-8", newline="\n")
         cases = [("full", "success", "success", ["success"] * 10, True),
                  ("docs", "success", "success", ["skipped"] * 10, True),
                  ("release-metadata", "success", "success", ["skipped"] * 10, True),
@@ -257,9 +270,11 @@ class CIWorkflowGateTests(unittest.TestCase):
             with self.subTest(scope=scope, plan=plan, repository=repository, results=results):
                 env = {**os.environ, "CI_SCOPE": scope, "PLAN_RESULT": plan,
                        "REPOSITORY_RESULT": repository, "MATRIX_RESULTS": " ".join(results)}
-                result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], env=env,
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", script_path.as_posix()], env=env,
                                         capture_output=True, text=True)
-                self.assertEqual(result.returncode == 0, passed, result.stderr)
+                self.assertEqual(result.returncode == 0, passed,
+                                 {"bash": bash, "exit_code": result.returncode,
+                                  "stdout": result.stdout, "stderr": result.stderr})
 
 
 if __name__ == "__main__":
