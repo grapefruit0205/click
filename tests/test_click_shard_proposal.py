@@ -323,6 +323,38 @@ class ProposalTests(unittest.TestCase):
         write(self.root, "tests/no_package/test_invisible.py", "raise RuntimeError('never imported')\n")
         self.assertEqual(self.generate(command)["reasons"], ["undiscovered-file-matches-policy-inventory"])
 
+    def test_refresh_keeps_parent_and_exact_child_dependencies_separate(self):
+        command = library_project(self.root)
+        first = self.generate(command)
+        entries = first["proposals"][".click/evidence-dependencies.json"]["entries"]
+        first_checks = entries[0]["checks"]
+        entries[0]["paths"].append("invoice-data/**")
+        parent = {"checks": [command], "paths": ["shared-data/**"]}
+        unrelated = {"checks": [["python3", "-m", "unittest", "other"]],
+                     "paths": ["unrelated-project/**"]}
+        write(self.root, ".click/evidence-dependencies.json", json.dumps(
+            {"version": 1, "entries": [*entries, parent, unrelated]}))
+        refreshed = self.generate(command)
+        self.assertTrue(refreshed["proposal_ready"], refreshed["reasons"])
+        actual = refreshed["proposals"][".click/evidence-dependencies.json"]["entries"]
+        self.assertIn(parent, actual)
+        self.assertIn(unrelated, actual)
+        for entry in actual:
+            if entry["checks"] in [parent["checks"], unrelated["checks"]]:
+                continue
+            self.assertIn("shared-data/**", entry["paths"])
+            self.assertNotIn("unrelated-project/**", entry["paths"])
+            self.assertEqual("invoice-data/**" in entry["paths"],
+                             entry["checks"] == first_checks)
+            prior = next(old for old in entries if old["checks"] == entry["checks"])
+            self.assertTrue(set(prior["paths"]).issubset(entry["paths"]))
+
+        # Persisting and refreshing again must not spread a sibling's inputs.
+        write(self.root, ".click/evidence-dependencies.json", json.dumps(
+            {"version": 1, "entries": actual}))
+        repeated = self.generate(command)
+        self.assertEqual(actual, repeated["proposals"][".click/evidence-dependencies.json"]["entries"])
+
     def test_discovery_imports_contribute_dependencies(self):
         command = library_project(self.root)
         write(self.root, "retail/test_helpers.py", """

@@ -30,14 +30,14 @@ codex plugin add click@click
 
 Restart Codex and start a new task so the installed Hooks and skill reload. Review pending Click Hooks in the CLI's `/hooks` view before relying on them; see [Hook troubleshooting](#hook-troubleshooting).
 
-Current release: **v0.94.1**. To update:
+Current release: **v0.95.0**. To update:
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.94.1 separates maintained architecture and canonical prompts from completed implementation history, while preserving the v0.94.0 runtime behavior. Automatic sharding `init/status/refresh`, authorized shard reuse, and conservative parent fallback remain required regressions. See [release notes](RELEASE_NOTES.md), the [documentation map](docs/README.md), and the [multilingual expansion record](docs/history/multilang-expansion/FINAL_REPORT.md) for validation, measurements, and their limits.
+Restart and use a fresh task after updating. v0.95.0 preserves each child's dependency scope and compatible evidence across complete shard refreshes. Supported Vitest/Jest test-body edits retain file-based splits; changed or insufficiently justified children run, and an incomplete split falls back to the parent. Reuse still requires current authority. Automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md), [child verification continuity](docs/architecture/child-verification-continuity.md), and [CI change scopes](docs/architecture/ci-scope.md).
 
 ## Start with everyday work
 

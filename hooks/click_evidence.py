@@ -510,6 +510,63 @@ def activate_shard_plan(
     return sources, ""
 
 
+def refresh_shard_plan(
+    state: dict[str, Any], parent_source_key: str, plan: dict[str, Any]
+) -> tuple[dict[str, Any] | None, str]:
+    """Adopt a validated complete plan, retaining only compatible stale facts.
+
+    The caller resolves committed authority first. A retained result is never
+    current: normal dependency/receipt checks must requalify it before reuse.
+    Legacy children without a per-child input binding start fresh.
+    """
+    previous = state.get("evidence_state", {})
+    old_sources = previous.get("sources", {}) if isinstance(previous, dict) else None
+    active = click_evidence_shards.active_set(previous, parent_source_key)
+    verification = state.get("verification")
+    revision = verification.get("mutation_revision") if isinstance(verification, dict) else None
+    if (
+        not click_evidence_shards.state_is_valid(previous, old_sources)
+        or active is None
+        or not isinstance(plan, dict)
+        or plan.get("status") != "sharded"
+        or active.get("parent_check_digest") != plan.get("parent_check_digest")
+        or plan.get("parent_source_key") != parent_source_key
+    ):
+        return None, "The Evidence Shards refresh binding is unavailable."
+    assert isinstance(old_sources, dict)
+    # Build off to the side so an unsuccessful transition changes no registry.
+    candidate = {"evidence_state": json.loads(json.dumps(previous))}
+    _, error = collapse_shard_plan(candidate, parent_source_key)
+    if error:
+        return None, error
+    sources, error = activate_shard_plan(candidate, parent_source_key, plan)
+    if error or sources is None:
+        return None, error
+    for child in plan["children"]:
+        key = child["source_key"]
+        old = old_sources.get(key)
+        current = sources[key]
+        old_metadata = old.get("shard", {}) if isinstance(old, dict) else {}
+        if (
+            not isinstance(old, dict)
+            or "binding_digest" not in old_metadata
+            or click_evidence_shards.reuse_binding(old_metadata)
+            != click_evidence_shards.reuse_binding(current["shard"])
+            or old.get("status") not in {"passed", "stale"}
+            or not revision_is_valid(revision)
+            or not revision_is_valid(old.get("verified_revision"))
+            or old["verified_revision"] >= revision
+        ):
+            continue
+        sources[key] = json.loads(json.dumps(old))
+        sources[key]["shard"] = current["shard"]
+        sources[key]["status"] = "stale"
+    if not click_evidence_shards.state_is_valid(candidate["evidence_state"], sources):
+        return None, "The Evidence Shards refreshed registry is malformed."
+    state["evidence_state"] = candidate["evidence_state"]
+    return sources, ""
+
+
 def collapse_shard_plan(
     state: dict[str, Any], parent_source_key: str
 ) -> tuple[dict[str, Any] | None, str]:

@@ -157,6 +157,48 @@ class ClickEvidenceShardsTests(unittest.TestCase):
         self.assertEqual(drifted["status"], "fallback")
         self.assertEqual(drifted["reason"], "inventory-not-covered-exactly-once")
 
+    def test_child_identity_binds_own_coverage_without_sibling_invalidation(self) -> None:
+        original = self.resolve()
+        (self.root / "tests/test_gamma.py").write_text("# gamma\n", encoding="utf-8")
+        value = self.manifest()
+        value["entries"][0]["shards"].append({
+            "id": "gamma", "checks": [["python3", "-m", "unittest", "tests.test_gamma"]],
+            "covers": ["tests/test_gamma.py"],
+        })
+        self.write_manifest(value)
+        self.commit()
+        enlarged = self.resolve()
+        self.assertEqual(enlarged["status"], "sharded")
+        self.assertNotEqual(original["plan_digest"], enlarged["plan_digest"])
+        self.assertEqual(original["children"], enlarged["children"][:2])
+        before = click_evidence_shards.source_metadata(original, original["children"][0])
+        after = click_evidence_shards.source_metadata(enlarged, enlarged["children"][0])
+        self.assertNotEqual(before, after)
+        self.assertEqual(click_evidence_shards.reuse_binding(before),
+                         click_evidence_shards.reuse_binding(after))
+
+        # Even unchanged argv cannot reuse a child whose coverage is reassigned.
+        shards = value["entries"][0]["shards"]
+        shards[0]["covers"], shards[1]["covers"] = shards[1]["covers"], shards[0]["covers"]
+        self.write_manifest(value)
+        self.commit()
+        reassigned = self.resolve()
+        self.assertEqual(reassigned["status"], "sharded")
+        for old, new in zip(enlarged["children"][:2], reassigned["children"][:2]):
+            self.assertNotEqual(old["source_key"], new["source_key"])
+        self.assertEqual(enlarged["children"][2], reassigned["children"][2])
+
+    def test_legacy_binding_remains_bound_to_the_whole_plan(self) -> None:
+        plan = self.resolve()
+        metadata = click_evidence_shards.source_metadata(plan, plan["children"][0])
+        legacy = {key: value for key, value in metadata.items() if key != "binding_digest"}
+        self.assertTrue(click_evidence_shards.source_metadata_is_valid(legacy))
+        self.assertEqual(click_evidence_shards.reuse_binding(legacy), legacy)
+        self.assertNotEqual(click_evidence_shards.reuse_binding(legacy),
+                            click_evidence_shards.reuse_binding(metadata))
+        metadata["binding_digest"] = "invalid"
+        self.assertFalse(click_evidence_shards.source_metadata_is_valid(metadata))
+
     def test_default_unittest_discovery_cannot_be_narrower_than_inventory(
         self,
     ) -> None:

@@ -1,5 +1,34 @@
 # Release notes
 
+## v0.95.0 — 2026-09-09
+
+- Automatic shard proposals preserve the exact parent's dependency declarations
+  and each existing child's inputs without inheriting unrelated checks' scopes.
+  Previously broad owner declarations are not silently narrowed.
+- Supported static Vitest/Jest profiles distinguish test-body changes from
+  file-selection changes. Assertion edits and new cases inside the same file
+  retain the split; file membership and discovery configuration still require
+  validation. Python test-case structure checks remain in place.
+- Child identities bind their own commands and covered files independently of
+  sibling changes. A complete, committed shard refresh retains compatible old
+  results only as stale candidates. Repeated edits retain the last successful
+  candidate, but current inputs, receipts and reuse authority must be rechecked.
+  Legacy results require a fresh baseline instead of receiving narrower bindings.
+- A child with changed inputs or insufficient reuse evidence executes. All
+  affected children execute for shared changes; an incomplete or invalid split
+  retains the original parent fallback. Static dependency analysis alone never
+  authorizes skipping verification.
+- GitHub CI selects repository, distribution and maintained local-link checks
+  for bounded documentation or version-only changes. Runtime, Hook, reuse,
+  sharding, policy, CI and unknown changes retain the full platform matrix.
+  Release tags and manual runs also select full CI. Existing required-check
+  names remain, and failed, cancelled or missing checks cannot pass the gate.
+- Automatic sharding `init/status/refresh`, complete inventory, authorized shard
+  reuse, conservative parent fallback and generated Antigravity parity remain
+  release acceptance criteria. See [child verification continuity](docs/architecture/child-verification-continuity.md)
+  and [CI change scopes](docs/architecture/ci-scope.md) for behavior and limits.
+  No new whole-task time or token-saving claim is made.
+
 ## v0.94.1 — 2026-09-09
 
 - Maintained architecture documents, canonical prompts, completed phase packages,

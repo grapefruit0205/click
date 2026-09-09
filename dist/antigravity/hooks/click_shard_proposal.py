@@ -68,13 +68,9 @@ def equivalence(parent: dict, children: list[dict]) -> dict:
             "semantic_equivalence_proven": False}
 
 
-def existing_configuration(root: Path) -> tuple[list[dict], list[dict], set[str]]:
-    """Preserve all existing dependency entries and inherit their union.
-
-    Broad inheritance is deliberately conservative: this phase cannot decide
-    which owner-declared inputs may be dropped from a new command.
-    """
-    metadata, entries, inherited = [], [], set()
+def existing_configuration(root: Path) -> tuple[list[dict], list[dict]]:
+    """Preserve owner declarations without mixing unrelated check scopes."""
+    metadata, entries = [], []
     for name in POLICY_NAMES:
         target = root / ".click" / name
         if not target.exists() and not target.is_symlink():
@@ -105,8 +101,7 @@ def existing_configuration(root: Path) -> tuple[list[dict], list[dict], set[str]
                 raise inventory.AnalysisError("existing-dependencies-invalid")
             seen.add(key)
             entries.append(entry)
-            inherited.update(patterns)
-    return metadata, entries, inherited
+    return metadata, entries
 
 
 def propose(project: Path, argv: list[str] | None, *, cwd: Path | None = None,
@@ -142,7 +137,13 @@ def propose(project: Path, argv: list[str] | None, *, cwd: Path | None = None,
         before = inventory.workspace_snapshot(root, limits)
         if inventory.digest(before) != parent["workspace_digest"]:
             raise inventory.AnalysisError("project-changed-during-proposal")
-        existing, old_entries, inherited = existing_configuration(root)
+        existing, old_entries = existing_configuration(root)
+        parent_key = dependencies.manifest_group_digest([parent["command"]["argv"]])
+        inherited = {
+            path for entry in old_entries
+            if dependencies.manifest_group_digest(entry["checks"]) == parent_key
+            for path in entry["paths"]
+        }
         result["existing_configuration"] = existing
         candidates = parent["dependencies"]
         result["split_risks"] = candidates["split_risks"]

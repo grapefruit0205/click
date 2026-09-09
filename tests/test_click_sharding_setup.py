@@ -359,6 +359,11 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
         self.assertEqual(changed["status"], "review-required")
         self.assertEqual(changed["reasons"], ["test-inventory-changed"])
 
+        # Exercise a real policy update. Adding a case alone keeps the exact
+        # file children and must no longer widen every child's dependencies.
+        write(self.root, "app/extra.py", "EXTRA = 2\n")
+        alpha.write_text("from app.extra import EXTRA\n" + alpha.read_text(encoding="utf-8"),
+                         encoding="utf-8")
         update_analysis = "ctr_" + "3" * 32
         update_application = "ctr_" + "4" * 32
         proposal = setup.generate(self.root, self.command, update_analysis)
@@ -394,6 +399,23 @@ class ShardingSetupStateMachineTests(unittest.TestCase):
         self.assertEqual(
             setup.status(self.root)["reasons"], ["test-discovery-changed"]
         )
+
+    def test_added_case_preserves_policy_bytes_and_needs_no_policy_recommit(self) -> None:
+        setup.generate(self.root, self.command, self.analysis_contract)
+        setup.apply(self.root, self.application_contract)
+        self.commit_policy()
+        before = {relative: (self.root / relative).read_bytes() for relative in setup.POLICY_PATHS}
+        alpha = self.root / "tests/test_alpha.py"
+        with alpha.open("a", encoding="utf-8") as stream:
+            stream.write("\n    def test_another_case(self):\n        self.assertEqual(VALUE, 2)\n")
+        self.assertEqual(setup.status(self.root)["reasons"], ["test-inventory-changed"])
+        proposed = setup.generate(self.root, self.command, "ctr_" + "3" * 32)
+        self.assertEqual(proposed["status"], "approval-required", proposed)
+        self.assertEqual(proposed["review"]["test_count"], 3)
+        applied = setup.apply(self.root, "ctr_" + "4" * 32)
+        self.assertEqual(applied["status"], "baseline-required", applied)
+        self.assertEqual(before, {relative: (self.root / relative).read_bytes() for relative in setup.POLICY_PATHS})
+        self.assertEqual(git(self.root, "diff", "HEAD", "--", *setup.POLICY_PATHS).stdout, "")
 
     def test_short_parent_skips_child_cost_probes_and_keeps_whole_suite(self) -> None:
         proposal = {
@@ -573,6 +595,15 @@ class VitestShardingSetupTests(unittest.TestCase):
         self.assertTrue(bootstrapped["bootstrap"]["inventory_equal"])
         self.assertEqual(len(bootstrapped["bootstrap"]["children"]), 3)
 
+        body = next((self.root / "tests").rglob("*.test.js"))
+        original_body = body.read_bytes()
+        body.write_bytes(original_body + b"\n// changed test implementation\n")
+        with mock.patch.object(inventory, "analyze", side_effect=AssertionError("status must not collect")):
+            unchanged_layout = setup.status(self.root)
+        self.assertNotEqual(unchanged_layout["status"], "review-required", unchanged_layout)
+        self.assertNotIn("test-inventory-changed", unchanged_layout["reasons"])
+        body.write_bytes(original_body)
+
         lockfile = self.root / "package-lock.json"
         original_lock = lockfile.read_bytes()
         lockfile.write_bytes(original_lock + b"\n")
@@ -684,6 +715,15 @@ class JestShardingSetupTests(unittest.TestCase):
         self.assertEqual(bootstrapped["bootstrap"]["status"], "passed", bootstrapped)
         self.assertTrue(bootstrapped["bootstrap"]["inventory_equal"])
         self.assertEqual(len(bootstrapped["bootstrap"]["children"]), 5)
+
+        body = next((self.root / "tests").rglob("*.test.js"))
+        original_body = body.read_bytes()
+        body.write_bytes(original_body + b"\ntest('added case', () => expect(2).toBe(2));\n")
+        with mock.patch.object(inventory, "analyze", side_effect=AssertionError("status must not collect")):
+            unchanged_layout = setup.status(self.root)
+        self.assertNotEqual(unchanged_layout["status"], "review-required", unchanged_layout)
+        self.assertNotIn("test-inventory-changed", unchanged_layout["reasons"])
+        body.write_bytes(original_body)
 
         snapshot = next((self.root / "tests").rglob("*.snap"))
         original_snapshot = snapshot.read_bytes()

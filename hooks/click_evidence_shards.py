@@ -292,6 +292,13 @@ def _normalize_entry(
                 "checks": checks,
                 "covers": list(covers),
                 "check_digest": check_digest,
+                "binding_digest": _digest({
+                    "parent_check_digest": parent_digest,
+                    "id": shard_id,
+                    "checks": checks,
+                    "covers": list(covers),
+                    "paths": covered,
+                }),
             }
         )
     if any(count != 1 for count in coverage_counts.values()):
@@ -440,7 +447,7 @@ def _plan_from_entry(
     for shard in entry["shards"]:
         shard_id = str(shard["id"])
         evidence_id = _synthetic_evidence_id(
-            parent_source_key, str(entry["entry_digest"]), shard_id
+            parent_source_key, str(shard["binding_digest"]), shard_id
         )
         children.append(
             {
@@ -448,6 +455,7 @@ def _plan_from_entry(
                 "source_key": _source_key(evidence_id),
                 "shard_id": shard_id,
                 "check_digest": str(shard["check_digest"]),
+                "binding_digest": str(shard["binding_digest"]),
                 "checks": [list(argv) for argv in shard["checks"]],
             }
         )
@@ -567,13 +575,15 @@ def source_metadata(plan: dict[str, Any], child: dict[str, Any]) -> dict[str, An
         "entry_digest": str(plan["entry_digest"]),
         "inventory_digest": str(plan["inventory_digest"]),
         "check_digest": str(child["check_digest"]),
+        **({"binding_digest": child["binding_digest"]} if "binding_digest" in child else {}),
     }
 
 
 def source_metadata_is_valid(value: Any) -> bool:
     return bool(
         isinstance(value, dict)
-        and set(value) == SOURCE_METADATA_FIELDS
+        and set(value) in (SOURCE_METADATA_FIELDS, SOURCE_METADATA_FIELDS | {"binding_digest"})
+        and ("binding_digest" not in value or _is_digest(value["binding_digest"]))
         and value.get("provider") == PROVIDER_NAME
         and _is_digest(value.get("parent_source_key"))
         and _is_digest(value.get("parent_check_digest"))
@@ -594,6 +604,26 @@ def source_metadata_is_valid(value: Any) -> bool:
     )
 
 
+def reuse_binding(value: Any) -> dict[str, Any] | None:
+    """Bind a child's inputs, leaving full-plan admission to the runner.
+
+    Legacy evidence retains its original whole-plan binding and cannot be
+    migrated by inventing a narrower identity after execution.
+    """
+    if not source_metadata_is_valid(value):
+        return None
+    if "binding_digest" not in value:
+        return dict(value)
+    return {key: value[key] for key in (
+        "provider", "parent_source_key", "parent_check_digest", "shard_id",
+        "check_digest", "binding_digest",
+    )}
+
+
+def _child_record(child: dict[str, Any]) -> dict[str, Any]:
+    return {key: child[key] for key in CHILD_FIELDS | {"binding_digest"} if key in child}
+
+
 def shard_set_for_plan(
     plan: dict[str, Any],
     *,
@@ -611,12 +641,7 @@ def shard_set_for_plan(
         "dependency_patterns": list(dependency_patterns),
         "dependency_declaration_digest": dependency_declaration_digest,
         "children": [
-            {
-                "evidence_id": str(child["evidence_id"]),
-                "source_key": str(child["source_key"]),
-                "shard_id": str(child["shard_id"]),
-                "check_digest": str(child["check_digest"]),
-            }
+            _child_record(child)
             for child in plan["children"]
         ],
     }
@@ -636,12 +661,7 @@ def plan_matches_shard_set(plan: Any, shard_set: Any) -> bool:
             "inventory_digest",
         )
     ) and [
-        {
-            "evidence_id": child.get("evidence_id"),
-            "source_key": child.get("source_key"),
-            "shard_id": child.get("shard_id"),
-            "check_digest": child.get("check_digest"),
-        }
+        _child_record(child)
         for child in plan.get("children", [])
         if isinstance(child, dict)
     ] == shard_set.get("children")
@@ -697,7 +717,9 @@ def state_is_valid(evidence_state: Any, sources: Any) -> bool:
         seen_ids: set[str] = set()
         seen_shard_ids: set[str] = set()
         for child in children:
-            if not isinstance(child, dict) or set(child) != CHILD_FIELDS:
+            if not isinstance(child, dict) or set(child) not in (
+                CHILD_FIELDS, CHILD_FIELDS | {"binding_digest"}
+            ):
                 return False
             evidence_id = child.get("evidence_id")
             source_key = child.get("source_key")
@@ -711,6 +733,12 @@ def state_is_valid(evidence_state: Any, sources: Any) -> bool:
                 or not isinstance(shard_id, str)
                 or not SHARD_ID_PATTERN.fullmatch(shard_id)
                 or not _is_digest(check_digest)
+                or "binding_digest" in child and (
+                    not _is_digest(child["binding_digest"])
+                    or evidence_id != _synthetic_evidence_id(
+                        parent_key, child["binding_digest"], shard_id
+                    )
+                )
                 or evidence_id in seen_ids
                 or shard_id in seen_shard_ids
                 or source_key in child_keys
@@ -728,6 +756,7 @@ def state_is_valid(evidence_state: Any, sources: Any) -> bool:
                 "entry_digest": shard_set["entry_digest"],
                 "inventory_digest": shard_set["inventory_digest"],
                 "check_digest": check_digest,
+                **({"binding_digest": child["binding_digest"]} if "binding_digest" in child else {}),
             }
             if (
                 not source_metadata_is_valid(metadata)

@@ -46,7 +46,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
             (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
         self.assertEqual(manifest["name"], "click")
-        self.assertEqual(manifest["version"], "0.94.1")
+        self.assertRegex(manifest["version"], r"^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$")
         self.assertEqual(manifest["license"], "MIT")
         combined_copy = " ".join(
             (
@@ -71,9 +71,8 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         )
         self.assertEqual(marketplace["name"], "click")
         self.assertEqual(marketplace["plugins"][0]["name"], "click")
-        self.assertEqual(
-            marketplace["plugins"][0]["source"]["ref"], "v0.94.1"
-        )
+        version = json.loads((ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
+        self.assertEqual(marketplace["plugins"][0]["source"]["ref"], f"v{version}")
 
     def test_readmes_preserve_modes_references_and_reproducible_evidence_boundaries(self) -> None:
         for name, readme in _readmes().items():
@@ -386,14 +385,17 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
                 self.assertNotIn(f"from {forbidden}", shards)
 
     def test_release_documents_identify_current_and_preserve_release_history(self) -> None:
+        version = json.loads((ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
         for readme in _readmes().values():
-            self.assertIn("v0.94.0", readme)
+            self.assertIn(f"v{version}", readme)
             self.assertIn("codex plugin marketplace upgrade click", readme)
             self.assertIn("codex plugin add click@click", readme)
             self.assertIn("RELEASE_NOTES.md", readme)
 
         notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+        self.assertIn(f"## v{version}", notes)
         for marker in (
+            "## v0.94.1",
             "## v0.94.0",
             "## v0.93.0",
             "## v0.92.0",

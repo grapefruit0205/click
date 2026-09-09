@@ -512,8 +512,16 @@ def _json_artifact(payload: dict[str, bytes], name: str) -> dict[str, Any]:
     return value
 
 
-def _test_structure_digest(root: Path, files: list[str]) -> str:
+def _test_structure_digest(
+    root: Path, files: list[str], *, framework: str = ""
+) -> str:
     """Fingerprint discovery structure for the adapter's supported test files."""
+    if framework in {"vitest", "jest"}:
+        # These bounded profiles collect files, not test-case IDs. Exact file
+        # selectors run every case in a file, including newly added cases.
+        # Body bytes remain verification inputs, not shard-layout authority.
+        return inventory.digest({"selection": "exact-files-v1", "framework": framework,
+                                 "files": files})
     records: list[dict[str, Any]] = []
     total = 0
     for relative in files:
@@ -778,7 +786,9 @@ def _new_state(
         "inventory_digest": str(proposal["inventory_digest"]),
         "runtime": dict(analysis["runtime"]),
         "discovery_files": sorted(discovery),
-        "test_structure_digest": _test_structure_digest(root, sorted(discovery)),
+        "test_structure_digest": _test_structure_digest(
+            root, sorted(discovery), framework=analysis["runtime"].get("framework", "")
+        ),
         "policy_files": policies,
         "review": _review(
             proposal,
@@ -972,7 +982,7 @@ def _condition_reasons(root: Path, state: dict[str, Any]) -> list[str]:
         if current_files != state["discovery_files"]:
             reasons.append("test-discovery-changed")
         elif state.get("test_structure_digest") and _test_structure_digest(
-            root, current_files
+            root, current_files, framework=state["runtime"].get("framework", "")
         ) != state.get("test_structure_digest"):
             reasons.append("test-inventory-changed")
         executable = inventory.trusted_executable(state["parent_argv"][0], root)

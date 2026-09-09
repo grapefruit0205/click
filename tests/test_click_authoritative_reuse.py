@@ -27,6 +27,7 @@ from hooks import click_dependency_cache as dependency_cache
 from hooks import click_observation_inputs as observation_inputs
 from hooks import click_observer_runtime as observer_runtime
 from hooks import click_test_inventory as inventory
+from hooks import click_shard_proposal as proposal
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -543,6 +544,65 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
             turn_id="turn-4",
             tool_use_id=tool_id,
         )
+
+    def test_complete_plan_refresh_requalifies_unaffected_automatic_child(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n")
+        (self.workspace / "app").mkdir()
+        (self.workspace / "tests").mkdir()
+        (self.workspace / "app/__init__.py").write_text("")
+        for name in ("alpha", "beta"):
+            (self.workspace / f"app/{name}.py").write_text("VALUE = 1\n")
+            (self.workspace / f"tests/test_{name}.py").write_text(
+                f"import unittest\nfrom app.{name} import VALUE\n"
+                "class Case(unittest.TestCase):\n"
+                "    def test_value(self): self.assertGreater(VALUE, 0)\n")
+        parent = [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"]
+        self.initialize_git(".gitignore", "app", "tests")
+        generated = proposal.propose(self.workspace, parent)
+        self.assertTrue(generated["proposal_ready"], generated["reasons"])
+        for path, value in generated["proposals"].items():
+            target = self.workspace / path
+            target.parent.mkdir(exist_ok=True)
+            target.write_text(json.dumps(value))
+        subprocess.run(["git", "add", ".click"], cwd=self.workspace, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "accept automatic child plan"],
+                       cwd=self.workspace, check=True, capture_output=True)
+        self.approve_contract()
+        self.enable_authoritative("turn-2")
+        first = self.run_rewritten(self.verify_gate([parent]))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        baseline = json.loads(state_path.read_text())
+        old_sources = baseline["evidence_state"]["sources"]
+        for source in old_sources.values():
+            self.assertEqual(source["verified_dependency_observation"]["status"], "complete")
+
+        # A reviewed layout change affects alpha's identity, while beta's
+        # command, coverage, shared inputs and observed dependencies stay exact.
+        tool_id = "refresh-child-plan"
+        self.assertIsNone(self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-2",
+                                       submit_prompt=False, tool_use_id=tool_id))
+        (self.workspace / "app/alpha.py").write_text("VALUE = 2\n")
+        path = self.workspace / ".click/evidence-shards.json"
+        manifest = json.loads(path.read_text())
+        alpha = next(child for child in manifest["entries"][0]["shards"]
+                     if child["covers"] == ["tests/test_alpha.py"])
+        alpha["id"] = "alpha-refreshed"
+        path.write_text(json.dumps(manifest))
+        subprocess.run(["git", "add", "."], cwd=self.workspace, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "accept refreshed child plan"],
+                       cwd=self.workspace, check=True, capture_output=True)
+        self.tool_hook("post-tool", "apply_patch", {"patch": "alpha and plan"},
+                       turn_id="turn-2", tool_use_id=tool_id)
+        prepared = self.verify_gate([parent])
+        planned = json.loads(state_path.read_text())
+        decisions = planned["verification"]["incremental_plan"]["decisions"]
+        self.assertEqual(sorted(item["decision"] for item in decisions),
+                         ["reuse-dependency", "run"], decisions)
+        self.assertEqual(self.run_rewritten(prepared).returncode, 0)
+        completed = json.loads(state_path.read_text())
+        self.assertEqual(len(completed["evidence_state"]["sources"]), 2)
+        self.assertEqual(completed["verification"]["status"], "passed")
 
     def test_separate_contract_reuses_only_the_unaffected_shard(self) -> None:
         (self.workspace / ".gitignore").write_text("__pycache__/\n")

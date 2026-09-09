@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -14,7 +15,65 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.plan.outputs.scope }}
+      base: ${{ steps.plan.outputs.base }}
+      head: ${{ steps.plan.outputs.head }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.10"
+      - name: Classify the complete checked-out change set
+        id: plan
+        run: >-
+          python scripts/ci_scope.py
+          --event "$GITHUB_EVENT_PATH" --event-name "$GITHUB_EVENT_NAME"
+          --head "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
+
+  repository-checks:
+    needs: changes
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.10"
+      - name: Validate plugin, marketplace, version, and distribution parity
+        run: python scripts/validate_distribution.py
+      - name: Check maintained documentation links
+        env:
+          BASE_COMMIT: ${{ needs.changes.outputs.base }}
+          HEAD_COMMIT: ${{ needs.changes.outputs.head }}
+        run: python scripts/check_doc_links.py --base "$BASE_COMMIT" --head "$HEAD_COMMIT"
+      - name: Run repository and distribution tests for the reduced scope
+        if: needs.changes.outputs.scope == 'docs' || needs.changes.outputs.scope == 'release-metadata'
+        run: >-
+          python -B -m unittest tests.test_repository_policy
+          tests.test_distribution_validation tests.test_repository_shard_inventory -v
+      - name: Check whitespace errors across the comparison
+        env:
+          BASE_COMMIT: ${{ needs.changes.outputs.base }}
+          HEAD_COMMIT: ${{ needs.changes.outputs.head }}
+        run: |
+          if [ -n "$BASE_COMMIT" ] && [ -n "$HEAD_COMMIT" ]; then
+            git diff --check "$BASE_COMMIT" "$HEAD_COMMIT" --
+          else
+            git diff --check
+          fi
+
   deterministic-partitions:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -41,15 +100,9 @@ jobs:
       - name: Install Windows deterministic test tools
         if: runner.os == 'Windows'
         run: choco install ripgrep --no-progress -y
-      - name: Validate plugin, marketplace, and Click/Fix skills
-        if: runner.os == 'Linux' && matrix.part == 1
-        run: python scripts/validate_distribution.py
       - name: Compile Python sources
         if: runner.os == 'Linux' && matrix.part == 1
         run: python -m compileall -q hooks evals scripts benchmarks tests
-      - name: Check whitespace errors
-        if: runner.os == 'Linux' && matrix.part == 1
-        run: git diff --check
       - name: Run deterministic Hook, grader, and repository-policy tests
         run: python -B scripts/run_ci_tests.py --parts 4 --part ${{ matrix.part }} --timings-out "${{ runner.temp }}/click-test-durations.json"
       - name: Keep measured test durations
@@ -69,19 +122,58 @@ jobs:
   # Retain the established required-check names after splitting execution.
   deterministic-tests:
     if: always()
-    needs: deterministic-partitions
+    needs:
+      - changes
+      - repository-checks
+      - deterministic-partitions
+      - native-authoritative
+      - python-runtime-compatibility
+      - pytest-integration
+      - vitest-sharding-integration
+      - jest-sharding-integration
+      - multilang-execution
+      - mixed-project-integration
+      - native-toolchain-profile-smoke
+      - content-validation-profile-smoke
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Require every test partition and native smoke to succeed
+      - name: Require every check selected by the CI scope
         shell: bash
         env:
-          PARTITION_RESULT: ${{ needs.deterministic-partitions.result }}
-        run: test "$PARTITION_RESULT" = success
+          PLAN_RESULT: ${{ needs.changes.result }}
+          REPOSITORY_RESULT: ${{ needs.repository-checks.result }}
+          CI_SCOPE: ${{ needs.changes.outputs.scope }}
+          MATRIX_RESULTS: >-
+            ${{ needs.deterministic-partitions.result }}
+            ${{ needs.native-authoritative.result }}
+            ${{ needs.python-runtime-compatibility.result }}
+            ${{ needs.pytest-integration.result }}
+            ${{ needs.vitest-sharding-integration.result }}
+            ${{ needs.jest-sharding-integration.result }}
+            ${{ needs.multilang-execution.result }}
+            ${{ needs.mixed-project-integration.result }}
+            ${{ needs.native-toolchain-profile-smoke.result }}
+            ${{ needs.content-validation-profile-smoke.result }}
+        run: |
+          test "$PLAN_RESULT" = success
+          test "$REPOSITORY_RESULT" = success
+          case "$CI_SCOPE" in
+            full) expected=success ;;
+            docs|release-metadata) expected=skipped ;;
+            *) exit 1 ;;
+          esac
+          read -r -a results <<< "$MATRIX_RESULTS"
+          test "${#results[@]}" -eq 10
+          for result in "${results[@]}"; do
+            test "$result" = "$expected"
+          done
 
   native-authoritative:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -145,6 +237,8 @@ jobs:
           "%RUNNER_TEMP%\click-native-authority\Scripts\python.exe" -B -m unittest tests.test_click_authoritative_reuse.AuthoritativeObserverRuntimeTests tests.test_click_authoritative_reuse.AuthoritativeCrossContractReuseTests -v
 
   python-runtime-compatibility:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -173,6 +267,8 @@ jobs:
             -v
 
   pytest-integration:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -186,6 +282,8 @@ jobs:
         run: python -m unittest tests.test_click_auto_sharding tests.test_click_shard_proposal -v
 
   vitest-sharding-integration:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -216,6 +314,8 @@ jobs:
           -v
 
   jest-sharding-integration:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -247,6 +347,8 @@ jobs:
           -v
 
   multilang-execution:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -281,6 +383,8 @@ jobs:
           tests.test_click_multilang_execution -v
 
   mixed-project-integration:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
@@ -306,6 +410,8 @@ jobs:
         run: python -B -m unittest tests.test_click_mixed_project -v
 
   native-toolchain-profile-smoke:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
@@ -366,6 +472,8 @@ jobs:
           tests.test_click_runtime_identity -v
 
   content-validation-profile-smoke:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || (needs.changes.outputs.scope != 'docs' && needs.changes.outputs.scope != 'release-metadata')) }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
