@@ -109,7 +109,7 @@ def binding_path_digest(path: Path) -> str:
 def authoritative_shard_digest(source: dict[str, Any]) -> str:
     metadata = source.get("shard")
     return click_capability.digest({
-        "shard": metadata if click_evidence_shards.source_metadata_is_valid(metadata) else None
+        "shard": click_evidence_shards.reuse_binding(metadata)
     })
 
 
@@ -518,7 +518,13 @@ def successor_binding_reason(
         or previous.get("verified_host_coverage") != host_coverage
     ):
         return "host-coverage-binding-changed"
-    if previous.get("shard") != current.get("shard"):
+    if any(
+        source.get("shard") is not None
+        and not click_evidence_shards.source_metadata_is_valid(source["shard"])
+        for source in (previous, current)
+    ) or click_evidence_shards.reuse_binding(previous.get("shard")) != (
+        click_evidence_shards.reuse_binding(current.get("shard"))
+    ):
         return "check-binding-changed"
     verified_at = previous.get("verified_at")
     if (

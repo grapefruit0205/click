@@ -281,8 +281,12 @@ def mark_contract_mutated(
     for source in sources.values():
         if not isinstance(source, dict):
             continue
-        was_passed = source.get("status") == "passed"
-        source["status"] = "stale" if was_passed else "ready"
+        # Several edits before verification still share the last successful
+        # baseline. Retain it as stale, never as a current passing result.
+        has_baseline = source.get("status") in {"passed", "stale"} and (
+            click_evidence.revision_is_valid(source.get("verified_revision"))
+        )
+        source["status"] = "stale" if has_baseline else "ready"
         source["unchanged_failure_retries"] = 0
         source["last_exit_code"] = None
         if not source.get("locked_check_digest"):

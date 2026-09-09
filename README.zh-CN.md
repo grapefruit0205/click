@@ -29,14 +29,14 @@ codex plugin add click@click
 
 重启 Codex 并新建任务，让已安装的 Hook 和技能重新加载。在依赖 Hook 之前，先通过 CLI 的 `/hooks` 页面审阅待确认的 Click Hook；详见 [Hook 故障排查](#hook-故障排查)。
 
-当前版本：**v0.94.1**。更新命令：
+当前版本：**v0.95.0**。更新命令：
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.94.1 将持续维护的架构文档和规范提示词与已完成的实现历史分开，同时保留 v0.94.0 的运行时行为。自动分片 `init/status/refresh`、经授权的分片复用和保守的 parent fallback 仍是必须满足的回归标准。验证结果与测量限制见[版本说明](RELEASE_NOTES.md)、[文档索引](docs/README.md)和[多语言扩展记录](docs/history/multilang-expansion/FINAL_REPORT.md)。
+更新后请重启，并使用新任务。v0.95.0 保留各子验证的依赖范围，并在完整分片刷新后保留兼容的验证证据。受支持的 Vitest/Jest 测试正文修改保持文件级分片；受影响或证据不足的子验证会执行，分片不完整时回退到 parent。复用仍需当前有效的授权。自动分片 `init/status/refresh` 和经授权的分片复用仍是必须满足的回归标准。详情见[版本说明](RELEASE_NOTES.md)、[子验证证据保留](docs/architecture/child-verification-continuity.md)和 [CI 变更范围](docs/architecture/ci-scope.md)。
 
 ## 从日常工作开始
 

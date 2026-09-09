@@ -514,13 +514,7 @@ def _expand_evidence_shards(
             parent_source_key=parent_source_key,
             git_capture=git_capture,
         )
-        plan_current = bool(
-            decision.get("status") == "sharded"
-            and (
-                active is None
-                or click_evidence_shards.plan_matches_shard_set(decision, active)
-            )
-        )
+        plan_current = decision.get("status") == "sharded"
         shard_checks: list[dict[str, Any]] | None = None
         validation_error = ""
         if plan_current:
@@ -561,6 +555,19 @@ def _expand_evidence_shards(
             if activation_error or sources is None:
                 return None, None, advisories, activation_error
             evidence_state = state["evidence_state"]
+        elif active is not None and plan_current and not (
+            click_evidence_shards.plan_matches_shard_set(decision, active)
+        ):
+            sources, refresh_error = click_evidence.refresh_shard_plan(
+                state, parent_source_key, decision
+            )
+            if refresh_error or sources is None:
+                return None, None, advisories, refresh_error
+            evidence_state = state["evidence_state"]
+            advisories.append(
+                f"Click Evidence Shards [{evidence_id}]: complete committed plan "
+                "refreshed; requalifying each child's evidence."
+            )
         if plan_current:
             assert shard_checks is not None
             expanded.extend(shard_checks)

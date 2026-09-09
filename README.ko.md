@@ -76,14 +76,14 @@ codex plugin add click@click
 
 Codex를 재시작하고 새 작업을 시작해 설치된 Hook과 스킬을 다시 불러옵니다. CLI의 `/hooks`에서 검토 대기 중인 Click Hook을 확인한 뒤 사용하세요. 자세한 내용은 [Hook 문제 확인](#hook-문제-확인)을 참고하세요.
 
-현재 릴리스는 **v0.94.1**입니다. 업데이트 명령은 다음과 같습니다.
+현재 릴리스는 **v0.95.0**입니다. 업데이트 명령은 다음과 같습니다.
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.94.1은 유지 중인 아키텍처 문서와 canonical 프롬프트를 완료된 구현 이력에서 분리하며, v0.94.0의 런타임 동작을 그대로 유지합니다. 자동 샤딩 `init/status/refresh`, 권한 있는 샤드 재사용, 보수적인 parent fallback은 필수 회귀 기준입니다. 검증 결과와 측정 한계는 [릴리스 노트](RELEASE_NOTES.md), [문서 안내](docs/README.md), [다국어 확장 기록](docs/history/multilang-expansion/FINAL_REPORT.md)에 있습니다.
+업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.95.0은 자식별 의존성 범위를 유지하고, 완전한 샤드 갱신 뒤에도 호환되는 검증 근거를 보존합니다. 지원되는 Vitest/Jest 테스트 본문 수정은 파일 단위 분할을 유지하며, 영향받거나 근거가 부족한 자식은 실행하고 분할이 불완전하면 parent로 돌아갑니다. 재사용에는 현재 유효한 권한이 계속 필요합니다. 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준입니다. 자세한 내용은 [릴리스 노트](RELEASE_NOTES.md), [자식 검증 근거 유지](docs/architecture/child-verification-continuity.md), [CI 변경 범위](docs/architecture/ci-scope.md)에 있습니다.
 
 설치와 재사용 준비 상태는 서로 다릅니다.
 

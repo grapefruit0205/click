@@ -4560,6 +4560,63 @@ class ClickGateVerificationTests(ClickGateTestCase):
         )
         self.assertEqual(self.run_rewritten(prepared).returncode, 0)
 
+    def test_refreshed_complete_plan_runs_children_without_promoting_stale_facts(self) -> None:
+        parent = self.install_evidence_shard_fixture(safe_readme_reuse=True)
+        self.approve_contract()
+        first = self.verify_gate([parent])
+        old_ids = {check["evidence_id"] for check in self.decoded_verification_batch(first)["checks"]}
+        self.assertEqual(self.run_rewritten(first).returncode, 0)
+        self.assertIsNone(self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-2"))
+        (self.workspace / "c_shard.py").write_text(
+            "import unittest\nclass Gamma(unittest.TestCase):\n"
+            "    def test_pass(self): self.assertTrue(True)\n", encoding="utf-8")
+        target = self.workspace / ".click/evidence-shards.json"
+        manifest = json.loads(target.read_text())
+        manifest["entries"][0]["shards"].append({
+            "id": "gamma", "covers": ["c_shard.py"],
+            "checks": [[sys.executable, "-m", "unittest", "c_shard.Gamma.test_pass"]],
+        })
+        target.write_text(json.dumps(manifest), encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=self.workspace, check=True, capture_output=True)
+        subprocess.run(["git", "-c", "user.name=Click Tests",
+                        "-c", "user.email=click-tests@example.invalid", "commit", "-qm", "refresh complete child plan"],
+                       cwd=self.workspace, check=True, capture_output=True)
+        self.tool_hook("post-tool", "apply_patch", {"patch": "new child"}, tool_use_id="tool-1")
+        prepared = self.verify_gate([parent])
+        checks = self.decoded_verification_batch(prepared)["checks"]
+        self.assertEqual(len(checks), 3)
+        self.assertTrue(old_ids.issubset({check["evidence_id"] for check in checks}))
+        self.assertTrue(all(check["argv"] != parent for check in checks))
+        self.assertEqual(self.run_rewritten(prepared).returncode, 0)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        state = json.loads(state_path.read_text())
+        self.assertEqual(sorted(source["attempts"] for source in state["evidence_state"]["sources"].values()), [1, 2, 2])
+        self.assertEqual(state["verification"]["incremental_plan"]["planned_reuse_source_count"], 0)
+        exported = self.pre_tool("Bash", "click-gate receipt export", "turn-2", submit_prompt=False)
+        result = self.run_rewritten(exported)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        receipt = json.loads(result.stdout)["receipt"]
+        self.assertEqual(len(receipt["evidence"]), 3)
+        self.assertTrue(all(item["shard"]["shard_count"] == 3 for item in receipt["evidence"]))
+
+    def test_multiple_edits_preserve_safe_change_candidates_per_child(self) -> None:
+        parent = self.install_evidence_shard_fixture(safe_readme_reuse=True)
+        self.set_default("evidence", "turn-0")
+        self.prompt_submit("Verify the current project with Evidence.", "turn-1")
+        self.assertEqual(self.run_rewritten(self.verify_gate([parent], "turn-1")).returncode, 0)
+        for index in range(2):
+            tool_id = f"readme-{index}"
+            self.assertIsNone(self.pre_tool("apply_patch", "*** Begin Patch\n*** End Patch", "turn-1",
+                                           tool_use_id=tool_id))
+            (self.workspace / "README.md").write_text(f"after {index}\n", encoding="utf-8")
+            self.tool_hook("post-tool", "apply_patch", {"patch": "readme"},
+                           turn_id="turn-1", tool_use_id=tool_id)
+        prepared = self.verify_gate([parent], "turn-1")
+        self.assertNotIn("run-verification", prepared["hookSpecificOutput"]["updatedInput"]["command"])
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        state = json.loads(state_path.read_text())
+        self.assertEqual(state["verification"]["incremental_plan"]["planned_reuse_source_count"], 2)
+
 
 class ReviewHardeningGateTests(ClickGateTestCase):
     def _passing_state(self, mode: str, *, safe_change: bool = False):
