@@ -1,5 +1,8 @@
 # Maintained architecture documents
 
+- [Verification lifecycle boundaries](verification-lifecycle.md) describes admission,
+  one-use claims, execution and result recording.
+
 - [Verification economics and file inputs](verification-economics.md) records
   parent-relative costs, scoped owner policy, stable file groups and paired sessions.
 

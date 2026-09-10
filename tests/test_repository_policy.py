@@ -380,7 +380,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
             ROOT / "hooks" / "click_evidence_shards.py"
         ).read_text(encoding="utf-8")
         verification = (
-            ROOT / "hooks" / "click_verification.py"
+            ROOT / "hooks" / "click_verification_prepare.py"
         ).read_text(encoding="utf-8")
         change_policy = (
             ROOT / "hooks" / "click_change_policy.py"
@@ -388,7 +388,10 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         receipt = (ROOT / "hooks" / "click_receipt.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn("running_plan_error", verification)
+        claims = (ROOT / "hooks" / "click_verification_claims.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("running_plan_error", claims)
         self.assertIn("collapse_shard_plan", verification)
         self.assertIn('SHARD_RECEIPT_VERSION = 3', receipt)
         self.assertIn('".click/evidence-shards.json"', change_policy)
