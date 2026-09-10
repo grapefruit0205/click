@@ -6,23 +6,39 @@
 
 English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
-> Less repetition. More progress.
+> **Verify what changed. Reuse what still holds.**
 
-Click provides **incremental verification** for coding agents. It records which checks ran, what changed, and whether an earlier result still applies through **revision-aware evidence**. Evidence mode is the default and works under the host's existing permissions. Guarded mode adds an explicitly approved work boundary when needed.
+You change one part of a project. Your coding agent runs the whole test suite again.
+Then you make another small edit—and wait for the same checks once more.
 
-The goal is to complete the same agreed work with less time, token use, and intervention. Reused checks are one part of that result; they do not by themselves demonstrate a faster completed task.
+**Click helps coding agents avoid repeating verification that is still valid.**
+It records successful checks and their conditions, rechecks those conditions after
+an edit, and runs the checks that need fresh evidence. This is **incremental verification**, backed by **revision-aware evidence**: a record of what passed
+and whether that result still applies now.
 
-The current source adds parent-relative cost checks, fewer duplicate setup runs,
-stable Vitest/Jest file groups, and owner-declared file-input reuse policies.
-See [verification economics](docs/architecture/verification-economics.md) for
-configuration, the paired-session comparison, and the limits of time-saving claims.
+## What changes in your workflow?
 
-- **Reuse with an explanation:** retain a valid result only when its execution bindings and reuse rules still hold.
-- **Automatic sharding:** propose and maintain groups for supported suites, retaining the full-suite fallback when splitting is unsupported or not worthwhile.
-- **Useful verification feedback:** show executed, reused, failed, and outstanding checks; optionally summarize failures.
-- **A local dashboard:** inspect results, reuse reasons, measurements, and shareable reports in Korean, English, or Simplified Chinese.
+Suppose a project has 12 verification groups and you edit only authentication:
 
-Click does not prove that the code is correct or that the selected tests are sufficient.
+```text
+First run       → establish passing results for all 12 groups
+Edit auth code  → run the 3 affected groups
+                → reuse 9 groups whose evidence still holds
+```
+
+This is an example, not a benchmark. It requires a complete split and valid
+per-group input or policy evidence. A shared change may run all groups; an
+unverifiable split runs the original full suite.
+
+- **Less waiting between edits:** avoid eligible unchanged checks while rerunning affected ones.
+- **A reason for each decision:** see what ran, what was reused, and why.
+- **Continuity across tasks:** carry successful results forward as candidates and recheck them.
+- **A visible outcome:** inspect verification and available measurements in a local dashboard.
+
+Click fits projects with **slow checks, repeated edit/test cycles, and separable
+test groups**. If your entire suite takes two seconds, setup and bookkeeping may
+cost more than rerunning it. The goal is less time spent completing the same work;
+production minutes and token savings still need representative measurement.
 
 ## Install and update
 
@@ -42,18 +58,60 @@ codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.96.0 rejects uneconomic splits, avoids duplicate Evidence bootstrap child runs, supports stable large Vitest/Jest groups, and adds owner-declared file-input policy v2 for child-specific cross-revision reuse. Affected or uncertain children run, and an incomplete split falls back to the parent. Automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and [verification economics](docs/architecture/verification-economics.md).
+Restart and start a new task after updating.
 
-## Start with everyday work
+This README includes the **unreleased v0.97 candidate** source: automatic observation, conditional JS reuse and recovery. The published release remains **v0.96.0**; updating it does not install candidate changes. See [release notes](RELEASE_NOTES.md).
 
-Ask Codex normally, for example:
+## Try it on your next change
+
+After installation, ask Codex:
 
 ```text
-Refactor the authentication parser and preserve its public behavior.
-Run the repository's relevant tests with Click Evidence and show click-gate status.
+Use Click Evidence for this change. Run the relevant tests, show which checks
+ran or were reused, and open the Click dashboard.
 ```
 
-The `click-gate` lines in this guide are Click controls for the agent to issue inside the Codex task. Installation commands above run in your terminal.
+**Evidence is the default.** It uses the host's existing permissions without an
+extra Click approval step. The first successful execution establishes a baseline;
+reuse becomes possible only when a later request satisfies its rules. Automatic
+test splitting is a separate setup step for supported suites.
+
+The `click-gate` commands below are controls for the agent inside a Codex task.
+For a large suite, ask it to inspect `click-gate sharding init`, then follow
+`click-gate sharding status` and the [setup guide](skills/click/references/automatic-sharding-setup.md).
+
+## See what Click did
+
+```text
+click-gate status
+click-gate dashboard start
+```
+
+Open the local URL returned by the dashboard command. See executed, reused,
+failed and outstanding groups, their reuse reasons, and the next action when
+input collection is not ready. The top-right language selector offers
+**한국어 · English · 简体中文**.
+
+Avoided test execution is estimated from actual reuse and prior successful
+durations. Whole-task time and token savings stay **unmeasured** until you import
+a suitable comparison. Reusing 75% of groups does not mean a 75% faster task.
+
+## What works automatically?
+
+| Capability | Scope |
+| --- | --- |
+| Record verification | Default Evidence mode under host permissions. |
+| Split a suite | Supported unittest, pytest, Vitest and Jest profiles, after setup. |
+| Observe Python inputs | Bounded CPython 3.12 and unittest/pytest profiles with platform prerequisites. |
+| Conditional JS reuse | Eligible Linux Node 22.23.2 executions; observed inputs are rechecked and incomplete coverage is disclosed. |
+| Existing repository policy | Declared reuse policies retain their own checks. Observer can stay off. |
+
+Settings, dynamic imports and ignored files can be tracked in supported profiles.
+Worker and dynamic-input limitations remain. [The source-derived support table](docs/architecture/runtime-support.md)
+separates execution, splitting and reuse; a language name alone does not guarantee all three.
+
+<details>
+<summary>Modes, reuse rules, sharding and Observer recovery</summary>
 
 | Mode | Behavior |
 | --- | --- |
@@ -85,7 +143,9 @@ Click checks the exact command, workspace and mutation state, relevant inputs, e
 | --- | --- |
 | Same revision | A successful receipt for the exact check whose current bindings still match. |
 | Committed safe-change policy | An unchanged `.click/evidence-reuse.json` policy committed **before the baseline**, permitting every net changed path for that exact check. No Observer is required. |
+| Declared file inputs (policy v2) | The committed policy's allowed changes and complete owner-declared file boundary both match the baseline, including ignored inputs. This is owner policy, not automatic dependency discovery. |
 | Authoritative input observation | A complete signed input snapshot from supported automatic Evidence capture or an approved Guarded run, with all reuse conditions rechecked. |
+| Conditional JS observation | Eligible requested executions establish a separately attested observed-input receipt, then recheck inputs and execution bindings. Reports disclose that input completeness is unproven. |
 
 For example, if a policy for the exact authentication test command was committed before revision 12 and permits `README.md` changes:
 
@@ -134,16 +194,18 @@ Automatic inventory and exact splitting are locally verified for bounded unittes
 
 Support is tracked by tool profile rather than by language name alone:
 
-| Tool/profile | Actual local execution | Automatic inventory/split |
+| Tool/profile | Execution evidence | Automatic inventory/split |
 | --- | --- | --- |
 | CPython unittest | Verified | Profile-limited |
 | pytest | Bounded collect-only profile; pinned integration CI | Profile-limited |
 | Vitest 5 / Jest 30 | Verified with pinned fixtures | Profile-limited, exact file children |
 | Node test/check, npm test, Go test | Verified | Parent execution only |
 | JSON/YAML/Markdown/SVG project validators, jq | Verified fixtures | Parent execution only |
-| Cargo, Gradle/Maven, .NET, TypeScript/CMake/CTest, direct SQL/XML linters | Command/runtime profile recognized; native execution still unverified in this checkout | None |
+| Cargo, Gradle, .NET, TypeScript, CMake/CTest | Linux CI tool smoke; not full Click reuse integration | None |
+| xmllint, ImageMagick identify | Linux CI tool smoke | None |
+| Maven, direct SQL linters | Recognized command/runtime profile; no dedicated native CI fixture | None |
 
-A recognized-only profile is not a claim that its native toolchain passed. Runtime and CI evidence by phase is recorded in the [multilanguage expansion history](docs/history/multilang-expansion/README.md).
+A tool smoke is narrower than a Hook-to-runner reuse test. The [.NET smoke](.github/workflows/ci.yml) uses a class library and does not establish test discovery. A recognized profile alone proves neither. Current coverage is assigned in [CI](.github/workflows/ci.yml); earlier phase evidence is in the [multilanguage expansion history](docs/history/multilang-expansion/README.md).
 
 ## Can Observer stay off?
 
@@ -172,7 +234,27 @@ Automatic preparation respects existing `evidence-reuse.json` owner policy.
 Structured diagnostics and bounded failure collection retain output from the
 same execution used for native input capture.
 
-Default JavaScript observation can also produce **conditional reuse** receipts without owner JSON: two normally requested executions establish an unchanged observed input set, and later requests recheck it. The dashboard and reports disclose that input completeness is unproven. Known dynamic inputs and collection gaps execute their child; some Vitest/Jest and worker invocations remain ineligible. See [conditional scope and limits](docs/architecture/node-runtime-observation.md).
+On supported Linux Node 22.23.2 profiles, default JavaScript observation can
+produce **conditional reuse** receipts without owner JSON. Two eligible, normally
+requested executions learn and compare observed inputs; later requests recheck
+them. Settings, dynamic imports and ignored files are covered when captured.
+Environment changes can rerun multiple children because environment binding is
+conservative. Known clock/random/shared-memory inputs and unsupported workers
+remain ineligible; collecting diagnostic values does not make them reusable.
+
+A child that already uses conditional observation keeps requiring that evidence
+after an edit introduces unsupported worker inputs. It executes until usable
+evidence recovers. Removing the worker lets automatic mode retry a previously
+started Inspector capture on the next requested execution, without resetting
+Click state. A new task alone does not trigger that recovery capture. Unsupported
+launchers and diagnostic-only mode retain their collection limits. No extra test
+is launched to learn. See [conditional scope and recovery](docs/architecture/node-runtime-observation.md).
+
+
+</details>
+
+<details>
+<summary>Dashboard measurements, receipts, benchmarks and troubleshooting</summary>
 
 ## Dashboard: results and measured effect
 
@@ -263,7 +345,12 @@ agy plugin install ./dist/antigravity
 
 It uses the host's available Hook surface for Evidence and Guarded workflows. Unsupported coverage is not reported as independent observation. See the [Antigravity adapter guide](platforms/antigravity/README.md).
 
+
+</details>
+
 ## Limits and technical reference
+
+Click does not prove that the code is correct or that the selected tests are sufficient.
 
 Click is a workflow guardrail, not an operating-system sandbox. It cannot prove hidden reasoning, semantic correctness, test sufficiency, or external activity outside matched Hooks. Manual or hosted evidence without independent observation remains an attestation. Keep normal code review, CI, branch protection, and deployment controls.
 
@@ -275,6 +362,7 @@ Protocol details and implementation boundaries:
 - [Automatic sharding setup](skills/click/references/automatic-sharding-setup.md) and [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), and [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)
 - [Documentation map](docs/README.md), [verification efficiency](skills/click/references/verification-efficiency.md), [anti-loop policy](skills/click/references/anti-loop-policy.md), and [runtime architecture and optimization](docs/architecture/runtime-optimization.md)
+- [Verification lifecycle modules](docs/architecture/verification-lifecycle.md): preparation, one-use claims, execution and result recording behind the existing API.
 
 ## License
 

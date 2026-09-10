@@ -5,23 +5,37 @@
 [![CI](https://github.com/grapefruit0205/click/actions/workflows/ci.yml/badge.svg)](https://github.com/grapefruit0205/click/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> 少些重复，多些进展。
+> **重新验证变化的部分，复用仍然有效的结果。**
 
-Click 为编码代理提供**增量验证（incremental verification）**，通过**感知修订状态的验证记录（revision-aware evidence）**记录哪些检查实际执行过、工作区发生了什么变化，以及先前结果是否仍然适用。Evidence 是默认模式，沿用宿主已有的权限；需要时，Guarded 模式会增加一个经明确批准的工作边界。
+只改了登录逻辑，编码代理却又跑了一遍完整测试。
+再做一个小修改，刚刚通过的检查又要重新等待。
 
-目标是在完成同样约定工作的前提下，减少时间、Token 消耗和人工介入。复用检查只是其中一环，不能单凭复用数量就认定整个任务完成得更快。
+**Click 帮助 AI 编码代理减少仍然有效的重复验证。** 它记住检查成功时的条件，
+在修改后重新核对这些条件，再执行需要新依据的检查。这就是**增量验证
+（incremental verification）**；支撑判断的是记录变更与验证条件的
+**revision-aware evidence**。
 
-当前源码新增相对于 parent 的成本判断、减少重复初始化验证、稳定的
-Vitest/Jest 文件分组，以及由仓库所有者声明的文件输入复用策略。
-配置和成对会话比较方法见[验证成本与输入策略](docs/architecture/verification-economics.md)。
-尚未证实实际项目能够节省数十分钟。
+## 使用后有什么不同？
 
-- **说明复用依据：** 只有执行条件和复用规则仍成立时，才保留先前的有效结果。
-- **自动分片：** 为受支持的测试套件提出并维护分组；无法拆分或拆分不划算时，保留完整套件执行路径。
-- **实用的验证反馈：** 展示实际执行、复用、失败和待完成的检查，并可选择汇总失败原因。
-- **本地仪表板：** 使用韩语、英语或简体中文查看结果、复用依据、测量数据及可分享报告。
+假设项目有 12 个验证组，而这次只修改了登录代码：
 
-Click 不证明代码正确，也不证明所选测试足够充分。
+```text
+首次验证     → 建立 12 个组的成功基准
+修改登录代码 → 执行受影响的 3 个组
+             → 复用依据仍然有效的 9 个组
+```
+
+这是工作方式示例，不是性能实测。它要求分片完整，且各组有有效的输入或策略
+依据。公共输入变化时可能需要执行所有组；无法确认分片完整性时执行原始完整套件。
+
+- **减少修改之间的等待：** 执行受影响的检查，避免重复仍有效的检查。
+- **解释每次决定：** 看清哪些执行了、哪些被复用，以及依据是什么。
+- **让结果延续到后续任务：** 把先前成功作为候选，重新核对当前条件。
+- **查看实际结果：** 在本地仪表板区分验证结果和有依据的节省估算。
+
+Click 更适合**测试耗时长、频繁修改并验证、测试可合理分组的项目**。
+如果整个套件只需两秒，设置与判断成本可能更高。目标是减少完成相同工作所需
+的时间与麻烦；真实项目节省多少分钟和 Token，仍需单独测量。
 
 ## 安装与更新
 
@@ -41,18 +55,56 @@ codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.96.0 会拒绝得不偿失的分片，减少 Evidence bootstrap 中重复执行子验证，并支持稳定的大型 Vitest/Jest 分组和由仓库所有者声明的文件输入策略 v2。受影响或不确定的子验证仍会执行，分片不完整时回退到 parent。自动分片 `init/status/refresh` 和经授权的分片复用仍是必须满足的回归标准。详情见[版本说明](RELEASE_NOTES.md)和[验证成本与输入策略](docs/architecture/verification-economics.md)。
+更新后请重启，并使用新任务。
 
-## 从日常工作开始
+本 README 也描述自动观测、条件 JS 复用与恢复的**未发布 v0.97 候选源码**。公开版本仍为 **v0.96.0**；更新该版本不会安装候选改动。详见[版本说明](RELEASE_NOTES.md)。
 
-照常向 Codex 提出请求，例如：
+## 从下一次代码修改开始
+
+安装后，可以向 Codex 这样请求：
 
 ```text
-重构认证解析器，并保持现有对外行为。
-用 Click Evidence 运行仓库中相关的测试，并展示 click-gate status。
+这次修改使用 Click Evidence。运行相关测试，展示哪些检查执行或复用了，
+然后打开 Click 仪表板。
 ```
 
-本指南中的 `click-gate` 是由代理在 Codex 任务内发出的 Click 控制命令。上面的安装命令则在终端中运行。
+**Evidence 是默认模式。** 它沿用宿主权限，不增加额外的 Click 批准步骤。
+首次成功执行建立基准，后续请求满足复用条件时才能使用该结果。
+自动拆分测试是受支持项目中的独立设置步骤。
+
+下文 `click-gate` 是由代理在 Codex 任务内执行的控制命令。对于大型套件，
+可先让它用 `click-gate sharding init` 查看配置，再按照 `click-gate sharding status`
+和[设置指南](skills/click/references/automatic-sharding-setup.md)的下一步提示操作。
+
+## 在仪表板查看结果
+
+```text
+click-gate status
+click-gate dashboard start
+```
+
+打开命令返回的本地 URL，查看已执行、已复用、失败和剩余检查，以及复用依据、
+输入采集尚未就绪时的下一步操作。右上角可选择 **한국어 · English · 简体中文**。
+
+避免的测试执行时间根据实际复用与过去成功耗时估算。完整任务耗时和 Token
+节省在导入合适的比较资料前保持**未测量**。复用 75% 的组不等于任务快了 75%。
+
+## 哪些可以自动完成？
+
+| 功能 | 适用范围 |
+| --- | --- |
+| 记录验证 | 默认 Evidence 模式，在宿主权限下运行。 |
+| 拆分测试 | 支持的 unittest、pytest、Vitest、Jest 配置，需先设置。 |
+| Python 输入观测 | 满足平台前置条件的受限 CPython 3.12 与 unittest/pytest 配置。 |
+| JS 条件复用 | 符合条件的 Linux Node 22.23.2 执行，重新核对观测输入并披露采集限制。 |
+| 现有仓库策略 | 保留已声明策略的复用规则，Observer 可以关闭。 |
+
+支持的配置可以追踪设置文件、动态 import 与忽略文件，worker 和动态输入仍有
+限制。[从源码生成的支持表](docs/architecture/runtime-support.md)区分执行、拆分和复用；
+支持某个语言不等于三者全部支持。
+
+<details>
+<summary>展开：模式、复用规则、自动分片与 Observer 恢复</summary>
 
 | 模式 | 行为 |
 | --- | --- |
@@ -84,7 +136,9 @@ Click 会核对精确命令、工作区与变更状态、相关输入、环境�
 | --- | --- |
 | 同一修订 | 精确检查已有成功凭据，且当前绑定条件仍然一致。 |
 | 已提交的安全变更策略 | `.click/evidence-reuse.json` 在**基准执行之前**已提交且保持不变，并允许该精确检查对应的全部净变更路径。无需 Observer。 |
+| 声明的文件输入策略 v2 | 已提交策略的允许变更范围与所有者声明的完整文件输入均符合基准，包括忽略文件。这是所有者策略，不是自动依赖发现。 |
 | 权威输入观测 | 来自受支持的 Evidence 自动观测或已批准的 Guarded 执行的完整、签名输入快照，并重新核对所有复用条件。 |
+| 条件 JS 观测 | 符合条件的正常执行建立单独签署的观测输入凭据，后续重新核对输入与执行条件。报告明确标注输入完整性尚未得到证明。 |
 
 例如，在 revision 12 之前，仓库已为精确的认证测试命令提交策略，允许 `README.md` 变更：
 
@@ -126,16 +180,18 @@ click-gate sharding refresh
 
 支持范围按验证工具配置管理，而不是只按编程语言名称管理。
 
-| 工具/配置 | 实际本地执行 | 自动清单与拆分 |
+| 工具/配置 | 执行验证依据 | 自动清单与拆分 |
 | --- | --- | --- |
 | CPython unittest | 已验证 | 受限配置 |
 | pytest | 受限 collect-only 配置；固定版本集成 CI | 受限配置 |
 | Vitest 5 / Jest 30 | 已使用固定 fixture 验证 | 受限配置、精确文件子项 |
 | Node test/check、npm test、Go test | 已验证 | 仅父命令执行 |
 | JSON/YAML/Markdown/SVG 项目验证器、jq | 已验证 fixture | 仅父命令执行 |
-| Cargo、Gradle/Maven、.NET、TypeScript/CMake/CTest、直接 SQL/XML linter | 仅识别命令与运行时配置；此 checkout 尚未验证原生执行 | 无 |
+| Cargo、Gradle、.NET、TypeScript、CMake/CTest | Linux CI 工具冒烟检查；不代表 Click 完整复用集成 | 无 |
+| xmllint、ImageMagick identify | Linux CI 工具冒烟检查 | 无 |
+| Maven、直接 SQL linter | 识别命令与运行时配置；没有专用原生 CI fixture | 无 |
 
-“仅识别”不代表相应原生工具链已经通过。各 Phase 的运行时与 CI 依据记录在[多语言扩展历史](docs/history/multilang-expansion/README.md)。
+工具冒烟检查的范围小于从 Hook 到执行器再到复用的集成测试。当前 [.NET 检查](.github/workflows/ci.yml)使用类库，不能证明测试发现有效。仅识别配置不证明上述任一范围。当前检查安排见 [CI](.github/workflows/ci.yml)，历史 Phase 依据见[多语言扩展历史](docs/history/multilang-expansion/README.md)。
 
 ## Observer 可以一直关闭吗？
 
@@ -164,7 +220,24 @@ click-gate observer off
 
 Linux strace 6.8、macOS 特权 `fs_usage` 和 Windows 内置 ETW 配置均有原生主机验证记录。自动分片端到端记录的范围是 Linux。Click 不会安装前置工具或提升权限。观测不完整时保留测试的实际结果，但不能据此建立未来复用的权威依据。详见[平台要求与验证范围](skills/click/references/authoritative-observer-v2.md)。
 
-默认 JavaScript 观测也可在无需所有者 JSON 的情况下生成**条件复用**凭据：两次正常请求的执行学习并核对观测输入，之后每次请求重新检查。仪表板和报告明确标注输入完整性未获证明。已知动态输入或采集缺口会执行对应子检查；部分 Vitest/Jest 和 worker 执行仍不符合条件。参见[条件范围与限制](docs/architecture/node-runtime-observation.md)。
+在受支持的 Linux Node 22.23.2 配置下，默认 JavaScript 观测可在无需所有者
+JSON 的情况下生成**条件复用**凭据。两次符合条件的正常请求执行学习并核对
+观测输入，后续请求再次检查。配置文件、动态 import 和忽略文件在被采集后也
+会核对。环境绑定采用保守范围，一个变量变化可能使多个子检查重跑。
+已知时间、随机数、共享内存输入和不支持的 worker 仍不符合条件；采集了诊断
+值不等于允许复用。
+
+已进入条件观测的子检查在新增不支持的 worker 后仍须满足观测依据要求，并会
+实际执行。移除 worker 后，自动模式会在下一次正常请求执行时重试先前已启动
+的 Inspector 采集，无需重置 Click 状态。仅开启新任务不会触发该恢复采集。
+不支持的启动方式和纯诊断模式保留采集限制，也不会为学习而额外运行测试。
+参见[条件范围与恢复](docs/architecture/node-runtime-observation.md)。
+
+
+</details>
+
+<details>
+<summary>展开：测量、凭据、基准与 Hook 故障排查</summary>
 
 ## 仪表板：结果与实测效果
 
@@ -255,6 +328,9 @@ agy plugin install ./dist/antigravity
 
 适配器通过宿主可用的 Hook 接口支持 Evidence 与 Guarded 工作流。不受支持的覆盖范围不会被报告为独立观测。详见 [Antigravity 适配器指南](platforms/antigravity/README.md)。
 
+
+</details>
+
 ## 限制与技术参考
 
 Click 是工作流护栏，不是操作系统沙箱。它不能证明隐藏推理、语义正确性、测试充分性，或匹配的 Hook 之外的外部活动。没有独立观测的手工或托管验证依据仍属于自述证明。请保留正常的代码审查、CI、分支保护和部署控制。
@@ -267,6 +343,7 @@ Click 是工作流护栏，不是操作系统沙箱。它不能证明隐藏推�
 - [自动分片设置](skills/click/references/automatic-sharding-setup.md)与 [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)、[Shadow Observer v1](skills/click/references/observer-v1.md)与 [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)
 - [文档地图](docs/README.md)、[验证效率](skills/click/references/verification-efficiency.md)、[反重复策略](skills/click/references/anti-loop-policy.md)与[运行时架构及优化](docs/architecture/runtime-optimization.md)
+- [验证生命周期模块](docs/architecture/verification-lifecycle.md)：在保留现有 API 的前提下，分离准备、一次性 claim、执行与结果记录。
 
 ## 许可证
 
