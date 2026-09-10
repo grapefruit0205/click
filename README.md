@@ -11,10 +11,16 @@ English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 You change one part of a project. Your coding agent runs the whole test suite again.
 Then you make another small edit—and wait for the same checks once more.
 
-**Click helps coding agents avoid repeating verification that is still valid.**
-It records successful checks and their conditions, rechecks those conditions after
-an edit, and runs the checks that need fresh evidence. This is **incremental verification**, backed by **revision-aware evidence**: a record of what passed
-and whether that result still applies now.
+**Click is a workflow guardrail for verification and reuse that leaves your
+model selection and reasoning settings unchanged.** The model analyzes the
+problem and chooses how to implement it. Click connects actual execution results
+to workspace changes, reducing valid repeated checks and checking that an old
+success still applies before reusing it.
+
+This is **incremental verification**, backed by **revision-aware evidence**:
+a record of what passed and whether it remains valid now. Savings target repeated
+workflow execution; Click does not switch you to a weaker model or lower its
+reasoning settings.
 
 ## What changes in your workflow?
 
@@ -96,7 +102,39 @@ Avoided test execution is estimated from actual reuse and prior successful
 durations. Whole-task time and token savings stay **unmeasured** until you import
 a suitable comparison. Reusing 75% of groups does not mean a 75% faster task.
 
-## What works automatically?
+## Which projects can use it?
+
+| Project | Current scope |
+| --- | --- |
+| Python backends and libraries | Splitting and reuse for supported unittest/pytest commands. Automatic input observation uses bounded CPython 3.12 profiles. |
+| JS/TS frontends and Node projects | Supported Vitest/Jest suites can split and requalify each child. Observation-only conditional reuse is limited to eligible Linux Node 22.23.2 executions. |
+| Go services | `go test` execution and qualifying result reuse. No automatic test splitting. |
+| Mixed-language repositories | Decide execution and reuse per registered check; no claim of discovering every dependency across languages. |
+
+Rust, Java, .NET and C/C++ command profiles and their tool CI coverage appear in
+the detailed table below. Executing a command, splitting its tests and authorizing
+reuse from input observation are separate capabilities.
+
+## What happens automatically?
+
+Installed Hooks record work and execution. **On the next verification request**,
+Click follows this flow:
+
+```text
+Requested check  → record its success and execution conditions
+Code edit        → record the changed workspace state
+Next request     → recheck command, environment, inputs and reuse evidence
+                 → run required groups + reuse groups with current evidence
+                 → record actual results and reasons
+```
+
+Supported automatic input observation can establish evidence without project
+JSON. Conditional JS reuse learns and compares inputs in two eligible requested
+executions. Automatic sharding needs initial setup and a baseline; when tools
+must be installed or policy committed, status explains the next action. Click
+does not install tools on its own.
+
+Automation depends on the tool and input profile:
 
 | Capability | Scope |
 | --- | --- |
