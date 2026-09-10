@@ -1,6 +1,7 @@
 """Conditional confidence is explicit and never upgraded to complete authority."""
 import copy
 import json
+import secrets
 import os
 from pathlib import Path
 import shutil
@@ -47,6 +48,7 @@ class ConditionalSnapshotTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             conditional.snapshot(self.root, [{'path':'alias/missing','kind':'missing','operations':['read']}])
 
+    @unittest.skipIf(os.name == "nt", "conditional external receipts require POSIX paths")
     def test_external_alias_and_target_are_both_bound(self):
         (self.root / 'alias').symlink_to(self.root / 'input.txt')
         before = conditional.external_snapshot([{'path':str(self.root / 'alias'),'kind':'file','operations':['read']}])
@@ -101,6 +103,7 @@ class RealConditionalTests(unittest.TestCase):
             (root/'check.cjs').write_text("const fs=require('node:fs');if(fs.readFileSync('input.txt','utf8')!=='ok')process.exitCode=1;console.log('RAN-ONCE');\n")
             context={key:'a'*64 for key in dependencies.AUTHORITATIVE_BINDING_FIELDS if key!='execution_digest'}
             context['mutation_revision']=0
+            runner_token=secrets.token_hex(32)
             previous=None
             for learning in (True,False):
                 output={}
@@ -108,7 +111,7 @@ class RealConditionalTests(unittest.TestCase):
                     environment=dict(os.environ),evidence_key='a'*64,check_digest='a'*64,mutation_revision=0,
                     execute_unobserved=lambda:99,resolve_backend=lambda name,**kw:(shutil.which(name),''),
                     digest_file=node.digest_file,capture_output=output,previous=previous,
-                    conditional_context=context,conditional_secret='runner-secret')
+                    conditional_context=context,conditional_secret=runner_token)
                 self.assertEqual(execution.exit_code,0)
                 self.assertEqual(output['process'].stdout.data.count(b'RAN-ONCE'),1)
                 self.assertTrue(framework.record_valid(execution.record),execution.record)
@@ -116,18 +119,18 @@ class RealConditionalTests(unittest.TestCase):
                 self.assertEqual(execution.envelope is None,learning,execution.record)
                 previous=execution.record
             envelope=execution.envelope
-            observation=conditional.verify(envelope,secret='runner-secret',expected_binding=context)
+            observation=conditional.verify(envelope,secret=runner_token,expected_binding=context)
             self.assertIsNotNone(observation)
             self.assertFalse(dependencies.authoritative_dependency_observation_is_complete(observation))
             self.assertTrue(dependencies.bound_dependency_observation_is_reusable(observation))
             binding={key:context[key] for key in dependencies.AUTHORITATIVE_CURRENT_BINDING_FIELDS}
             self.assertTrue(conditional.matches(observation,project=root,binding=binding))
-            self.assertIsNone(conditional.verify(envelope,secret='other-token',expected_binding=context))
+            self.assertIsNone(conditional.verify(envelope,secret=secrets.token_hex(32),expected_binding=context))
             for key in ('evidence_key','environment_digest','executable_digest','shard_digest'):
                 changed={**context,key:'b'*64}
-                self.assertIsNone(conditional.verify(envelope,secret='runner-secret',expected_binding=changed))
+                self.assertIsNone(conditional.verify(envelope,secret=runner_token,expected_binding=changed))
             forged=copy.deepcopy(envelope);forged['observation']['runtime_inputs_complete']=True
-            self.assertIsNone(conditional.verify(forged,secret='runner-secret',expected_binding=context))
+            self.assertIsNone(conditional.verify(forged,secret=runner_token,expected_binding=context))
             (root/'unrelated.txt').write_text('unrelated')
             self.assertTrue(conditional.matches(observation,project=root,binding=binding))
             (root/'input.txt').write_text('changed')

@@ -127,6 +127,7 @@ class ClickDependencyTraceTests(unittest.TestCase):
         self.assertFalse(result.record["reuse_authorized"])
         self.assertEqual((len(spawned), fallbacks), (1, []))
 
+    @unittest.skipUnless(platform.system() == "Linux", "strace collector is Linux-only")
     def test_empty_path_metadata_binds_descriptor_and_unknown_fd_is_incomplete(self):
         root = self.workspace.as_posix()
         row = f'10 statx(3<{root}/ignored.cfg>, "", AT_EMPTY_PATH, STATX_ALL, {{stx_mode=S_IFREG}}) = 0'

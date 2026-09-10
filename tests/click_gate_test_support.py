@@ -581,6 +581,7 @@ class ClickGateTestCase(unittest.TestCase):
             env=environment,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
         )
 

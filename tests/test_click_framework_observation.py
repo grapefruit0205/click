@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import secrets
 import os
 from pathlib import Path
 import subprocess
@@ -50,6 +51,7 @@ class FrameworkObservationTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.runner_token = secrets.token_hex(32)
         self.context = {key: "a" * 64 for key in observer.FULL_BINDING_FIELDS}
         self.context["mutation_revision"] = 1
 
@@ -61,13 +63,13 @@ class FrameworkObservationTests(unittest.TestCase):
             raise AssertionError("supported fixture unexpectedly ran without observation")
         result = observer.run_command(
             argv, workspace=self.root, observation_root=self.root, environment=environment,
-            binding_context=self.context, runtime=self.runtime, runner_token="test-runner-secret",
+            binding_context=self.context, runtime=self.runtime, runner_token=self.runner_token,
             execute_unobserved=fallback, capture_output=self.capture,
             capture_limit_bytes=4096, resolve_backend=lambda name, **kwargs: (str(runtime.inventory.trusted_executable(name, self.root)), ""),
             digest_file=runtime._digest_file,
         )
         self.assertEqual(result.exit_code, self.capture["process"].returncode)
-        self.observation = observer.verified_observation(result.envelope, secret="test-runner-secret", expected_binding=self.context)
+        self.observation = observer.verified_observation(result.envelope, secret=self.runner_token, expected_binding=self.context)
         self.assertIsNotNone(self.observation)
         return result
 
@@ -102,13 +104,13 @@ class FrameworkObservationTests(unittest.TestCase):
             "  print('ONLY-ONCE', flush=True)\n"
             "  Path('ready.pid').write_text(str(os.getpid()))\n  time.sleep(60)\n")
         script = (
-            "import json, os, sys\nfrom pathlib import Path\n"
+            "import json, os, secrets, sys\nfrom pathlib import Path\n"
             f"sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})\n"
             "from hooks import click_authoritative_observer as observer\n"
             "from hooks import click_observer_runtime as runtime\n"
             "root=Path(sys.argv[1]); capture={}\n"
             "def fallback():\n raise AssertionError('unexpected fallback')\n"
-            f"result=observer.run_command([sys.executable, '-m', 'unittest', 'test_case', '-q'], workspace=root, observation_root=root, environment=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONHASHSEED='0'), binding_context={self.context!r}, runtime={self.runtime!r}, runner_token='test-only', execute_unobserved=fallback, capture_output=capture, resolve_backend=lambda name, **kw: (str(runtime.inventory.trusted_executable(name, root)), ''), digest_file=runtime._digest_file)\n"
+            f"result=observer.run_command([sys.executable, '-m', 'unittest', 'test_case', '-q'], workspace=root, observation_root=root, environment=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONHASHSEED='0'), binding_context={self.context!r}, runtime={self.runtime!r}, runner_token=secrets.token_hex(32), execute_unobserved=fallback, capture_output=capture, resolve_backend=lambda name, **kw: (str(runtime.inventory.trusted_executable(name, root)), ''), digest_file=runtime._digest_file)\n"
             "print(json.dumps({'exit': result.exit_code, 'output': capture['process'].stdout.data.decode()}))\n")
         harness = subprocess.Popen([sys.executable, "-c", script, str(self.root)],
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)

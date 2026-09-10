@@ -103,17 +103,24 @@ class FrameworkCandidateTests(unittest.TestCase):
         result = self.execute([shutil.which("node"), "--test", "test.cjs"])
         self.assertEqual(result.exit_code, 0, self.capture)
         self.assertEqual(self.capture["process"].stdout.data.count(b"ONLY-ONCE"), 1)
-        if result.record["capture"]["backend"]["name"] == "strace":
+        if (result.record["capture"]["backend"] or {}).get("name") == "strace":
             paths = {item["path"] for item in result.record["capture"]["inputs"]}
             self.assertIn("data.json", paths)
             self.assertGreater(result.record["workers"]["threads"], 0)
 
     def test_framework_failure_is_executed_once_and_reported(self):
         (self.root / "package.json").write_text(json.dumps({"scripts": {"test": "node fail.cjs"}}))
-        (self.root / "fail.cjs").write_text("console.error('ONLY-ONCE'); process.exitCode=7;\n")
+        (self.root / "fail.cjs").write_text("console.error('ONLY-ONCE'); process.exitCode=process.argv[2]==='unchanged-argument'?7:8;\n")
         if not shutil.which("npm"):
             self.skipTest("npm unavailable")
-        result = self.execute([shutil.which("npm"), "test", "--", "unchanged-argument"])
+        npm = Path(shutil.which("npm"))
+        argv = [str(npm)]
+        if os.name == "nt":
+            # Invoke the installed CLI through Node, without a cmd.exe shim.
+            cli = npm.parent / "node_modules" / "npm" / "bin" / "npm-cli.js"
+            self.assertTrue(cli.is_file(), cli)
+            argv = [shutil.which("node"), str(cli)]
+        result = self.execute([*argv, "test", "--", "unchanged-argument"])
         self.assertEqual(result.exit_code, 7, self.capture)
         self.assertEqual(self.capture["process"].stderr.data.count(b"ONLY-ONCE"), 1)
 
@@ -128,7 +135,7 @@ class FrameworkCandidateTests(unittest.TestCase):
         result = self.framework_fixture("vitest-v5", "vitest/vitest.mjs", ["run", "tests/unit/shared.test.js"])
         self.assertEqual(result.exit_code, 0, self.capture)
         self.assertEqual(result.record["framework"], "vitest")
-        if result.record["capture"]["backend"]["name"] == "strace":
+        if (result.record["capture"]["backend"] or {}).get("name") == "strace":
             paths = {item["path"] for item in result.record["capture"]["inputs"]}
             self.assertIn("tests/unit/shared.test.js", paths)
             self.assertIn("src/math.js", paths)
@@ -137,7 +144,7 @@ class FrameworkCandidateTests(unittest.TestCase):
         result = self.framework_fixture("jest-v30", "jest/bin/jest.js", ["--maxWorkers=2", "--runTestsByPath", "tests/unit/shared.test.cjs", "tests/types/value.test.ts"])
         self.assertEqual(result.exit_code, 0, self.capture)
         self.assertEqual(result.record["framework"], "jest")
-        if result.record["capture"]["backend"]["name"] == "strace":
+        if (result.record["capture"]["backend"] or {}).get("name") == "strace":
             paths = {item["path"] for item in result.record["capture"]["inputs"]}
             self.assertIn("tests/setup.cjs", paths)
             self.assertIn("tests/global-teardown.cjs", paths)
