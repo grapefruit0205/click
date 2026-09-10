@@ -491,6 +491,17 @@ class PortableObserverRuntimeContractTests(unittest.TestCase):
         changed = json.loads(json.dumps(states[1]))
         changed["backend"]["version"] = "bad version"
         self.assertFalse(runtime.state_is_valid(changed))
+        for invalid in ([], {}, True, None):
+            changed = dict(states[0], profile=invalid)
+            self.assertFalse(runtime.state_is_valid(changed))
+        self.assertFalse(runtime.state_is_valid(dict(states[0], version=True)))
+        from hooks import click_reuse_readiness
+        readiness = click_reuse_readiness.projection({"verification": {
+            "observer_control": {"version": 1, "mode": "authoritative", "updated_at": 1},
+            "authoritative_observer": states[0],
+        }})
+        self.assertEqual(readiness["preparation"]["reason"], "prepared")
+        self.assertFalse(readiness["reuse_authorized"])
 
     def test_portable_build_commands_select_native_artifact_shapes(self) -> None:
         darwin_artifact = Path("/tmp/_click_observer_companion.so")

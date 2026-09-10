@@ -1085,7 +1085,56 @@
   $('batchSelect').onchange=event=>{selectedBatch=event.target.value;render(snapshot);};
   $('latestBatch').onclick=()=>{selectedBatch='';render(snapshot);};
 
+  const preparationText = localized({
+    'not-attempted':'다음 검증 요청에서 지원되는 입력 관찰을 준비합니다.',
+    'prepared':'수집기 준비 기록이 있습니다. 검증 요청마다 입력과 영수증을 다시 확인합니다.',
+    'disabled':'입력 관찰을 껐습니다. 기존 영수증과 저장소 정책 재사용은 계속 사용할 수 있습니다.',
+    'diagnostics-only':'현재 모드는 진단 정보만 수집합니다.',
+    'owner-policy-selected':'저장소 소유자가 선택한 입력 정책을 사용합니다.',
+    'environment-required':'현재 Python 환경은 자동 관찰 조건과 다릅니다. 원래 검사는 그대로 실행합니다.',
+    'runtime-unsupported':'이 Python 실행 환경은 자동 관찰 지원 범위 밖입니다.',
+    'prerequisite-missing':'수집 도구 또는 빌드 도구를 사용할 수 없습니다.',
+    'permission-required':'현재 권한으로 수집기를 사용할 수 없습니다.',
+    'capture-unavailable':'입력 관찰을 준비하지 못했습니다. 일반 검증은 사용할 수 있습니다.'
+  });
+  const readinessActionText = localized({
+    'run-verification':'평소 검증 명령을 실행하세요. 관찰 때문에 추가 실행하지 않습니다.',
+    'keep-owner-policy':'기존 입력 정책을 유지하고 평소처럼 검증하세요.',
+    'check-environment':'자동 관찰에는 PYTHONHASHSEED=0, PYTHONDONTWRITEBYTECODE=1이 필요합니다. 테스트 의미에 맞는 경우에만 환경을 선택하세요.',
+    'check-supported-runtime':'지원 범위는 CPython 3.12.3–3.12.14입니다. 다른 버전도 일반 검증은 계속 실행합니다.',
+    'check-prerequisites':'Linux는 strace 6.8와 C 컴파일러, macOS는 fs_usage와 C 컴파일러, Windows는 ETW 도구와 MSVC가 필요합니다.',
+    'check-permissions':'권한을 자동으로 올리지 않습니다. 관찰 없이 검증하거나 권한 있는 환경에서 수동으로 준비하세요.',
+    'retry-observer-auto':'준비 조건이 바뀌면 자동으로 재확인합니다. 수동 재시도: click-gate observer auto',
+    'keep-current-mode':'이 선택을 유지합니다. 모드 확인: click-gate observer status',
+    'review-conditional-limits':'조건부 JS 재사용의 입력 완전성은 입증되지 않았습니다. 알려진 동적 입력은 다시 실행합니다.',
+    'rerun-affected-check':'영향받은 검사를 다시 실행하세요. 형제 결과는 각자의 근거로 재판정합니다.',
+    'inspect-verification-status':'최근 계획에 기록된 재사용입니다. 현재 결과 확인: click-gate status'
+  });
+  const readinessReasonText = localized({
+    'conditional':'조건부 재사용', 'inputs-changed':'입력 변경', 'binding-changed':'실행 조건 변경',
+    'output-required':'실제 출력 필요', 'capture-unavailable':'입력 근거 부족',
+    'recorded-reuse':'재사용 계획 기록', 'check-required':'검증 필요'
+  });
+  function renderObserverReadiness(data) {
+    const root=$('observerPreparation'); if(!root)return;
+    const value=data.readiness;
+    if(!value || value.version!==1 || value.reuse_authorized!==false){
+      root.textContent=msg('이전 형식의 기록입니다. 최신 검증 요청에서 준비 상태를 확인하세요.');
+      $('observerNext').textContent=''; $('observerChecks').replaceChildren(); return;
+    }
+    root.textContent=preparationText[value.preparation?.reason] || msg('입력 관찰 상태를 확인하세요.');
+    $('observerNext').textContent=readinessActionText[value.preparation?.action] || '';
+    const list=$('observerChecks');list.replaceChildren();
+    for(const [index,check] of (value.checks || []).slice(0,256).entries()){
+      const item=document.createElement('li');
+      item.textContent=msg`검증 묶음 ${index+1}`+' · '+(readinessReasonText[check.reason] || msg('검증 필요'))+' — '+(readinessActionText[check.action] || '');
+      list.append(item);
+    }
+    if(!list.children.length){const item=document.createElement('li');item.textContent=msg('아직 검사별 실행 계획이 없습니다.');list.append(item);}
+  }
+
   function render(data) {
+    renderObserverReadiness(data);
     const focusId=document.activeElement?.id;
     const focusSource=document.activeElement?.dataset?.id;
     const identity=`${data.task.contract_id || ''}:${data.task.name || ''}:${data.history?.current_batch_id || ''}`;
@@ -1242,7 +1291,7 @@
     // An explicit module boundary lets rendering and export consumers exercise
     // the same application without rewriting its source or starting polling.
     module.exports=Object.freeze({readComparison,readTaskEfficiency,comparisonRows,
-      summaryCopy,render,renderBatch,renderSources,renderMap,renderComparison,
+      renderObserverReadiness,summaryCopy,render,renderBatch,renderSources,renderMap,renderComparison,
       renderTaskEfficiency,taskEfficiencyPresentation,publicTaskEfficiency,
       outcomePresentation,renderOutcome,explain,standaloneReport,shareReport,
       setLanguage,applyStaticLanguage,msg,MESSAGES,getLocale:()=>locale,

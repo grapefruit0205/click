@@ -15,6 +15,7 @@ from hooks import (
     click_dependency_trace,
     click_incremental,
     click_observer_control,
+    click_reuse_readiness,
     click_shadow_intelligence,
 )
 
@@ -32,6 +33,45 @@ BACKEND = "a" * 64
 
 
 class ClickDashboardProjectionTests(unittest.TestCase):
+    def test_readiness_is_bounded_read_only_and_never_grants_authority(self) -> None:
+        state = {"verification": {
+            "observer_control": {"version": 1, "mode": "authoritative", "updated_at": 1},
+            "automatic_observer_attempt": {"status": "unavailable", "reason": "compiler-secret=/private/token"},
+        }}
+        before = copy.deepcopy(state)
+        view = click_reuse_readiness.projection(state)
+        self.assertEqual(state, before)
+        self.assertTrue(click_reuse_readiness.is_valid(view))
+        self.assertFalse(view["reuse_authorized"])
+        self.assertFalse(click_observer_control.projection(state["verification"])["reuse_authorized"])
+        self.assertEqual(view["preparation"], {"reason": "prerequisite-missing", "action": "check-prerequisites"})
+        self.assertNotIn("secret", json.dumps(view))
+        for field, parent in (("mode", view), ("reason", view["preparation"]), ("action", view["preparation"])):
+            old = parent[field]
+            for invalid in ([], {}, True, None):
+                parent[field] = invalid
+                self.assertFalse(click_reuse_readiness.is_valid(view))
+            parent[field] = old
+        state["verification"]["observer_control"]["mode"] = []
+        self.assertEqual(click_reuse_readiness.projection(state)["mode"], "off")
+
+    def test_readiness_ignores_malformed_decisions_and_preserves_conditional_label(self) -> None:
+        entry = click_incremental.decision(
+            source_key=KEY_RUN, decision="reuse-dependency",
+            reason_code="conditional-observed-inputs-current", current_revision=1,
+            previous_revision=0, check_digest=CHECK_RUN,
+            authority_source="conditional-js-observation",
+        )
+        state = {"verification": {click_incremental.PLAN_FIELD: {"decisions": [entry]}}}
+        view = click_reuse_readiness.projection(state)
+        self.assertEqual(view["checks"][0]["reason"], "conditional")
+        for field in ("decision", "reason_code", "authority_source"):
+            broken = dict(entry, **{field: []})
+            state["verification"][click_incremental.PLAN_FIELD]["decisions"] = [broken]
+            self.assertEqual(click_reuse_readiness.projection(state)["checks"], [])
+        state["verification"][click_incremental.PLAN_FIELD]["decisions"] = [entry] * 500
+        self.assertEqual(len(click_reuse_readiness.projection(state)["checks"]), 1)
+
     def test_engine_identity_preserves_python_file_byte_provenance(self) -> None:
         hooks = self.workspace / "hooks"
         hooks.mkdir()
@@ -78,9 +118,16 @@ class ClickDashboardProjectionTests(unittest.TestCase):
             locale.rename(renamed)
             self.assertNotEqual(click_dashboard_projection.engine_identity()["hook_files_digest"], baseline)
 
-    def test_projection_v6_through_v8_remain_readable_and_new_fields_are_validated(self) -> None:
+    def test_projection_v6_through_v9_remain_readable_and_new_fields_are_validated(self) -> None:
         value = click_dashboard_projection.dashboard_projection({})
         self.assertTrue(click_dashboard_projection.projection_is_valid(value))
+        v9 = copy.deepcopy(value)
+        v9["version"] = 9
+        v9.pop("readiness")
+        self.assertTrue(click_dashboard_projection.projection_is_valid(v9))
+        invalid = copy.deepcopy(value)
+        invalid["readiness"]["reuse_authorized"] = True
+        self.assertFalse(click_dashboard_projection.projection_is_valid(invalid))
         readiness_fields = {
             "command_status",
             "inventory_status",
@@ -91,17 +138,20 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         }
         v8 = copy.deepcopy(value)
         v8["version"] = 8
+        v8.pop("readiness")
         for field in readiness_fields:
             v8["setup"].pop(field)
         self.assertTrue(click_dashboard_projection.projection_is_valid(v8))
         v7 = copy.deepcopy(value)
         v7["version"] = 7
+        v7.pop("readiness")
         v7.pop("task_efficiency")
         for field in readiness_fields:
             v7["setup"].pop(field)
         self.assertTrue(click_dashboard_projection.projection_is_valid(v7))
         previous = copy.deepcopy(value)
         previous["version"] = 6
+        previous.pop("readiness")
         previous.pop("retained_impact")
         previous.pop("task_efficiency")
         for field in readiness_fields:
@@ -418,7 +468,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         )
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
-        self.assertEqual(projection["version"], 9)
+        self.assertEqual(projection["version"], 10)
         self.assertEqual(
             projection["task_efficiency"]["measurement_status"], "unmeasured"
         )
@@ -634,6 +684,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         )
         legacy = copy.deepcopy(projection)
         legacy["version"] = 4
+        legacy.pop("readiness")
         legacy.pop("batch_summaries")
         legacy.pop("setup")
         legacy.pop("retained_impact")
@@ -644,6 +695,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
 
         v5 = copy.deepcopy(projection)
         v5["version"] = 5
+        v5.pop("readiness")
         v5.pop("setup")
         v5.pop("retained_impact")
         v5.pop("task_efficiency")

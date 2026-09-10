@@ -5,8 +5,20 @@
 Draft stabilization: companion loss reproduces the earlier opposite-child
 decision when capture-loss safeguards are disabled in an isolated control.
 Current safeguards report the affected child's failure; the exact historical
-trigger remains unconfirmed. Stable publication is pending review and native
-CI results. See `docs/architecture/automatic-observation.md`.
+trigger remains unconfirmed. The preceding stabilization was merged in PR #103
+after its 43 checks passed; that historical run does not validate later changes.
+This candidate remains unreleased. See `docs/architecture/automatic-observation.md`.
+
+- Preparation status now explains bounded failure reasons, recovery actions and
+  recent per-check rerun/conditional-reuse decisions in all three dashboard
+  languages. Mode selection and status never claim reuse authorization.
+- Automatic native preparation retries after relevant capability changes while
+  retaining one attempt for an unchanged failed context. Windows ETW failures
+  emit fixed diagnostic codes without raw paths or command output; failures
+  after target start still never cause a second target execution.
+- Incremental record schemas are isolated from lifecycle orchestration while
+  preserving existing imports. The code-derived runtime support table is checked
+  for drift alongside repository policy tests.
 
 - Native preparation publishes complete cache directories atomically. Concurrent
   preparation no longer mistakes an in-progress build for an invalid cache;

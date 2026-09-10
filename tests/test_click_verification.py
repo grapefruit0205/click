@@ -21,6 +21,29 @@ from hooks import (
 
 
 class ClickVerificationTests(unittest.TestCase):
+    def test_lifecycle_modules_have_one_way_dependencies(self) -> None:
+        root = Path(click_verification.__file__).parent
+        allowed = {
+            "common": set(), "prepare": {"common"}, "claims": {"common"},
+            "results": {"common"}, "runner": {"common", "claims", "results"},
+        }
+        lifecycle = {"click_verification_" + name for name in allowed}
+        for name, dependencies in allowed.items():
+            source = (root / ("click_verification_" + name + ".py")).read_text(encoding="utf-8")
+            imported = {
+                argument.value
+                for node in ast.walk(ast.parse(source))
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "load_siblings"
+                for argument in node.args[1:]
+                if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+            }
+            with self.subTest(domain=name):
+                self.assertEqual(imported & lifecycle, {
+                    "click_verification_" + dependency for dependency in dependencies
+                })
+                self.assertNotIn("click_verification", imported)
+
     def test_tool_working_directory_prefers_explicit_absolute_or_relative_path(
         self,
     ) -> None:
@@ -87,7 +110,10 @@ class ClickVerificationTests(unittest.TestCase):
         return source
 
     def test_verification_runtime_has_no_gate_host_router_or_service_dependency(self) -> None:
-        source = Path(click_verification.__file__).read_text(encoding="utf-8")
+        root = Path(click_verification.__file__).parent
+        source = "\n".join(
+            path.read_text(encoding="utf-8") for path in root.glob("click_verification*.py")
+        )
         imported: set[str] = set()
         for node in ast.walk(ast.parse(source)):
             if isinstance(node, ast.Import):
@@ -175,16 +201,16 @@ class ClickVerificationTests(unittest.TestCase):
         )
 
     def test_verification_entrypoints_and_exact_validation_stay_in_domain(self) -> None:
-        source = Path(click_verification.__file__).read_text(encoding="utf-8")
-        for required in (
-            "def _prepare_verification(",
-            "def _claim_verification_run(",
-            "def _record_verification_result(",
-            "def _release_unclaimed_verification_reservation(",
-            "def _run_verification(",
-        ):
-            with self.subTest(required=required):
-                self.assertIn(required, source)
+        for name, owner in {
+            "prepare": "prepare", "claim_run": "claims",
+            "record_result": "results", "release_unclaimed_reservation": "claims",
+            "run": "runner",
+        }.items():
+            with self.subTest(entrypoint=name):
+                self.assertEqual(
+                    getattr(click_verification, name).__module__,
+                    "hooks.click_verification_" + owner,
+                )
 
         batch, units, error = click_verification.validate_batch(
             json.dumps(

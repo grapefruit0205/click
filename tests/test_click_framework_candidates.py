@@ -13,6 +13,46 @@ from hooks import click_observer_process_tree as processes
 from hooks import click_observer_runtime as runtime
 
 
+class CaptureRetryTests(unittest.TestCase):
+    def test_missing_projection_retries_after_revision_change_only(self):
+        previous = {
+            "version": 3, "framework": "node-script",
+            "capture": cache.shadow_observer_record(
+                evidence_key="a" * 64, check_digest="b" * 64,
+                mutation_revision=2, backend_name=None, status="unavailable",
+                process_tree_complete=False,
+            ),
+            "runtime": observer.node_observer.empty("unsupported-runtime"),
+            "conditional_capture": None,
+            "workers": {"processes": 0, "threads": 0, "completed": 0, "complete": False},
+            "runtime_inputs_complete": False, "reuse_authorized": False,
+            "reason": "runtime-input-completeness-unavailable",
+        }
+        previous.update(version=4, workspace_digest="a" * 64)
+        self.assertTrue(observer.record_valid(previous))
+        def collect(revision, digest, automatic=True):
+            return observer.should_collect(previous, "b" * 64, revision,
+                recover_missing_projection=automatic, workspace_digest=digest)
+        self.assertFalse(collect(3, "b" * 64))  # Unsupported launcher never started.
+        previous["runtime"].update(status="partial", sessions=1, contexts=1, installed=1)
+        self.assertTrue(observer.record_valid(previous))
+        for revision in (None, -1, True, "3"):
+            with self.subTest(revision=revision):
+                self.assertFalse(collect(revision, "b" * 64))
+        for revision in (0, 1, 2, 3):
+            with self.subTest(revision=revision):
+                self.assertFalse(collect(revision, "a" * 64))
+                self.assertTrue(collect(revision, "b" * 64))
+                self.assertFalse(collect(revision, "b" * 64, automatic=False))
+        self.assertFalse(collect(3, ""))
+        self.assertTrue(observer.should_collect(previous, "c" * 64, 2))
+        previous.update(version=3)
+        previous.pop("workspace_digest")
+        self.assertTrue(observer.record_valid(previous))
+        self.assertTrue(collect(0, "b" * 64))  # One capture migrates a legacy attempt.
+
+
+
 class ProcessTreeTests(unittest.TestCase):
     def test_group_exit_closes_idle_threads_but_not_forked_children(self):
         prefix = (

@@ -58,6 +58,10 @@ class ClickObserverControlTests(ClickGateTestCase):
         self.assertIn("reuse requires complete bound inputs", result.stdout)
         self.assertIn("base reuse implemented", result.stdout)
         self.assertIn("static configuration implemented", result.stdout)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["readiness"]["reuse_authorized"])
+        self.assertEqual(report["readiness"]["assurance"], "recorded-status-not-reuse-authority")
+        self.assertEqual(report["readiness"]["preparation"], {"reason": "not-attempted", "action": "run-verification"})
 
     def test_explicit_off_survives_completed_evidence_rollover(self) -> None:
         payload = self.pre_tool("Bash", "click-gate observer off")

@@ -975,6 +975,24 @@ class DashboardLanguageTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_observer_recovery_and_conditional_limits_follow_language_without_execution(self):
+        self.run_language_script(r'''
+const value={version:1,reuse_authorized:false,preparation:{reason:'prerequisite-missing',action:'check-prerequisites'},checks:[{reason:'conditional',action:'review-conditional-limits'}]};
+const before=JSON.stringify(value);
+for(const language of ['en','zh-CN','ko']){
+  api.setLanguage(language);
+  api.renderObserverReadiness({readiness:value});
+  assert(doc.getElementById('observerPreparation').textContent.length>0);
+  assert(doc.getElementById('observerNext').textContent.length>0);
+  const explanation=doc.getElementById('observerChecks').textContent;
+  assert(explanation.length>0);
+  if(language!=='ko')assert(!/[가-힣]/u.test(explanation));
+}
+assert.equal(JSON.stringify(value),before);
+api.renderObserverReadiness({});
+assert.equal(doc.getElementById('observerChecks').children.length,0);
+''')
+
     def test_unchanged_snapshot_ignores_only_projection_timestamps(self):
         self.run_language_script(r'''
 const original=JSON.stringify(input.projection);

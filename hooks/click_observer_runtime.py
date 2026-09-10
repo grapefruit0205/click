@@ -1,6 +1,6 @@
 """Local preparation of the native CPython observation companion.
 
-Automatic preparation uses installed tools once per lifecycle and caches the
+Automatic preparation retries after capability changes and caches the
 artifact outside the project. It installs nothing and never blocks the original
 check on failure. The artifact is an input, not evidence or reuse authorization.
 """
@@ -37,15 +37,12 @@ WINDOWS_PROFILE = observation_inputs.WINDOWS_PROFILE
 PROFILES = observation_inputs.PROFILES
 profiles = observation_inputs.profiles
 STATE_FIELD = "authoritative_observer"
-STATE_VERSION = 1
+STATE_VERSION = profiles.STATE_VERSION
 SUPPORTED_STRACE_VERSION = "6.8"
-DIGEST = re.compile(r"^[0-9a-f]{64}$")
-ARTIFACT_ID = re.compile(r"^click-native-observer-[a-zA-Z0-9_-]{1,64}$")
-STATE_FIELDS = frozenset({
-    "version", "profile", "artifact_id", "artifact_digest", "source_digest",
-    "compiler_digest", "backend",
-})
-BACKEND_FIELDS = frozenset({"name", "version", "digest"})
+DIGEST = profiles.DIGEST
+ARTIFACT_ID = profiles.ARTIFACT_ID
+STATE_FIELDS = profiles.STATE_FIELDS
+BACKEND_FIELDS = profiles.BACKEND_FIELDS
 PROFILE_BACKENDS = profiles.BACKENDS
 ARTIFACT_NAMES = {profile: {"linux": "monitor.so", "darwin": "_click_observer_companion.so",
                            "win32": "_click_observer_companion.pyd"}[platform]
@@ -167,6 +164,14 @@ def _compiler_identity(project: Path, profile: str) -> tuple[Path, str]:
     return compiler, digest
 
 
+NATIVE_RULE_FILES = (
+    "click_observer_profiles.py", "click_observation_inputs.py",
+    "click_observer_process_tree.py", "click_authoritative_observer.py",
+    "click_observer_linux.py", "click_observer_macos.py", "click_observer_windows.py",
+    "click_observer_runtime.py", "click_dependency_cache.py", "click_process.py",
+)
+
+
 def _source_digest(profile: str) -> str:
     native = _digest_file(Path(__file__).with_name("click_observer_native.c"))
     # A compiler can produce an identical artifact against incompatible header
@@ -176,12 +181,7 @@ def _source_digest(profile: str) -> str:
                for path in sorted(include.rglob("*.h")) if path.is_file()]
     native = hashlib.sha256(json.dumps({
         "native": native, "rules": {
-            name: _digest_file(Path(__file__).with_name(name)) for name in (
-                "click_observer_profiles.py", "click_observation_inputs.py",
-                "click_observer_process_tree.py", "click_authoritative_observer.py",
-                "click_observer_linux.py", "click_observer_macos.py", "click_observer_windows.py",
-                "click_observer_runtime.py", "click_dependency_cache.py", "click_process.py",
-            )
+            name: _digest_file(Path(__file__).with_name(name)) for name in NATIVE_RULE_FILES
         },
         "python": sys.version, "soabi": sysconfig.get_config_var("SOABI"),
         "executable": _digest_file(Path(sys.executable).resolve()), "headers": headers,
@@ -250,36 +250,7 @@ def _build_command(
     raise inventory.AnalysisError("unsupported-native-runtime")
 
 
-def state_is_valid(value) -> bool:
-    backend = value.get("backend") if isinstance(value, dict) else None
-    profile = value.get("profile") if isinstance(value, dict) else None
-    expected_backend = PROFILE_BACKENDS.get(profile)
-    return bool(
-        isinstance(value, dict)
-        and set(value) == STATE_FIELDS
-        and value.get("version") == STATE_VERSION
-        and profile in PROFILES
-        and isinstance(value.get("artifact_id"), str)
-        and ARTIFACT_ID.fullmatch(value["artifact_id"])
-        and all(
-            isinstance(value.get(field), str) and DIGEST.fullmatch(value[field])
-            for field in ("artifact_digest", "source_digest", "compiler_digest")
-        )
-        and isinstance(backend, dict)
-        and set(backend) == BACKEND_FIELDS
-        and expected_backend is not None
-        and backend.get("name") == expected_backend[0]
-        and (
-            expected_backend[1] is None
-            or backend.get("version") == expected_backend[1]
-        )
-        and isinstance(backend.get("version"), str)
-        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}", backend["version"])
-        is not None
-        and isinstance(backend.get("digest"), str)
-        and DIGEST.fullmatch(backend["digest"])
-    )
-
+state_is_valid = profiles.prepared_state_is_valid
 
 def control_state(build: dict) -> dict:
     artifact = Path(str(build.get("artifact", "")))
@@ -501,23 +472,78 @@ def main() -> int:
         return 2
 
 
+def _automatic_context(project: Path, verification: dict, candidates: list) -> str:
+    """Cheap retry scheduling identity, never a passing-input fingerprint.
+
+    No tool runs here. Metadata changes may request a new preparation; every
+    artifact, executable and input still undergoes the normal content checks.
+    Only the digest is stored, never environment values or host paths.
+    """
+    def identity(path):
+        try:
+            path = Path(path).resolve(strict=True)
+            info = path.stat()
+            return [str(path), info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+        except (OSError, ValueError, TypeError):
+            return None
+    tools = {}
+    for name in {"linux": ("cc", "strace"), "darwin": ("cc", "fs_usage"),
+                 "win32": ("cl", "link", "logman", "tracerpt")}.get(sys.platform, ()):
+        try:
+            tools[name] = identity(inventory.trusted_executable(name, project))
+        except (OSError, ValueError, inventory.AnalysisError):
+            tools[name] = None
+    runtime = state_from_verification(verification)
+    include = sysconfig.get_path("include")
+    value = {
+        "python": identity(sys.executable), "version": sys.version,
+        "profile": profiles.current(), "tools": tools,
+        "collector_rules": {name: identity(Path(__file__).with_name(name)) for name in
+                            (*NATIVE_RULE_FILES, "click_observer_native.c", "click_observer_bootstrap.py")},
+        "headers": [identity(Path(include) / name) for name in ("Python.h", "pyconfig.h")]
+                   if isinstance(include, str) else None,
+        "library": identity(Path(sys.base_prefix) / "libs" / "python312.lib") if sys.platform == "win32" else None,
+        "commands": [argv[:3] for argv in candidates],
+        "environment": {key: os.environ.get(key) for key in
+                        ("PATH", "PYTHONHASHSEED", "PYTHONDONTWRITEBYTECODE", "INCLUDE", "LIB", "LIBPATH")},
+        "privilege": getattr(os, "geteuid", lambda: None)(),
+        "policy": identity(project / ".click" / "evidence-reuse.json"),
+        "artifact": identity(artifact_path(runtime)) if runtime else None,
+    }
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
 def prepare_automatic(project: Path, verification: dict, groups: dict) -> None:
-    """Prepare once per lifecycle; failure never prevents normal verification.
+    """Retry preparation when capabilities change; failure preserves verification.
 
     This state is only a local capability result. Every execution/reuse still
     validates the artifact, backend, runtime and complete signed input records.
     An explicit observer auto control clears the attempt for a provisioning retry.
     """
-    if state_from_verification(verification) is not None:
-        return
-    if verification.get("automatic_observer_attempt"):
-        return
     candidates = [checks[0].get("argv", []) for checks in groups.values() if len(checks) == 1]
     if not any(
         len(argv) >= 3 and argv[1] == "-m" and argv[2] in {"unittest", "pytest"}
         for argv in candidates
     ):
         return
+    try:
+        project = inventory.project_root(project)
+        context = _automatic_context(project, verification, candidates)
+        if verification.get("automatic_observer_context") == context and (
+            state_from_verification(verification) is not None
+            or verification.get("automatic_observer_attempt")
+        ):
+            return
+        attempt_context = _automatic_context(
+            project, {**verification, STATE_FIELD: None}, candidates
+        )
+    except Exception:
+        verification["automatic_observer_attempt"] = {
+            "status": "unavailable", "reason": "native-preparation-unavailable",
+        }
+        return
+    verification["automatic_observer_context"] = attempt_context
+    verification.pop(STATE_FIELD, None)
     if any(
         os.environ.get(key, default) != default
         for key, default in (("PYTHONHASHSEED", "0"), ("PYTHONDONTWRITEBYTECODE", "1"))
@@ -527,7 +553,7 @@ def prepare_automatic(project: Path, verification: dict, groups: dict) -> None:
         }
         return
     try:
-        root = inventory.project_root(project)
+        root = project
         if (root / ".click" / "evidence-reuse.json").exists():
             # An owner already selected a reuse route. Do not silently replace
             # its scoped baseline with coarser automatic directory observations.
@@ -543,12 +569,16 @@ def prepare_automatic(project: Path, verification: dict, groups: dict) -> None:
             and inventory.trusted_executable(argv[0], root).resolve(strict=True) == executable
             for argv in candidates
         ):
+            verification["automatic_observer_attempt"] = {
+                "status": "unavailable", "reason": "runtime-mismatch",
+            }
             return
         value = control_state(prepare(project))
         if validate(project, value) is None:
             raise inventory.AnalysisError("native-companion-unavailable")
         verification[STATE_FIELD] = value
         verification["automatic_observer_attempt"] = {"status": "available", "reason": ""}
+        verification["automatic_observer_context"] = _automatic_context(project, verification, candidates)
     except Exception as error:
         verification["automatic_observer_attempt"] = {
             "status": "unavailable", "reason": str(error) if isinstance(error, inventory.AnalysisError)

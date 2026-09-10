@@ -81,6 +81,62 @@ class FrameworkObservationTests(unittest.TestCase):
         self.assertEqual(self.observation["status"], "complete", self.observation["ineligibility_reasons"])
         self.assertTrue(inputs.records_current(self.root, self.runtime["artifact_id"], self.observation["inputs"], profile=self.runtime["profile"]))
 
+    def test_config_dynamic_import_and_ignored_inputs_are_bound_individually(self):
+        (self.root / ".gitignore").write_text("local.cfg\n")
+        files = {
+            "project.json": '{"module": "helper"}',
+            "helper.py": "VALUE = 1\n",
+            "local.cfg": "ready",
+            "unrelated.txt": "unchanged",
+            "test_case.py": (
+                "import importlib, json, unittest\nfrom pathlib import Path\n"
+                "class Case(unittest.TestCase):\n def test_inputs(self):\n"
+                "  config = json.loads(Path('project.json').read_text())\n"
+                "  module = importlib.import_module(config['module'])\n"
+                "  self.assertEqual(module.VALUE, 1)\n"
+                "  self.assertEqual(Path('local.cfg').read_text(), 'ready')\n"
+            ),
+        }
+        for name, content in files.items():
+            (self.root / name).write_text(content)
+        self.assertEqual(self.execute("unittest", "test_case", "-q").exit_code, 0)
+        self.assertEqual(self.observation["status"], "complete", self.observation)
+        records = self.observation["inputs"]
+        selected = {
+            row["path"]: row for row in records
+            if row["root"] == "project" and row["path"] in files
+        }
+        (self.root / "unrelated.txt").write_text("unrelated change")
+        self.assertTrue(inputs.records_current(
+            self.root, self.runtime["artifact_id"], records, profile=self.runtime["profile"],
+        ))
+        for name in ("project.json", "helper.py", "local.cfg"):
+            with self.subTest(input=name):
+                self.assertIn(name, selected)
+                self.assertTrue(inputs.records_current(
+                    self.root, self.runtime["artifact_id"], [selected[name]], profile=self.runtime["profile"],
+                ))
+                (self.root / name).write_text(files[name] + "\n")
+                self.assertFalse(inputs.records_current(
+                    self.root, self.runtime["artifact_id"], [selected[name]], profile=self.runtime["profile"],
+                ))
+
+    def test_python_worker_input_is_reported_but_does_not_grant_complete_reuse(self):
+        (self.root / "worker.cfg").write_text("ready")
+        (self.root / "test_case.py").write_text(
+            "import threading, unittest\nfrom pathlib import Path\n"
+            "class Case(unittest.TestCase):\n def test_worker(self):\n"
+            "  values = []\n"
+            "  worker = threading.Thread(target=lambda: values.append(Path('worker.cfg').read_text()))\n"
+            "  worker.start(); worker.join()\n"
+            "  self.assertEqual(values, ['ready'])\n"
+        )
+        result = self.execute("unittest", "test_case", "-q")
+        self.assertEqual(result.exit_code, 0)
+        self.assertNotEqual(self.observation["status"], "complete")
+        self.assertIn("worker.cfg", self.observation["paths"])
+        self.assertIn("concurrent-execution-unsupported", self.observation["ineligibility_reasons"])
+
     def test_failure_and_large_output_are_retained_without_repeating(self):
         (self.root / "test_case.py").write_text("import unittest\nclass Case(unittest.TestCase):\n def test_one(self):\n  print('ONLY-ONCE')\n  print('x'*100000)\n  self.fail('original failure')\n")
         result = self.execute("unittest", "test_case", "-q")

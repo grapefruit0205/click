@@ -227,7 +227,7 @@ class VerificationBindingStageTests(unittest.TestCase):
         self.assertEqual({item.name for item in fields(verification.VerificationRunResult)}, expected)
         records = [{"message": "bounded diagnostic"}]
         result = verification.VerificationRunResult(1, 0, diagnostic_records=records)
-        with mock.patch.object(verification, "_record_verification_result", return_value=False) as record:
+        with mock.patch.object(verification._results, "_record_verification_result", return_value=False) as record:
             self.assertFalse(verification.record_outcome(Path("state"), {}, "digest", "token", result))
         self.assertIs(record.call_args.kwargs["diagnostic_records"], records)
         self.assertEqual(record.call_args.kwargs["exit_code"], 1)

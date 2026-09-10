@@ -4926,7 +4926,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
                     action()
                     return matched
 
-                with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+                with mock.patch.object(CLICK_VERIFICATION._prepare, "_verification_receipt_matches",
                                        side_effect=match_then_change) as matched:
                     payload = self.verify_gate([argv], turn)
                 self.assertEqual(matched.call_count, 1)
@@ -4966,7 +4966,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
                 os.environ["CLICK_HARDENING_INPUT"] = "changed"
                 return matched
 
-            with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+            with mock.patch.object(CLICK_VERIFICATION._prepare, "_verification_receipt_matches",
                                    side_effect=match_then_change):
                 payload = self.verify_gate([argv], turn)
             self.assertIn("updatedInput", payload["hookSpecificOutput"], payload)
@@ -5011,7 +5011,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
             link.symlink_to("bad.txt")
             return result
 
-        with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+        with mock.patch.object(CLICK_VERIFICATION._prepare, "_verification_receipt_matches",
                                side_effect=replace_target):
             payload = self.verify_gate([argv], turn)
         self.assertIn("run-verification", split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"]))
@@ -5039,7 +5039,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
             executable.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
             return result
 
-        with mock.patch.object(CLICK_VERIFICATION, "_verification_receipt_matches",
+        with mock.patch.object(CLICK_VERIFICATION._prepare, "_verification_receipt_matches",
                                side_effect=replace_executable):
             payload = self.verify_gate([argv], "turn-1")
         self.assertIn("updatedInput", payload["hookSpecificOutput"], payload)
@@ -5057,7 +5057,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
             fixture = self.workspace / "verification_fixture.py"
             fixture.write_text(fixture.read_text().replace("self.assertTrue(True)", "self.fail('late drift')"))
 
-        with mock.patch.object(CLICK_VERIFICATION, "_promote_safe_change_receipt",
+        with mock.patch.object(CLICK_VERIFICATION._prepare, "_promote_safe_change_receipt",
                                side_effect=promote_then_change) as promoted:
             payload = self.verify_gate([argv], turn)
         self.assertEqual(promoted.call_count, 1)

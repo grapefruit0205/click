@@ -753,6 +753,16 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
         self.assertEqual(shared_decisions[beta_key]["decision"], "run")
         shared_result = self.run_rewritten(shared_request)
         self.assertEqual(shared_result.returncode, 0, shared_result.stderr)
+        shared_completed = json.loads(state_path.read_text())
+        for key in (alpha_key, beta_key):
+            observed = shared_completed["evidence_state"]["sources"][key].get(
+                "verified_dependency_observation", {}
+            )
+            self.assertEqual(
+                observed.get("status"), "complete",
+                {"source": key, "observation": observed,
+                 "runner_stderr": shared_result.stderr},
+            )
 
         lockfile = self.workspace / "uv.lock"
         self.mark_patch(lockfile, "version=1", "version=2", "lockfile-change")
@@ -766,8 +776,8 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
                 "decisions"
             ]
         }
-        self.assertEqual(lockfile_decisions[alpha_key]["decision"], "run")
-        self.assertEqual(lockfile_decisions[beta_key]["decision"], "run")
+        self.assertEqual(lockfile_decisions[alpha_key]["decision"], "run", lockfile_decisions)
+        self.assertEqual(lockfile_decisions[beta_key]["decision"], "run", lockfile_decisions)
         lockfile_result = self.run_rewritten(lockfile_request)
         self.assertEqual(lockfile_result.returncode, 0, lockfile_result.stderr)
 
