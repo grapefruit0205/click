@@ -104,9 +104,11 @@ def should_collect(previous, check_digest, revision=None):
     if not record_valid(previous) or previous.get("version") != 3 or previous["capture"]["binding"]["check_digest"] != check_digest:
         return True
     # Continue learning on requested executions when a usable seed exists.
-    # Unsupported profiles retain the bounded once-per-lifecycle diagnostic.
+    # A changed project can remove an unsupported worker or dynamic input.
+    # Retry once at that revision even when the old capture had no projection;
+    # unchanged unsupported executions still avoid repeated Inspector startup.
     return (conditional.eligible_record(previous) or
-            revision is not None and previous.get("conditional_capture") is not None
+            type(revision) is int and revision >= 0
             and previous["capture"]["binding"]["mutation_revision"] != revision)
 
 

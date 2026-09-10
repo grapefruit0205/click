@@ -365,3 +365,18 @@ was rerun. Distribution validation, maintained Markdown file-link checks,
 dashboard JavaScript syntax and `git diff --check` also passed. Codex source and
 the generated Antigravity distribution match. These are regression results,
 not a production speed benchmark or new platform-support claim.
+
+## Bounded input-coverage regression cases
+
+Native Python integration fixtures exercise configuration-driven dynamic imports,
+ignored file reads and unrelated existing file changes. Each consumed input has
+its own before/after fingerprint. Threaded Python checks still report incomplete
+runtime coverage; they do not gain authority solely because file candidates were
+captured. The framework fixtures also retain the original output and exit status.
+
+JS conditional fixtures cover configuration, dynamic ESM imports, ignored inputs,
+environment rebinding and recovery after an unsupported worker is removed. See
+[node runtime observation](node-runtime-observation.md#input-changes-and-recovery)
+for the distinction between recorded inputs, conditional confidence and complete
+runtime evidence. This is a bounded JS/Python support target, not a promise to
+infer every external input without project policy.

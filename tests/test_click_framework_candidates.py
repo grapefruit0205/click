@@ -13,6 +13,29 @@ from hooks import click_observer_process_tree as processes
 from hooks import click_observer_runtime as runtime
 
 
+class CaptureRetryTests(unittest.TestCase):
+    def test_missing_projection_retries_after_revision_change_only(self):
+        previous = {
+            "version": 3, "framework": "node-script",
+            "capture": cache.shadow_observer_record(
+                evidence_key="a" * 64, check_digest="b" * 64,
+                mutation_revision=2, backend_name=None, status="unavailable",
+                process_tree_complete=False,
+            ),
+            "runtime": observer.node_observer.empty("unsupported-runtime"),
+            "conditional_capture": None,
+            "workers": {"processes": 0, "threads": 0, "completed": 0, "complete": False},
+            "runtime_inputs_complete": False, "reuse_authorized": False,
+            "reason": "runtime-input-completeness-unavailable",
+        }
+        self.assertTrue(observer.record_valid(previous))
+        for revision in (2, None, -1, True, "3"):
+            with self.subTest(revision=revision):
+                self.assertFalse(observer.should_collect(previous, "b" * 64, revision))
+        self.assertTrue(observer.should_collect(previous, "b" * 64, 3))
+        self.assertTrue(observer.should_collect(previous, "c" * 64, 2))
+
+
 class ProcessTreeTests(unittest.TestCase):
     def test_group_exit_closes_idle_threads_but_not_forked_children(self):
         prefix = (

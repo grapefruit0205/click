@@ -254,3 +254,31 @@ this tests routing, signatures, same-tree reuse and cross-revision child reuse,
 not eligibility of every production Jest suite. Real Jest 30 and Vitest 5 tests
 separately cover existing execution, diagnostics and repository-policy reuse.
 No production time-savings estimate is inferred from these fixtures.
+
+## Input changes and recovery
+
+Configuration files, ignored files and modules reached through CommonJS `require`
+or dynamic ESM `import` are candidates from the real file trace. The collector
+binds their actual consumed paths; unrelated existing file contents are not
+added just because they belong to the repository. Regression fixtures mutate
+configuration, a dynamically imported module and an ignored input separately.
+
+A recorded framework capture now requires observation evidence even when the
+first attempt is incomplete or uses workers. It cannot silently fall back to
+same-tree exact reuse while an ignored worker input changes. An explicit owner
+input receipt still has its separate current-policy admission checks. Unsupported
+or incomplete inputs cause that child to execute; they do not invalidate an
+otherwise complete shard partition.
+
+An unsupported attempt is bounded to one capture at an unchanged project
+revision. After a code change, Click retries capture on the next requested
+execution, including when the previous attempt produced no input projection.
+Removing an unsupported worker can therefore recover into the ordinary
+conditional learning path without resetting Click state. A learning execution
+is still a user-requested execution, never an extra test launched to learn.
+
+Environment binding remains conservative: the canonical execution environment
+is bound per command, so a changed inherited variable can rerun multiple children.
+This does not claim complete per-variable environment-reader attribution. Worker
+file candidates are diagnostic when runtime state or lifecycle coverage is
+insufficient; collecting a path alone does not prove worker input completeness.
