@@ -74,6 +74,7 @@ class ClickDependencyTraceTests(unittest.TestCase):
         exit_code: int = 0,
         capture_limit: int = click_dependency_trace.MAX_RAW_TRACE_BYTES,
         digest_values: tuple[str, str] = (BACKEND_DIGEST, BACKEND_DIGEST),
+        framework: bool = False,
     ) -> tuple[click_dependency_trace.ShadowExecution, list[list[str]], list[int]]:
         spawned: list[list[str]] = []
         fallback_calls: list[int] = []
@@ -105,8 +106,57 @@ class ClickDependencyTraceTests(unittest.TestCase):
             system_name="Linux",
             already_traced=lambda: False,
             capture_limit=capture_limit,
+            process_observer=(lambda *args, **kwargs: None) if framework else None,
         )
         return result, spawned, fallback_calls
+
+    @unittest.skipUnless(platform.system() == "Linux", "strace collector is Linux-only")
+    def test_framework_collection_reassembles_reads_and_closes_thread_group(self):
+        root = self.workspace.as_posix()
+        raw = self.trace_text(
+            '10 execve("/node", [], []) = 0',
+            '10 clone(flags=CLONE_THREAD <unfinished ...>',
+            f'11 openat(AT_FDCWD<{root}>, "input.js", O_RDONLY <unfinished ...>',
+            '10 <... clone resumed>) = 11',
+            f'11 <... openat resumed>) = 3<{root}/input.js>',
+            '10 exit_group(0) = ?',
+        )
+        result, spawned, fallbacks = self.fake_trace(raw, framework=True)
+        self.assertEqual(result.record["status"], "complete", result.record)
+        self.assertIn({"path": "input.js", "kind": "file", "operations": ["read"]}, result.record["inputs"])
+        self.assertFalse(result.record["reuse_authorized"])
+        self.assertEqual((len(spawned), fallbacks), (1, []))
+
+    @unittest.skipUnless(platform.system() == "Linux", "strace collector is Linux-only")
+    def test_empty_path_metadata_binds_descriptor_and_unknown_fd_is_incomplete(self):
+        root = self.workspace.as_posix()
+        row = f'10 statx(3<{root}/ignored.cfg>, "", AT_EMPTY_PATH, STATX_ALL, {{stx_mode=S_IFREG}}) = 0'
+        parsed = click_dependency_trace.parse_strace(self.trace_text(row), workspace=self.workspace)
+        self.assertEqual(parsed.unresolved_event_count, 0)
+        self.assertEqual(parsed.inputs, ({"path": "ignored.cfg", "kind": "file", "operations": ["metadata"]},))
+        unknown = click_dependency_trace.parse_strace(
+            self.trace_text('10 statx(3, "", AT_EMPTY_PATH, STATX_ALL, {stx_mode=S_IFREG}) = 0'),
+            workspace=self.workspace,
+        )
+        self.assertGreater(unknown.unresolved_event_count, 0)
+
+    def test_writes_never_erase_a_preexisting_read_dependency(self):
+        root = self.workspace.as_posix()
+        for write in (
+            f'10 openat(AT_FDCWD<{root}>, "state.cfg", O_WRONLY|O_TRUNC) = 4<{root}/state.cfg>',
+            f'10 chmod("{root}/state.cfg", 0600) = 0',
+            f'10 unlink("{root}/state.cfg") = 0',
+        ):
+            with self.subTest(write=write):
+                parsed = click_dependency_trace.parse_strace(self.trace_text(
+                    f'10 openat(AT_FDCWD<{root}>, "state.cfg", O_RDONLY) = 3<{root}/state.cfg>',
+                    write,
+                ), workspace=self.workspace)
+                self.assertIn({"path": "state.cfg", "kind": "file", "operations": ["read"]}, parsed.inputs)
+        readwrite = click_dependency_trace.parse_strace(self.trace_text(
+            f'10 openat(AT_FDCWD<{root}>, "state.cfg", O_RDWR) = 3<{root}/state.cfg>',
+        ), workspace=self.workspace)
+        self.assertIn({"path": "state.cfg", "kind": "file", "operations": ["read"]}, readwrite.inputs)
 
     @unittest.skipUnless(platform.system() == "Linux", "strace parser is Linux-only")
     def test_parser_normalizes_repository_inputs_and_counts_external_paths(self) -> None:

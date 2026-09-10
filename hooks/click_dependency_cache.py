@@ -31,11 +31,13 @@ CONFIG_VERSION = 1
 CONTRACT_PROVIDER_NAME = "approved-contract-v1"
 MANIFEST_PROVIDER_NAME = "repository-manifest-v1"
 COMBINED_PROVIDER_NAME = "approved-contract+repository-manifest-v1"
+AUTOMATIC_PROVIDER_NAME = "runtime-observed-inputs-v1"
 PROVIDER_NAMES = frozenset(
     {
         CONTRACT_PROVIDER_NAME,
         MANIFEST_PROVIDER_NAME,
         COMBINED_PROVIDER_NAME,
+        AUTOMATIC_PROVIDER_NAME,
     }
 )
 OBSERVATION_PROVIDER_NAME = "runtime-dependency-observation-v1"
@@ -53,11 +55,7 @@ OBSERVATION_FIELDS = frozenset(
 AUTHORITATIVE_OBSERVATION_PROVIDER_NAME = "runtime-dependency-observation-v2"
 AUTHORITATIVE_OBSERVATION_PROFILE = click_observation_inputs.PROFILE
 AUTHORITATIVE_OBSERVATION_PROFILES = click_observation_inputs.PROFILES
-AUTHORITATIVE_PROFILE_BACKENDS = {
-    click_observation_inputs.PROFILE: ("strace", "6.8"),
-    click_observation_inputs.DARWIN_PROFILE: ("fs_usage", None),
-    click_observation_inputs.WINDOWS_PROFILE: ("windows-etw", None),
-}
+AUTHORITATIVE_PROFILE_BACKENDS = click_observation_inputs.profiles.BACKENDS
 AUTHORITATIVE_OBSERVATION_FIELDS = frozenset({
     "provider", "status", "profile", "paths", "external_access",
     "child_processes", "process_tree_complete", "backend", "companion",
@@ -364,6 +362,8 @@ def unavailable_dependency_observation(*, failed: bool = False) -> dict[str, Any
 
 
 def dependency_observation_is_valid(value: Any) -> bool:
+    if conditional_dependency_observation_is_valid(value):
+        return True
     if authoritative_dependency_observation_is_valid(value):
         return True
     if not isinstance(value, dict) or set(value) != OBSERVATION_FIELDS:
@@ -382,7 +382,9 @@ def dependency_observation_is_valid(value: Any) -> bool:
 
 
 def dependency_observation_is_complete(value: Any) -> bool:
-    """Return whether runtime observation can safely support evidence reuse."""
+    """Whether observation supports reuse at its declared confidence level."""
+    if conditional_dependency_observation_is_valid(value):
+        return True
     if authoritative_dependency_observation_is_valid(value):
         return authoritative_dependency_observation_is_complete(value)
     return bool(
@@ -556,6 +558,31 @@ def authoritative_dependency_observation_is_complete(value: Any) -> bool:
         and value.get("child_processes") == 0
         and not value.get("ineligibility_reasons")
     )
+
+
+def conditional_observer():
+    if __package__:
+        from . import click_conditional_observer
+    else:
+        import click_conditional_observer
+    return click_conditional_observer
+
+
+def conditional_dependency_observation_is_valid(value: Any) -> bool:
+    return bool(isinstance(value, dict)
+                and value.get("provider") == "conditional-js-observation-v1"
+                and conditional_observer().valid(value))
+
+
+def bound_dependency_observation_is_reusable(value: Any) -> bool:
+    return (authoritative_dependency_observation_is_complete(value)
+            or conditional_dependency_observation_is_valid(value))
+
+
+def bound_dependency_observation_matches(value: Any, **kwargs) -> bool:
+    if conditional_dependency_observation_is_valid(value):
+        return conditional_observer().matches(value, **kwargs)
+    return authoritative_dependency_observation_matches(value, **kwargs)
 
 
 def authoritative_dependency_observation_matches(
@@ -1156,6 +1183,11 @@ def _load_repository(
     )
 
 
+def automatic_policy_digest(checks: list[dict[str, Any]]) -> str:
+    """Built-in capture rules, never an inferred owner dependency declaration."""
+    return _digest({"provider": AUTOMATIC_PROVIDER_NAME, "checks": _group_digest(checks)})
+
+
 def observation_policy_bindings(
     cwd: Path,
     grouped_checks: dict[str, list[dict[str, Any]]],
@@ -1167,7 +1199,7 @@ def observation_policy_bindings(
     loaded = _load_repository(cwd, git_capture)
     if loaded is None:
         return {}
-    _, _, entries, _ = loaded
+    _, manifest_digest, entries, _ = loaded
     approved = declarations or {}
     output: dict[str, str] = {}
     for source_key, checks in grouped_checks.items():
@@ -1182,6 +1214,8 @@ def observation_policy_bindings(
         else:
             declared_patterns = ()
         if not declared_patterns and not manifest_patterns:
+            if not manifest_digest:
+                output[source_key] = automatic_policy_digest(checks)
             continue
         output[source_key] = _digest({
             "checks": [check["argv"] for check in checks],
@@ -1224,9 +1258,12 @@ def receipts_for_groups(
                 continue
         else:
             declared_patterns = ()
-        if not declared_patterns and not manifest_patterns:
+        automatic = not declared_patterns and not manifest_patterns
+        if automatic and manifest_digest:
             continue
-        if declared_patterns and manifest_patterns:
+        if automatic:
+            provider = AUTOMATIC_PROVIDER_NAME
+        elif declared_patterns and manifest_patterns:
             provider = COMBINED_PROVIDER_NAME
         elif declared_patterns:
             provider = CONTRACT_PROVIDER_NAME
@@ -1237,7 +1274,7 @@ def receipts_for_groups(
             "contract_paths": list(declared_patterns),
             "manifest_paths": list(manifest_patterns),
         }
-        entry_digest = _digest(entry_payload)
+        entry_digest = automatic_policy_digest(checks) if automatic else _digest(entry_payload)
         raw_observation = observed.get(source_key)
         if raw_observation is None:
             observation = unavailable_dependency_observation()
@@ -1246,7 +1283,7 @@ def receipts_for_groups(
             if (
                 isinstance(binding, dict)
                 and binding.get("policy_digest") == entry_digest
-                and authoritative_dependency_observation_matches(
+                and bound_dependency_observation_matches(
                     raw_observation,
                     project=root,
                     runtime=authoritative_runtime,
@@ -1260,6 +1297,8 @@ def receipts_for_groups(
             observation = json.loads(json.dumps(raw_observation))
         else:
             observation = unavailable_dependency_observation(failed=True)
+        if automatic and (not authoritative_only or not bound_dependency_observation_is_reusable(observation)):
+            continue
         # Approval-bound contract paths are always hard dependencies. With a
         # complete runtime observation, expanding repository-manifest patterns
         # act as conservative discovery envelopes; the observation identifies

@@ -891,11 +891,7 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 if value == "status":
                     selected = click_observer_control.mode(verification)
                     support = click_observer_backend.support_report()
-                    detail = (
-                        "authoritative profile prepared, only complete bound observations may reuse"
-                        if selected == "authoritative"
-                        else "non-authoritative, reuse disabled"
-                    )
+                    detail = click_observer_control.description(verification)
                     tiers = (
                         f"platform {support['system']}: "
                         f"base reuse {support['base_reuse']['status']}, "
@@ -933,14 +929,14 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                         "Observer mode."
                     )
                     return
-                if value == "authoritative" and not approved_active:
+                if value in {"authoritative", "auto"} and not (approved_active or evidence_active):
                     _deny(
-                        "Authoritative Observer requires a separately approved Guarded contract."
+                        "Input observation requires an active Evidence or approved Guarded runtime."
                     )
                     return
-                previous_runtime = click_observer_runtime.state_from_verification(
-                    verification
-                )
+                verification.pop("automatic_observer_attempt", None)
+                if value == "runtime":
+                    verification.pop("framework_observations", None)
                 if value == "authoritative":
                     try:
                         build = click_observer_runtime.prepare(
@@ -953,7 +949,7 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                             raise ValueError("prepared runtime did not validate")
                     except Exception:
                         _deny(
-                            "The native CPython 3.12.3 authoritative profile "
+                            "The supported native CPython 3.12 authoritative profile "
                             "for this platform could not be prepared."
                         )
                         return
@@ -963,15 +959,10 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 click_observer_control.set_mode(verification, value)
                 runtime_state["verification"] = verification
                 click_contract_state.save_contract_state(event, runtime_state)
-                if previous_runtime is not None and previous_runtime != verification.get(
-                    click_observer_runtime.STATE_FIELD
-                ):
-                    click_observer_runtime.discard(previous_runtime)
-                detail = (
-                    "authoritative profile prepared, reuse still requires a complete bound run"
-                    if value == "authoritative"
-                    else "non-authoritative, reuse disabled"
-                )
+                # Prepared artifacts are content-addressed and shared by local
+                # sessions. Switching this session off must not delete a
+                # companion another session is using.
+                detail = click_observer_control.description(verification)
                 _allow_rewritten(
                     f"echo Click observer mode set to {value} - {detail}"
                 )

@@ -111,6 +111,7 @@ def _fresh_source(kind: str, dependency_patterns: tuple[str, ...] = ()) -> dict[
         "verified_dependency_paths": [],
         "verified_dependency_observation_digest": "",
         "verified_dependency_observation": {},
+        "automatic_observation_required": False,
         "dependency_reuse_count": 0,
         "last_dependency_reused_at": 0,
         "last_dependency_reused_from_revision": -1,
@@ -146,6 +147,7 @@ _SUCCESSOR_BASELINE_FIELDS = (
     "verified_dependency_paths",
     "verified_dependency_observation_digest",
     "verified_dependency_observation",
+    "automatic_observation_required",
     "verified_safe_change_receipt",
 )
 _SUCCESSOR_MEASUREMENT_FIELDS = (
@@ -712,10 +714,18 @@ def _dependency_fields_are_valid(source: dict[str, Any]) -> bool:
             and observation_digest
         ):
             return False
-        if provider == click_dependency_cache.CONTRACT_PROVIDER_NAME:
+        if provider in {
+            click_dependency_cache.CONTRACT_PROVIDER_NAME,
+            click_dependency_cache.AUTOMATIC_PROVIDER_NAME,
+        }:
             if manifest_digest:
                 return False
         elif re.fullmatch(r"[0-9a-f]{64}", manifest_digest) is None:
+            return False
+        if (
+            provider == click_dependency_cache.AUTOMATIC_PROVIDER_NAME
+            and not click_dependency_cache.bound_dependency_observation_is_reusable(observation)
+        ):
             return False
     elif any(
         (
@@ -768,6 +778,7 @@ def _input_policy_fields_are_valid(source: dict[str, Any]) -> bool:
         and not error
         and list(normalized) == input_patterns
         and isinstance(outputs_required, bool)
+        and isinstance(source.get("automatic_observation_required", False), bool)
         and isinstance(verified_input_digest, str)
         and (
             not verified_input_digest

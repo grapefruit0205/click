@@ -1130,10 +1130,11 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
             else "exact-and-partial-policy"
         )
     observations = [source.get("verified_dependency_observation") for source in child_sources]
-    if all(
+    complete_observations = sum(
         dependency_cache.authoritative_dependency_observation_is_complete(item)
         for item in observations
-    ):
+    )
+    if complete_observations == len(observations):
         report.update(
             status="reuse-ready",
             reasons=[],
@@ -1142,6 +1143,12 @@ def _baseline_status(root: Path, setup: dict[str, Any], contract_state: Any) -> 
             authoritative_reuse_status="available",
             next_action_code="reuse-by-current-authority",
             setup_authority=False,
+        )
+    elif complete_observations:
+        report.update(
+            reuse_status="exact-and-partial-observed",
+            authoritative_reuse_status="partially-available",
+            next_action_code="reuse-by-current-authority",
         )
     return report
 

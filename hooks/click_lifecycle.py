@@ -205,6 +205,8 @@ def _fresh_evidence_state(
     virtual_contract = {
         "verification": {"scale": "focused", "evidence": []}
     }
+    verification = click_verification.fresh_state(virtual_contract)
+    click_verification.click_observer_control.set_mode(verification, "auto", updated_at=0)
     return {
         "state_schema_version": CONTRACT_STATE_SCHEMA_VERSION,
         "status": "evidence",
@@ -221,7 +223,7 @@ def _fresh_evidence_state(
         "follow_up_turns": [],
         "history_complete": history_complete,
         "capability_ledger": click_claims.fresh_state(),
-        "verification": click_verification.fresh_state(virtual_contract),
+        "verification": verification,
         "evidence_state": click_evidence.fresh_state(virtual_contract),
         click_evidence.SUCCESSOR_EVIDENCE_FIELD: (
             click_evidence.fresh_successor_evidence()
@@ -266,6 +268,9 @@ def _ensure_evidence_state(event: dict[str, Any]) -> tuple[dict[str, Any], bool]
         previous = state
         state = _fresh_evidence_state(event, history_complete=not recovered)
         if completed_evidence:
+            click_verification.click_observer_control.carry_selection(
+                previous.get("verification"), state["verification"]
+            )
             _carry_completed_candidates(event, previous, state)
         _save_contract_state(event, state)
         return state, recovered
@@ -460,6 +465,8 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
         "off",
         "shadow",
         "authoritative",
+        "auto",
+        "runtime",
         "status",
     }:
         return "observer", tokens[2], ""
@@ -489,7 +496,7 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
         f"`{CONTROL_COMMAND} inspect '<Inspection JSON>'`, "
         f"`{CONTROL_COMMAND} mutate '<Mutation JSON>'`, "
         f"`{CONTROL_COMMAND} service '<Managed Service JSON>'`, "
-        f"`{CONTROL_COMMAND} observer off|shadow|authoritative|status`, "
+        f"`{CONTROL_COMMAND} observer off|shadow|authoritative|auto|runtime|status`, "
         f"`{CONTROL_COMMAND} dashboard start|stop|status`, "
         f"`{CONTROL_COMMAND} sharding init|status|refresh`, "
         f"`{CONTROL_COMMAND} status`, "

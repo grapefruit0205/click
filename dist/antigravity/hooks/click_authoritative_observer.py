@@ -178,7 +178,7 @@ def _supported_command(argv: Sequence[str]) -> bool:
         return bool(
             len(argv) >= 3
             and Path(argv[0]).resolve(strict=True) == Path(sys.executable).resolve(strict=True)
-            and list(argv[1:3]) == ["-m", "unittest"]
+            and argv[1] == "-m" and argv[2] in {"unittest", "pytest"}
             and all(isinstance(item, str) and item and "\x00" not in item for item in argv)
         )
     except (OSError, RuntimeError, TypeError, ValueError):
@@ -322,6 +322,7 @@ def _darwin_command(
     spawn_argv: Callable[..., subprocess.Popen[Any]],
     terminate_group: Callable[[subprocess.Popen[Any]], int],
     capture_limit: int,
+    output_capture: click_process.OutputCapture | None = None,
 ) -> AuthoritativeExecution:
     injection_keys = (
         "DYLD_INSERT_LIBRARIES",
@@ -404,6 +405,9 @@ def _darwin_command(
             terminate_group=terminate_group,
             capture_limit=capture_limit,
             strict_pid_scope=True,
+            **({"spawn_suspended": lambda argv, **kwargs: output_capture.spawn(
+                click_observer_macos._spawn_suspended_macos, argv, **kwargs
+            )} if output_capture is not None else {}),
         )
     except Exception:
         # The collector owns a suspended-target transaction and reports
@@ -698,7 +702,30 @@ def _windows_command(
     )
 
 
+@click_process.termination_as_interrupt()
 def run_command(
+    argv: Sequence[str], *, capture_output: dict | None = None,
+    capture_limit_bytes: int = 65536, capture_tee: bool = False, **kwargs,
+) -> AuthoritativeExecution:
+    """Capture output and inputs from the same admitted target, on all backends."""
+    if capture_output is None:
+        return _run_command(argv, **kwargs)
+    output = click_process.OutputCapture(limit=capture_limit_bytes, tee=capture_tee)
+    spawner = kwargs.pop("spawn_argv", click_process.spawn_argv)
+    result = None
+    try:
+        result = _run_command(
+            argv, **kwargs, output_capture=output,
+            spawn_argv=lambda argv, **options: output.spawn(spawner, argv, **options),
+        )
+        return result
+    finally:
+        captured = output.finish(argv, result.exit_code if result else 130)
+        if captured is not None:
+            capture_output.update(status="complete", process=captured)
+
+
+def _run_command(
     argv: Sequence[str],
     *,
     workspace: Path,
@@ -713,8 +740,9 @@ def run_command(
     spawn_argv: Callable[..., subprocess.Popen[Any]] = click_process.spawn_argv,
     terminate_group: Callable[[subprocess.Popen[Any]], int] = click_process.terminate_process_group,
     capture_limit: int = MAX_AUTHORITATIVE_CAPTURE_BYTES,
+    output_capture: click_process.OutputCapture | None = None,
 ) -> AuthoritativeExecution:
-    """Execute one supported unittest argv and return a runner-token attestation."""
+    """Execute one supported Python test argv and return a runner attestation."""
     binding = _binding(binding_context)
 
     def fallback(reason: str) -> AuthoritativeExecution:
@@ -733,7 +761,7 @@ def run_command(
     ):
         return fallback("unsupported-runtime")
     profile = runtime.get("profile") if isinstance(runtime, dict) else None
-    if profile == click_observer_runtime.DARWIN_PROFILE:
+    if click_observer_runtime.profiles.PLATFORMS.get(profile) == "darwin":
         return _darwin_command(
             argv,
             workspace=workspace,
@@ -748,8 +776,9 @@ def run_command(
             spawn_argv=spawn_argv,
             terminate_group=terminate_group,
             capture_limit=capture_limit,
+            output_capture=output_capture,
         )
-    if profile == click_observer_runtime.WINDOWS_PROFILE:
+    if click_observer_runtime.profiles.PLATFORMS.get(profile) == "win32":
         return _windows_command(
             argv,
             workspace=workspace,
@@ -765,7 +794,7 @@ def run_command(
             terminate_group=terminate_group,
             capture_limit=capture_limit,
         )
-    if profile != click_observer_runtime.PROFILE:
+    if click_observer_runtime.profiles.PLATFORMS.get(profile) != "linux":
         return fallback("unsupported-runtime")
     if any(key in environment for key in (
         "LD_PRELOAD", "CLICK_NATIVE_OBSERVER_CHANNEL", "CLICK_NATIVE_OBSERVER_ROOT"
@@ -801,13 +830,14 @@ def run_command(
     stop_reader = threading.Event()
     child: subprocess.Popen[Any] | None = None
     started = False
+    cancelled = False
     exit_code = 127
     snapshot: click_observation_inputs.InputSnapshot | None = None
     try:
         os.mkfifo(native_fifo, mode=0o600)
         native_descriptor = os.open(native_fifo, os.O_RDWR | os.O_NONBLOCK | os.O_CLOEXEC)
         snapshot = click_observation_inputs.InputSnapshot(
-            observation_root, str(runtime["artifact_id"])
+            observation_root, str(runtime["artifact_id"]), profile=str(profile)
         )
         trace_reader = threading.Thread(
             target=click_observer_linux._read_fifo,
@@ -829,6 +859,7 @@ def run_command(
         click_process.target_started()
         exit_code = int(child.wait())
     except KeyboardInterrupt:
+        cancelled = True
         if child is not None:
             try:
                 terminate_group(child)
@@ -857,6 +888,8 @@ def run_command(
             os.close(native_descriptor)
         native_fifo.unlink(missing_ok=True)
         click_observer_linux._remove_trace_fifo(trace_directory, trace_fifo)
+        if cancelled:
+            raise KeyboardInterrupt
         return fallback("capture-failed")
 
     reasons: set[str] = set()
@@ -869,6 +902,8 @@ def run_command(
             truncated=trace_capture.truncated or trace_capture.failed,
             allow_runtime_getrandom=True,
             allow_workspace_root=True,
+            allow_python_seed=list(argv[1:3]) == ["-m", "pytest"],
+            require_process_lifecycle=True,
         )
         events, native_failed = _read_native_events(native_descriptor)
         if native_failed or not NORMAL_NATIVE_EVENTS.issubset(events):
@@ -907,8 +942,10 @@ def run_command(
             != runtime["backend"]["version"]
         ):
             reasons.add("backend-changed")
-    except (OSError, ValueError, RuntimeError, TypeError):
+    except (OSError, ValueError, RuntimeError, TypeError) as error:
         reasons.add("input-snapshot-failed")
+        if isinstance(error, click_observation_inputs.InputError) and re.fullmatch(r"[a-z-]{1,64}", str(error)):
+            print("[Click observer] input snapshot unavailable: " + str(error), file=sys.stderr, flush=True)
         records = []
         parsed = click_observer_linux.ParsedTrace(
             (), 0, 1, 0, False, False

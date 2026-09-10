@@ -227,7 +227,8 @@ class CIWorkflowGateTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         jobs = dict(re.findall(r"(?ms)^  ([a-z-]+):\n(.*?)(?=^  [a-z-]+:|\Z)", workflow.split("jobs:\n", 1)[1]))
         matrix_jobs = set(jobs) - {"changes", "repository-checks", "deterministic-tests"}
-        self.assertEqual(len(matrix_jobs), 10)
+        self.assertEqual(len(matrix_jobs), 11)
+        self.assertIn("framework-observation", matrix_jobs)
         for name in matrix_jobs:
             self.assertIn("needs: changes", jobs[name])
             self.assertIn("needs.changes.result != 'success'", jobs[name])
@@ -257,15 +258,16 @@ class CIWorkflowGateTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         script_path = Path(temporary.name) / "required-check.sh"
         script_path.write_text(script, encoding="utf-8", newline="\n")
-        cases = [("full", "success", "success", ["success"] * 10, True),
-                 ("docs", "success", "success", ["skipped"] * 10, True),
-                 ("release-metadata", "success", "success", ["skipped"] * 10, True),
-                 ("full", "success", "success", ["success"] * 9 + ["failure"], False),
-                 ("full", "success", "success", ["success"] * 9 + ["skipped"], False),
-                 ("docs", "failure", "success", ["skipped"] * 10, False),
-                 ("docs", "success", "cancelled", ["skipped"] * 10, False),
-                 ("full", "success", "success", ["success"] * 9, False),
-                 ("unknown", "success", "success", ["skipped"] * 10, False)]
+        count = len(re.findall(r"needs\.([a-z-]+)\.result", block.split("MATRIX_RESULTS: >-", 1)[1].split("run: |", 1)[0]))
+        cases = [("full", "success", "success", ["success"] * count, True),
+                 ("docs", "success", "success", ["skipped"] * count, True),
+                 ("release-metadata", "success", "success", ["skipped"] * count, True),
+                 ("full", "success", "success", ["success"] * (count - 1) + ["failure"], False),
+                 ("full", "success", "success", ["success"] * (count - 1) + ["skipped"], False),
+                 ("docs", "failure", "success", ["skipped"] * count, False),
+                 ("docs", "success", "cancelled", ["skipped"] * count, False),
+                 ("full", "success", "success", ["success"] * (count - 1), False),
+                 ("unknown", "success", "success", ["skipped"] * count, False)]
         for scope, plan, repository, results, passed in cases:
             with self.subTest(scope=scope, plan=plan, repository=repository, results=results):
                 env = {**os.environ, "CI_SCOPE": scope, "PLAN_RESULT": plan,

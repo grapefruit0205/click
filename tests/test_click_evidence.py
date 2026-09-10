@@ -362,6 +362,7 @@ class ClickEvidenceTests(unittest.TestCase):
         for field, value in (
             *[("verified_revision", value) for value in (-1, True, False, 0.0, 1.9, "0", None, [], {}, float("nan"), float("inf"))],
             ("status", []), ("status", {}), ("attempts", "0"),
+            *[("automatic_observation_required", value) for value in (0, 1, "true", None)],
         ):
             with self.subTest(field=field, value=value):
                 state = copy.deepcopy(valid)
@@ -393,6 +394,7 @@ class ClickEvidenceTests(unittest.TestCase):
                         locked_check_digest="b" * 64, verified_contract_digest="c" * 64)
         previous["future_extension"] = object()
         previous["verified_future_authority"] = True
+        previous["automatic_observation_required"] = True
         # This helper constructs candidates, not authority. The public
         # requalification boundary separately checks matching kind/declarations.
         current["kind"] = "hosted"
@@ -403,6 +405,7 @@ class ClickEvidenceTests(unittest.TestCase):
         self.assertEqual(candidate["status"], "ready")
         self.assertEqual(candidate["verified_revision"], -1)
         self.assertEqual(candidate["verified_at"], 123)
+        self.assertTrue(candidate["automatic_observation_required"])
         for field in ("attempts", "unchanged_failure_retries", "reserved_units", "successor_reuse_count"):
             self.assertEqual(candidate[field], 0)
         for field in ("reserved_check_digest", "locked_check_digest", "verified_contract_digest"):

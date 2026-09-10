@@ -21,6 +21,27 @@ else:  # Installed launchers execute hooks directly.
     __package__, "click_capability", "click_change_policy", "click_dependency_cache", "click_evidence", "click_evidence_shards", "click_host_coverage", "click_incremental"
 )
 
+def automatic_observation_required(source: dict[str, Any]) -> bool:
+    return bool(
+        source.get("automatic_observation_required", False)
+        or source.get("verified_dependency_provider") == click_dependency_cache.AUTOMATIC_PROVIDER_NAME
+    )
+
+
+def automatic_observation_missing(source: dict[str, Any]) -> bool:
+    receipt = source.get("verified_safe_change_receipt", {})
+    return bool(
+        automatic_observation_required(source)
+        and not click_dependency_cache.bound_dependency_observation_is_reusable(
+            source.get("verified_dependency_observation")
+        )
+        # A current, explicit owner input policy has its own admission checks.
+        # A path-only safe-change policy cannot replace lost input collection.
+        and not (click_change_policy.receipt_is_valid(receipt)
+                 and receipt.get("provider") == click_change_policy.INPUT_PROVIDER_NAME)
+    )
+
+
 def verification_receipt_matches(
     source: dict[str, Any],
     *,
@@ -59,6 +80,7 @@ def verification_receipt_matches(
         return False
     return bool(
         source.get("status") == "passed"
+        and not automatic_observation_missing(source)
         and source["verified_revision"] == revision
         and source.get("verified_contract_digest") == contract_digest
         and source.get("verified_check_digest") == group_digest
@@ -110,6 +132,30 @@ def dependency_observations(
                 "paths": list(observation["paths"]),
             }
     return observations
+
+
+def changed_observed_inputs(
+    sources: dict[str, Any], source_keys: set[str], *,
+    project: Path, runtime: dict[str, Any] | None,
+) -> set[str]:
+    """Invalidate admitted receipts after sibling execution; never grant reuse.
+
+    Admission already checked each source's current command and bindings. This
+    second boundary checks its captured inputs and runtime again, because an
+    executed sibling can change ignored data without changing the Git tree.
+    """
+    changed = set()
+    for source_key in source_keys:
+        observation = sources[source_key].get("verified_dependency_observation")
+        if not click_dependency_cache.bound_dependency_observation_is_reusable(observation):
+            continue
+        if not click_dependency_cache.bound_dependency_observation_matches(
+            observation, project=project, runtime=runtime,
+            binding={field: observation["binding"][field]
+                     for field in click_dependency_cache.AUTHORITATIVE_CURRENT_BINDING_FIELDS},
+        ):
+            changed.add(source_key)
+    return changed
 
 
 def binding_path_digest(path: Path) -> str:
@@ -173,7 +219,7 @@ def dependency_receipt_is_valid(receipt: Any) -> bool:
     manifest_is_valid = bool(
         isinstance(manifest_digest, str)
         and (
-            provider == click_dependency_cache.CONTRACT_PROVIDER_NAME
+            provider in {click_dependency_cache.CONTRACT_PROVIDER_NAME, click_dependency_cache.AUTOMATIC_PROVIDER_NAME}
             and not manifest_digest
             or provider
             in {
@@ -193,6 +239,10 @@ def dependency_receipt_is_valid(receipt: Any) -> bool:
         and isinstance(observation_digest, str)
         and re.fullmatch(r"[0-9a-f]{64}", observation_digest)
         and click_dependency_cache.dependency_observation_is_valid(observation)
+        and (
+            provider != click_dependency_cache.AUTOMATIC_PROVIDER_NAME
+            or click_dependency_cache.bound_dependency_observation_is_reusable(observation)
+        )
         and observation_digest
         == click_dependency_cache.dependency_observation_digest(observation)
         and click_dependency_cache.receipt_paths_are_valid(
@@ -272,6 +322,9 @@ def dependency_receipt_matches(
 
 
 def clear_dependency_receipt(source: dict[str, Any]) -> None:
+    # Capture loss must not silently weaken a prior automatic input boundary
+    # into a Git-only success receipt, including across successor lifecycles.
+    source["automatic_observation_required"] = automatic_observation_required(source)
     source["verified_dependency_provider"] = ""
     source["verified_dependency_manifest_digest"] = ""
     source["verified_dependency_entry_digest"] = ""
@@ -291,6 +344,7 @@ def store_dependency_receipt(
     if not dependency_receipt_is_valid(receipt):
         return
     source["verified_dependency_provider"] = receipt["provider"]
+    source["automatic_observation_required"] = automatic_observation_required(source)
     source["verified_dependency_manifest_digest"] = receipt["manifest_digest"]
     source["verified_dependency_entry_digest"] = receipt["entry_digest"]
     source["verified_dependency_digest"] = receipt["dependency_digest"]
@@ -405,6 +459,7 @@ def safe_change_receipt_matches(
     verified_at = source.get("verified_at", 0)
     return bool(
         source.get("status") == "stale"
+        and not automatic_observation_missing(source)
         and click_evidence.revision_is_valid(verified_revision)
         and verified_revision < revision
         and isinstance(verified_at, int)
@@ -495,6 +550,8 @@ def reuse_binding_reason(
         or source.get("verified_host_coverage") != host_coverage
     ):
         return "host-coverage-binding-changed"
+    if automatic_observation_missing(source):
+        return "observer-incomplete"
     return "receipt-invalid"
 
 
@@ -634,6 +691,8 @@ def mark_successor_reuse(
 
 
 def observation_nonreuse_reason(observation: Any) -> str:
+    if click_dependency_cache.conditional_dependency_observation_is_valid(observation):
+        return "observed-input-changed"
     if not click_dependency_cache.dependency_observation_is_valid(observation):
         return "observer-incomplete"
     if observation.get("provider") != (
@@ -699,6 +758,11 @@ def canonical_incremental_plan(
         else:
             selected = "run"
             authority = "runner"
+        conditional = (source_key in reused_keys and
+                       click_dependency_cache.conditional_dependency_observation_is_valid(
+                           source.get("verified_dependency_observation")))
+        if conditional:
+            authority = "conditional-js-observation"
         timing_binding = click_incremental.timing_binding_digest(
             source_key=source_key,
             check_digest=group_digests[source_key],
@@ -721,7 +785,7 @@ def canonical_incremental_plan(
             click_incremental.decision(
                 source_key=source_key,
                 decision=selected,
-                reason_code=reason_codes[source_key],
+                reason_code="conditional-observed-inputs-current" if conditional else reason_codes[source_key],
                 current_revision=revision,
                 previous_revision=previous_revisions[source_key],
                 check_digest=group_digests[source_key],

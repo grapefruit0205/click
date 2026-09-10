@@ -46,6 +46,12 @@ static PyCodeObject *runner_code = NULL;
 static PyCodeObject *program_code = NULL;
 static PyCodeObject *case_code = NULL;
 static char *project_root = NULL;
+static int pytest_mode = 0;
+static PyCodeObject *pytest_clocks[2];
+static PyCodeObject *pytest_capture[24];
+static int pytest_capture_count = 0;
+static PyCodeObject *pytest_session = NULL;
+static char *pytest_root = NULL;
 
 static int project_prefix(const char *filename) {
     size_t length;
@@ -136,6 +142,18 @@ static PyCodeObject *method_code(PyObject *module, const char *cls, const char *
 
 static int reporting_frame(PyFrameObject *frame) {
     PyCodeObject *code = PyFrame_GetCode(frame);
+    if (pytest_mode) {
+        int match = code == pytest_clocks[0] || code == pytest_clocks[1];
+        Py_DECREF(code);
+        PyFrameObject *back = PyFrame_GetBack(frame);
+        while (back) {
+            if (project_frame(back)) match = 0;
+            PyFrameObject *next = PyFrame_GetBack(back);
+            Py_DECREF(back);
+            back = next;
+        }
+        return match;
+    }
     int is_case = code == case_code;
     int match = code == runner_code || is_case;
     Py_XDECREF(code);
@@ -159,6 +177,18 @@ static int reporting_frame(PyFrameObject *frame) {
 static int profile_impl(PyObject *unused, PyFrameObject *frame, int event, PyObject *callable) {
     (void)unused;
     if (!active || installing) return 0;
+    if (pytest_mode && event == PyTrace_CALL) {
+        PyCodeObject *code = PyFrame_GetCode(frame);
+        const char *name = code ? PyUnicode_AsUTF8(code->co_name) : NULL;
+        const char *filename = code ? PyUnicode_AsUTF8(code->co_filename) : NULL;
+        const char *report_hooks[] = {"pytest_runtest_makereport", "pytest_runtest_logreport",
+            "pytest_report_teststatus", "pytest_terminal_summary", "pytest_sessionfinish",
+            "pytest_exception_interact", NULL};
+        int builtin = filename && pytest_root && !strncmp(filename, pytest_root, strlen(pytest_root));
+        if (!builtin && name) for (int index = 0; report_hooks[index]; ++index)
+            if (!strcmp(name, report_hooks[index])) note(9, "dynamic-runtime-introspection\n");
+        Py_XDECREF(code);
+    }
     if (event == PyTrace_CALL && project_frame(frame)) {
         PyCodeObject *code = PyFrame_GetCode(frame);
         const char *sensitive[] = {"_outcome", "collectedDurations", "__dict__", "__getattribute__",
@@ -169,13 +199,20 @@ static int profile_impl(PyObject *unused, PyFrameObject *frame, int event, PyObj
                 if (PyUnicode_CompareWithASCIIString(name, sensitive[entry]) == 0)
                     note(9, "dynamic-runtime-introspection\n");
         }
+        if (pytest_mode) {
+            const char *timing_names[] = {"duration", "_session_start", "perf_count", "as_utc", NULL};
+            for (Py_ssize_t index = 0; code && index < PyTuple_Size(code->co_names); ++index)
+                for (int entry = 0; timing_names[entry]; ++entry)
+                    if (PyUnicode_CompareWithASCIIString(PyTuple_GetItem(code->co_names, index), timing_names[entry]) == 0)
+                        note(9, "dynamic-runtime-introspection\n");
+        }
         Py_XDECREF(code);
     }
     if (event != PyTrace_C_CALL || !PyCFunction_Check(callable)) return 0;
     PyCFunction pointer = PyCFunction_GetFunction(callable);
     for (int index = 0; index < clock_count; ++index) {
         if (clock_functions[index] == pointer) {
-            if (pointer != reporting_clock || !reporting_frame(frame))
+            if ((!pytest_mode && pointer != reporting_clock) || !reporting_frame(frame))
                 note(2, "time-random-input\n");
             return 0;
         }
@@ -186,9 +223,9 @@ static int profile_impl(PyObject *unused, PyFrameObject *frame, int event, PyObj
     const char *name = ((PyCFunctionObject *)callable)->m_ml->ml_name;
     const char *nondeterministic[] = {
         "random", "getrandbits", "randbytes", "now", "today", "utcnow",
-        "uuid1", "uuid4", "token_bytes", "token_hex", "token_urlsafe", NULL
+        "uuid1", "uuid4", "token_bytes", "token_hex", "token_urlsafe", "seed", "getstate", NULL
     };
-    if (project_frame(frame))
+    if (pytest_mode || project_frame(frame))
         for (int index = 0; nondeterministic[index]; ++index)
             if (!strcmp(name, nondeterministic[index]))
                 note(2, "time-random-input\n");
@@ -203,8 +240,14 @@ static int profile_impl(PyObject *unused, PyFrameObject *frame, int event, PyObj
         if (thread_functions[index] == pointer)
             note(11, "concurrent-execution-unsupported\n");
     for (int index = 0; index < descriptor_count; ++index)
-        if (descriptor_functions[index] == pointer)
-            note(4, "descriptor-operation-needs-review\n");
+        if (descriptor_functions[index] == pointer) {
+            int capture = 0;
+            PyCodeObject *code = PyFrame_GetCode(frame);
+            for (int item = 0; item < pytest_capture_count; ++item)
+                if (code == pytest_capture[item]) capture = 1;
+            Py_DECREF(code);
+            if (!capture) note(4, "descriptor-operation-needs-review\n");
+        }
     return 0;
 }
 
@@ -268,6 +311,79 @@ static void install_profile(void) {
     Py_XDECREF(runner);
     Py_XDECREF(program);
     Py_XDECREF(test_case);
+    if (pytest_mode) {
+        /* Initialize the stdlib's unused default generator before installing
+           the profile. Subsequent seed/state/draw calls remain ineligible. */
+        PyObject *random = PyImport_ImportModule("random");
+        Py_XDECREF(random);
+        PyObject *pytest = PyImport_ImportModule("pytest");
+        PyObject *version = pytest ? PyObject_GetAttrString(pytest, "__version__") : NULL;
+        PyObject *timing = PyImport_ImportModule("_pytest.timing");
+        PyObject *filename = timing ? PyObject_GetAttrString(timing, "__file__") : NULL;
+        const char *location = filename && PyUnicode_Check(filename) ? PyUnicode_AsUTF8(filename) : NULL;
+        if (location) {
+#ifdef _WIN32
+            pytest_root = _strdup(location);
+#else
+            pytest_root = strdup(location);
+#endif
+            char *separator = pytest_root ? strrchr(pytest_root, '/') : NULL;
+#ifdef _WIN32
+            char *backslash = pytest_root ? strrchr(pytest_root, '\\') : NULL;
+            if (backslash && (!separator || backslash > separator)) separator = backslash;
+#endif
+            if (separator) separator[1] = '\0';
+            else { free(pytest_root); pytest_root = NULL; }
+        }
+        Py_XDECREF(filename);
+        PyObject *instant = timing ? PyObject_GetAttrString(timing, "Instant") : NULL;
+        PyObject *fields = instant ? PyObject_GetAttrString(instant, "__dataclass_fields__") : NULL;
+        const char *names[] = {"time", "perf_count"};
+        for (int index = 0; index < 2; ++index) {
+            PyObject *field = fields && PyDict_Check(fields) ? PyDict_GetItemString(fields, names[index]) : NULL;
+            PyObject *factory = field ? PyObject_GetAttrString(field, "default_factory") : NULL;
+            if (factory && PyFunction_Check(factory)) {
+                pytest_clocks[index] = (PyCodeObject *)PyFunction_GetCode(factory);
+                Py_INCREF(pytest_clocks[index]);
+            }
+            Py_XDECREF(factory);
+        }
+        PyObject *capture = PyImport_ImportModule("_pytest.capture");
+        const char *classes[] = {"FDCaptureBase", "FDCapture", "FDCaptureBinary", NULL};
+        const char *methods[] = {"__init__", "start", "done", "suspend", "resume", "writeorg", NULL};
+        if (capture) for (int cls = 0; classes[cls]; ++cls)
+            for (int method = 0; methods[method]; ++method) {
+                PyCodeObject *code = method_code(capture, classes[cls], methods[method]);
+                if (code) pytest_capture[pytest_capture_count++] = code;
+            }
+        PyObject *fault = PyImport_ImportModule("_pytest.faulthandler");
+        PyObject *function = fault ? PyObject_GetAttrString(fault, "pytest_configure") : NULL;
+        if (function && PyFunction_Check(function)) {
+            PyCodeObject *code = (PyCodeObject *)PyFunction_GetCode(function);
+            Py_INCREF(code);
+            pytest_capture[pytest_capture_count++] = code;
+        }
+        Py_XDECREF(function);
+        Py_XDECREF(fault);
+        PyObject *main = PyImport_ImportModule("_pytest.main");
+        function = main ? PyObject_GetAttrString(main, "wrap_session") : NULL;
+        if (function && PyFunction_Check(function)) {
+            pytest_session = (PyCodeObject *)PyFunction_GetCode(function);
+            Py_INCREF(pytest_session);
+        }
+        Py_XDECREF(function);
+        Py_XDECREF(main);
+        if (!version || !PyUnicode_Check(version) ||
+            (PyUnicode_CompareWithASCIIString(version, "8.4.2") != 0 &&
+             PyUnicode_CompareWithASCIIString(version, "9.1.1") != 0) ||
+            !pytest_root || !pytest_clocks[0] || !pytest_clocks[1]) note(5, "native-profile-unavailable\n");
+        Py_XDECREF(capture);
+        Py_XDECREF(fields);
+        Py_XDECREF(instant);
+        Py_XDECREF(timing);
+        Py_XDECREF(version);
+        Py_XDECREF(pytest);
+    }
     if (!runner_code || !program_code || !case_code || !reporting_clock ||
         !clock_count || !thread_count || PyErr_Occurred()) {
         note(5, "native-profile-unavailable\n");
@@ -289,14 +405,17 @@ static int audit_impl(const char *event, PyObject *args, void *data) {
             if (project_call) note(3, "observer-introspection-or-tampering\n");
         } else {
             PyObject *module = PyTuple_Size(args) > 0 ? PyTuple_GetItem(args, 0) : NULL;
-            if (module && PyUnicode_Check(module) && PyUnicode_CompareWithASCIIString(module, "unittest") == 0)
+            if (module && PyUnicode_Check(module) &&
+                (PyUnicode_CompareWithASCIIString(module, "unittest") == 0 ||
+                 PyUnicode_CompareWithASCIIString(module, "pytest") == 0)) {
+                pytest_mode = PyUnicode_CompareWithASCIIString(module, "pytest") == 0;
                 install_profile();
-            else note(5, "native-profile-unavailable\n");
+            } else note(5, "native-profile-unavailable\n");
         }
     }
     if (installing) return 0;
-    if (active && project_call && (!strcmp(event, "sys.setprofile") || !strcmp(event, "sys.settrace") ||
-                   !strcmp(event, "sys._getframe") || !strcmp(event, "sys._current_frames")))
+    if (active && (!strcmp(event, "sys.setprofile") || !strcmp(event, "sys.settrace") ||
+                   (project_call && (!strcmp(event, "sys._getframe") || !strcmp(event, "sys._current_frames")))))
         note(3, "observer-introspection-or-tampering\n");
     if (active && project_call && (!strcmp(event, "code.__new__") || !strcmp(event, "function.__new__")))
         note(3, "observer-introspection-or-tampering\n");
@@ -311,8 +430,12 @@ static int audit_impl(const char *event, PyObject *args, void *data) {
     if (!strncmp(event, "subprocess.", 11) || !strncmp(event, "os.fork", 7) ||
         !strncmp(event, "os.exec", 7) || !strncmp(event, "os.spawn", 8))
         note(10, "child-process-unsupported\n");
-    if (!strcmp(event, "os.chdir"))
-        note(7, "external-or-native-input\n");
+    if (!strcmp(event, "os.chdir")) {
+        PyCodeObject *code = current ? PyFrame_GetCode(current) : NULL;
+        if (!pytest_mode || !code || code != pytest_session)
+            note(7, "external-or-native-input\n");
+        Py_XDECREF(code);
+    }
     if (!strncmp(event, "ctypes.", 7) || !strncmp(event, "socket.", 7) ||
         !strncmp(event, "sqlite3.", 8))
         note(7, "external-or-native-input\n");

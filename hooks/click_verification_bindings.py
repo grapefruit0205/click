@@ -129,11 +129,15 @@ def verification_environment(*, cwd: Path) -> dict[str, str]:
 def observer_environment(
     environment: dict[str, str], verification: Any
 ) -> dict[str, str]:
-    """Bind the deterministic Python profile selected by authoritative mode."""
+    """Bind capture defaults without overriding explicit settings in auto mode."""
     normalized = dict(environment)
-    if click_observer_control.mode(verification) == "authoritative":
+    selected = click_observer_control.mode(verification)
+    if selected == "authoritative":
         normalized["PYTHONHASHSEED"] = "0"
         normalized["PYTHONDONTWRITEBYTECODE"] = "1"
+    elif selected == "auto" and isinstance(verification.get("authoritative_observer"), dict):
+        normalized.setdefault("PYTHONHASHSEED", "0")
+        normalized.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     return normalized
 
 

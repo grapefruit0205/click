@@ -53,10 +53,8 @@ class DistributionValidationTests(unittest.TestCase):
             (copied / "hooks").mkdir(parents=True)
             for source in (ROOT / "hooks").glob("*.py"):
                 shutil.copy2(source, copied / "hooks" / source.name)
-            shutil.copy2(
-                ROOT / "hooks" / "click_observer_native.c",
-                copied / "hooks" / "click_observer_native.c",
-            )
+            for name in distribution_builder.ANTIGRAVITY_EXTRA_HOOK_SOURCES:
+                shutil.copy2(ROOT / "hooks" / name, copied / "hooks" / name)
             (copied / "hooks" / "click_new_runtime.py").write_text(
                 "VALUE = 1\n", encoding="utf-8"
             )
