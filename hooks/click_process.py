@@ -88,6 +88,61 @@ class _BoundedStream:
         )
 
 
+class OutputCapture:
+    """Bounded output for an externally managed, one-time target execution.
+
+    Collectors own admission, waiting and cancellation. This object only owns
+    output pipes; collector diagnostics must never be passed through it.
+    """
+
+    def __init__(self, *, limit: int = 65536, tee: bool = False) -> None:
+        import sys
+        self.streams = [_BoundedStream(limit), _BoundedStream(limit)]
+        self.targets = [getattr(sys.stdout, "buffer", None), getattr(sys.stderr, "buffer", None)] if tee else [None, None]
+        self.readers: list[threading.Thread] = []
+        self.started = False
+
+    def spawn(self, spawner, argv, **kwargs):
+        # Explicit pipes belong to the collector, not the requested check.
+        if "stdout" in kwargs or "stderr" in kwargs:
+            return spawner(argv, **kwargs)
+        if self.started:
+            raise RuntimeError("target output capture already admitted")
+        pipes = []
+        try:
+            for _ in range(2):
+                read_fd, write_fd = os.pipe()
+                pipes.append((os.fdopen(read_fd, "rb", buffering=0), os.fdopen(write_fd, "wb", buffering=0)))
+            for index, (source, sink) in enumerate(pipes):
+                reader = threading.Thread(target=_drain_stream, args=(source, self.streams[index], self.targets[index]), daemon=True)
+                self.readers.append(reader)
+                reader.start()
+            # Reader preparation can fail. Finish it before admitting the
+            # target so callers may safely use their pre-start fallback.
+            child = spawner(argv, **kwargs, stdout=pipes[0][1], stderr=pipes[1][1])
+            self.started = True
+            for _, sink in pipes:
+                try:
+                    sink.close()
+                except OSError:
+                    pass  # A launched target must never be reported unstarted.
+            return child
+        except BaseException:
+            for source, sink in pipes:
+                source.close()
+                sink.close()
+            raise
+
+    def finish(self, argv, returncode: int) -> CapturedProcess | None:
+        if not self.started:
+            return None
+        for index, reader in enumerate(self.readers):
+            reader.join(timeout=3)
+            if reader.is_alive():
+                self.streams[index].reader_error = True
+        return CapturedProcess(list(argv), int(returncode), *(stream.result() for stream in self.streams))
+
+
 def _drain_stream(
     source: BinaryIO,
     retained: _BoundedStream,

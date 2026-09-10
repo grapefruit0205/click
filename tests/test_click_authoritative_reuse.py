@@ -49,9 +49,8 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         cls.build = observer_runtime.prepare(ROOT)
         cls.runtime = observer_runtime.control_state(cls.build)
 
-    @classmethod
-    def tearDownClass(cls) -> None:
-        observer_runtime.discard(cls.runtime)
+    # The content-addressed companion is shared with other test processes and
+    # live sessions. This class owns its fixtures, not the cached runtime.
 
     def environment(self) -> dict[str, str]:
         value = {
@@ -522,7 +521,7 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
         runtime = observer_runtime.state_from_verification(state["verification"])
         self.assertIsNotNone(runtime)
         assert runtime is not None
-        self.addCleanup(observer_runtime.discard, runtime)
+        # Do not delete a cached companion another process may still be using.
         return state
 
     def mark_patch(self, path: Path, old: str, new: str, tool_id: str) -> None:

@@ -1,8 +1,8 @@
-"""Explicit preparation of the native CPython observation companion.
+"""Local preparation of the native CPython observation companion.
 
-Preparation is an authorized implementation/build operation, never an implicit
-installation hook or a verification-time compiler invocation. Its artifact is
-an input to later observation, not an observation or reuse authorization.
+Automatic preparation uses installed tools once per lifecycle and caches the
+artifact outside the project. It installs nothing and never blocks the original
+check on failure. The artifact is an input, not evidence or reuse authorization.
 """
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ PROFILE = observation_inputs.PROFILE
 DARWIN_PROFILE = observation_inputs.DARWIN_PROFILE
 WINDOWS_PROFILE = observation_inputs.WINDOWS_PROFILE
 PROFILES = observation_inputs.PROFILES
+profiles = observation_inputs.profiles
 STATE_FIELD = "authoritative_observer"
 STATE_VERSION = 1
 SUPPORTED_STRACE_VERSION = "6.8"
@@ -45,17 +46,11 @@ STATE_FIELDS = frozenset({
     "compiler_digest", "backend",
 })
 BACKEND_FIELDS = frozenset({"name", "version", "digest"})
-PROFILE_BACKENDS = {
-    PROFILE: ("strace", SUPPORTED_STRACE_VERSION),
-    DARWIN_PROFILE: ("fs_usage", None),
-    WINDOWS_PROFILE: ("windows-etw", None),
-}
-ARTIFACT_NAMES = {
-    PROFILE: "monitor.so",
-    DARWIN_PROFILE: "_click_observer_companion.so",
-    WINDOWS_PROFILE: "_click_observer_companion.pyd",
-}
-BOOTSTRAP_PROFILES = frozenset({DARWIN_PROFILE, WINDOWS_PROFILE})
+PROFILE_BACKENDS = profiles.BACKENDS
+ARTIFACT_NAMES = {profile: {"linux": "monitor.so", "darwin": "_click_observer_companion.so",
+                           "win32": "_click_observer_companion.pyd"}[platform]
+                  for profile, platform in profiles.PLATFORMS.items()}
+BOOTSTRAP_PROFILES = frozenset(profile for profile, platform in profiles.PLATFORMS.items() if platform != "linux")
 
 
 def _digest_file(path: Path) -> str:
@@ -147,28 +142,24 @@ def _windows_identity(project: Path) -> tuple[tuple[Path, Path], dict]:
 
 
 def _profile_for_current_runtime() -> str:
-    return {
-        "linux": PROFILE,
-        "darwin": DARWIN_PROFILE,
-        "win32": WINDOWS_PROFILE,
-    }.get(sys.platform, "")
+    return profiles.current()
 
 
 def _backend_identity(project: Path, profile: str) -> tuple[object, dict]:
-    if profile == PROFILE:
+    if profiles.PLATFORMS.get(profile) == "linux":
         return _strace_identity(project)
-    if profile == DARWIN_PROFILE:
+    if profiles.PLATFORMS.get(profile) == "darwin":
         return _darwin_identity(project)
-    if profile == WINDOWS_PROFILE:
+    if profiles.PLATFORMS.get(profile) == "win32":
         return _windows_identity(project)
     raise inventory.AnalysisError("unsupported-native-runtime")
 
 
 def _compiler_identity(project: Path, profile: str) -> tuple[Path, str]:
-    name = "cl" if profile == WINDOWS_PROFILE else "cc"
+    name = "cl" if profiles.PLATFORMS.get(profile) == "win32" else "cc"
     compiler = inventory.trusted_executable(name, project)
     digest = _digest_file(compiler)
-    if profile == WINDOWS_PROFILE:
+    if profiles.PLATFORMS.get(profile) == "win32":
         linker = inventory.trusted_executable("link", project)
         digest = hashlib.sha256(
             f"cl:{digest}\nlink:{_digest_file(linker)}\n".encode("ascii")
@@ -178,6 +169,23 @@ def _compiler_identity(project: Path, profile: str) -> tuple[Path, str]:
 
 def _source_digest(profile: str) -> str:
     native = _digest_file(Path(__file__).with_name("click_observer_native.c"))
+    # A compiler can produce an identical artifact against incompatible header
+    # or interpreter versions. Bind those inputs before cache lookup and reuse.
+    include = Path(sysconfig.get_path("include"))
+    headers = [(str(path.relative_to(include)), _digest_file(path))
+               for path in sorted(include.rglob("*.h")) if path.is_file()]
+    native = hashlib.sha256(json.dumps({
+        "native": native, "rules": {
+            name: _digest_file(Path(__file__).with_name(name)) for name in (
+                "click_observer_profiles.py", "click_observation_inputs.py",
+                "click_observer_process_tree.py", "click_authoritative_observer.py",
+                "click_observer_linux.py", "click_observer_macos.py", "click_observer_windows.py",
+                "click_observer_runtime.py", "click_dependency_cache.py", "click_process.py",
+            )
+        },
+        "python": sys.version, "soabi": sysconfig.get_config_var("SOABI"),
+        "executable": _digest_file(Path(sys.executable).resolve()), "headers": headers,
+    }, sort_keys=True).encode()).hexdigest()
     if profile not in BOOTSTRAP_PROFILES:
         return native
     bootstrap = _digest_file(
@@ -193,7 +201,7 @@ def _build_environment(root: Path, profile: str) -> dict[str, str]:
         "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "COMPILER_PATH",
         "GCC_EXEC_PREFIX", "DEPENDENCIES_OUTPUT", "GCONV_PATH",
     }
-    if profile != WINDOWS_PROFILE:
+    if profiles.PLATFORMS.get(profile) != "win32":
         rejected.add("LIBRARY_PATH")
     environment = {
         key: value
@@ -217,19 +225,19 @@ def _build_command(
     source: Path,
     artifact: Path,
 ) -> list[str]:
-    if profile == PROFILE:
+    if profiles.PLATFORMS.get(profile) == "linux":
         return [
             str(compiler), "-std=c11", "-shared", "-fPIC", "-O2", "-Wall",
             "-Wextra", "-Werror", "-Wl,--build-id=none", "-I", str(include),
             str(source), "-o", str(artifact), "-ldl",
         ]
-    if profile == DARWIN_PROFILE:
+    if profiles.PLATFORMS.get(profile) == "darwin":
         return [
             str(compiler), "-std=c11", "-bundle", "-fPIC", "-O2", "-Wall",
             "-Wextra", "-Werror", "-Wl,-undefined,dynamic_lookup", "-I",
             str(include), str(source), "-o", str(artifact),
         ]
-    if profile == WINDOWS_PROFILE:
+    if profiles.PLATFORMS.get(profile) == "win32":
         library = Path(sys.base_prefix) / "libs"
         python_library = library / "python312.lib"
         if not python_library.is_file():
@@ -311,9 +319,7 @@ def validate(project: Path, value: object) -> Path | None:
     try:
         root = inventory.project_root(project)
         if (
-            value["profile"] != _profile_for_current_runtime()
-            or sys.implementation.name != "cpython"
-            or sys.version_info[:3] != (3, 12, 3)
+            not profiles.supported(value["profile"])
         ):
             return None
         artifact = artifact_path(value)
@@ -383,8 +389,7 @@ def prepare(project: Path, *, profile: str | None = None) -> dict:
     if (
         selected not in PROFILES
         or selected != _profile_for_current_runtime()
-        or sys.implementation.name != "cpython"
-        or sys.version_info[:3] != (3, 12, 3)
+        or not profiles.supported(selected)
     ):
         raise inventory.AnalysisError("unsupported-native-runtime")
     source = Path(__file__).with_name("click_observer_native.c")
@@ -509,6 +514,61 @@ def main() -> int:
         reason = str(error) if isinstance(error, inventory.AnalysisError) else "native-build-unavailable"
         print(json.dumps({"status": "unavailable", "reason": reason, "authority": False}))
         return 2
+
+
+def prepare_automatic(project: Path, verification: dict, groups: dict) -> None:
+    """Prepare once per lifecycle; failure never prevents normal verification.
+
+    This state is only a local capability result. Every execution/reuse still
+    validates the artifact, backend, runtime and complete signed input records.
+    An explicit observer auto control clears the attempt for a provisioning retry.
+    """
+    if state_from_verification(verification) is not None:
+        return
+    if verification.get("automatic_observer_attempt"):
+        return
+    candidates = [checks[0].get("argv", []) for checks in groups.values() if len(checks) == 1]
+    if not any(
+        len(argv) >= 3 and argv[1] == "-m" and argv[2] in {"unittest", "pytest"}
+        for argv in candidates
+    ):
+        return
+    if any(
+        os.environ.get(key, default) != default
+        for key, default in (("PYTHONHASHSEED", "0"), ("PYTHONDONTWRITEBYTECODE", "1"))
+    ):
+        verification["automatic_observer_attempt"] = {
+            "status": "unavailable", "reason": "deterministic-environment-required",
+        }
+        return
+    try:
+        root = inventory.project_root(project)
+        if (root / ".click" / "evidence-reuse.json").exists():
+            # An owner already selected a reuse route. Do not silently replace
+            # its scoped baseline with coarser automatic directory observations.
+            # This disables optional capture only; policy validity is still
+            # checked by the existing reuse engine. Explicit capture is allowed.
+            verification["automatic_observer_attempt"] = {
+                "status": "unavailable", "reason": "owner-reuse-policy-selected",
+            }
+            return
+        executable = Path(sys.executable).resolve(strict=True)
+        if not any(
+            len(argv) >= 3 and argv[1] == "-m" and argv[2] in {"unittest", "pytest"}
+            and inventory.trusted_executable(argv[0], root).resolve(strict=True) == executable
+            for argv in candidates
+        ):
+            return
+        value = control_state(prepare(project))
+        if validate(project, value) is None:
+            raise inventory.AnalysisError("native-companion-unavailable")
+        verification[STATE_FIELD] = value
+        verification["automatic_observer_attempt"] = {"status": "available", "reason": ""}
+    except Exception as error:
+        verification["automatic_observer_attempt"] = {
+            "status": "unavailable", "reason": str(error) if isinstance(error, inventory.AnalysisError)
+            else "native-preparation-unavailable",
+        }
 
 
 if __name__ == "__main__":

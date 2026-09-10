@@ -42,6 +42,7 @@ AUTHORITY_SOURCES = frozenset(
         "runner",
         "exact-receipt",
         "runtime-dependency-observation",
+        "conditional-js-observation",
         "repository-safe-change-policy",
         "none",
     }
@@ -55,6 +56,7 @@ REASON_CODES = frozenset(
         "successor-evidence-scope-mismatch",
         "successor-evidence-integrity-invalid",
         "observed-dependencies-unchanged",
+        "conditional-observed-inputs-current",
         "safe-change-policy-covered",
         "no-passing-evidence",
         "previous-verification-failed",
@@ -87,7 +89,7 @@ TIMING_BINDING_VERSION = 1
 TIMING_UNIT = "ms"
 TIMING_MEASUREMENT_SCOPE = "source-command-dispatch-through-return"
 TIMING_EXECUTION_MODEL = "sequential"
-TIMING_OBSERVER_MODES = frozenset({"off", "shadow", "authoritative"})
+TIMING_OBSERVER_MODES = frozenset({"off", "shadow", "authoritative", "auto", "runtime"})
 _LEGACY_BASELINE_FIELDS = frozenset({
     "duration_ms", "revision", "check_digest", "observed_at", "batch_id",
     "sample_count",
@@ -362,6 +364,7 @@ EXECUTION_REASONS = frozenset({
     "plan-not-created", "reuse-applied", "command-started", "command-passed",
     "command-failed", "command-interrupted", "command-error",
     "preceding-check-stopped", "workspace-invalidated", "outcome-unconfirmed",
+    "observed-input-changed",
     "reservation-expired",
     "user-cancelled",
     "not-requested",
@@ -2157,6 +2160,10 @@ def host_summary(verification: Any) -> str:
         if ratio is None
         else f"약 {100 * ratio:.2f}".rstrip("0").rstrip(".") + "%"
     )
+    conditional_count = sum(item["status"] == "reused" and item.get("authority_source") == "conditional-js-observation"
+                            for item in batch["sources"])
+    limitation = (f" 조건부 JS 재사용 {conditional_count}개: 관찰 범위 기반 / 입력 완전성 미보증."
+                  if conditional_count else "")
     return (
         f"[Click 결과] {headline}; "
         f"재사용으로 생략한 테스트 실행시간: {omitted_text}; "
@@ -2166,6 +2173,7 @@ def host_summary(verification: Any) -> str:
         f"시간 근거 커버리지 {timed_reused}/{actual_reused} · "
         f"이전 계약 재판정 {prior}개; "
         "과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외."
+        + limitation
     )
 
 
@@ -2201,7 +2209,10 @@ def decision_is_valid(value: Any) -> bool:
         "not-evaluable": "none",
     }[selected]
     return bool(
-        authority == expected_authority
+        (authority == expected_authority or
+         authority == "conditional-js-observation" and selected in REUSE_DECISIONS)
+        and (authority != "conditional-js-observation" or value["reason_code"] == "conditional-observed-inputs-current")
+        and (value["reason_code"] != "conditional-observed-inputs-current" or authority == "conditional-js-observation")
         and (selected in REUSE_DECISIONS or avoided == 0)
     )
 
@@ -2352,6 +2363,7 @@ def record_execution(
     verification: dict[str, Any], source_durations_ms: dict[str, Any], *,
     source_results: dict[str, dict[str, Any]] | None = None,
     reused_keys: Iterable[str] = (), exit_code: int | None = None,
+    invalidated_reuse_keys: Iterable[str] = (),
     runner_duration_ms: float | None = None, workspace_changed: bool = False,
 ) -> bool:
     """Record witnessed outcomes, never derive executions from a plan."""
@@ -2395,6 +2407,8 @@ def record_execution(
                 runner_duration_ms=runner_duration_ms,
             )
     reused = set(reused_keys) if not workspace_changed else set()
+    invalidated_reuse = set(invalidated_reuse_keys)
+    reused.difference_update(invalidated_reuse)
     for source in batch["sources"]:
         key = source["source_key"]
         result = source_results.get(key)
@@ -2473,14 +2487,13 @@ def record_execution(
             source.update(status="reused", execution_reason_code="reuse-applied")
             _mark_unstarted_commands(source, "reuse-applied")
         else:
-            source.update(status="not-run", execution_reason_code=(
-                "workspace-invalidated" if workspace_changed else "preceding-check-stopped"
-            ))
-            _mark_unstarted_commands(
-                source,
+            reason = (
                 "workspace-invalidated" if workspace_changed
-                else "preceding-check-stopped",
+                else "observed-input-changed" if key in invalidated_reuse
+                else "preceding-check-stopped"
             )
+            source.update(status="not-run", execution_reason_code=reason)
+            _mark_unstarted_commands(source, reason)
     source_statuses = {source["status"] for source in batch["sources"]}
     batch["status"] = (
         "interrupted"

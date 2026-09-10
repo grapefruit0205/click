@@ -85,7 +85,7 @@ Click checks the exact command, workspace and mutation state, relevant inputs, e
 | --- | --- |
 | Same revision | A successful receipt for the exact check whose current bindings still match. |
 | Committed safe-change policy | An unchanged `.click/evidence-reuse.json` policy committed **before the baseline**, permitting every net changed path for that exact check. No Observer is required. |
-| Authoritative input observation | A complete signed input snapshot from a supported, explicitly enabled Guarded run, with all reuse conditions rechecked. |
+| Authoritative input observation | A complete signed input snapshot from supported automatic Evidence capture or an approved Guarded run, with all reuse conditions rechecked. |
 
 For example, if a policy for the exact authentication test command was committed before revision 12 and permits `README.md` changes:
 
@@ -98,6 +98,13 @@ revision 14  authentication code changed → run again; the policy does not allo
 An unlisted path, changed policy, ambiguous Git state, changed executable or environment, or later workspace drift requires real execution. The safe-change declaration is repository-owner policy, not automatic dependency discovery.
 
 The optional `.click/evidence-dependencies.json` map, or dependencies in an approved Guarded contract, declares candidate input boundaries. A map alone does not establish observation authority. Approval-bound contract dependencies and concrete manifest paths remain hard dependencies; complete authoritative observation can refine expanding manifest patterns. For this observation-based route, missing or incomplete authority cannot justify reuse after a mutation. See [verification profiles and reuse rules](skills/click/references/verification-profiles.md) and [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md).
+
+With no dependency policy, supported automatic Evidence capture can establish a
+complete input receipt for each check. Changed or uncertain children execute;
+unaffected children may reuse. Recorded inputs are rechecked even for identical
+Git trees, including ignored data. This is profile-limited, not a claim that all
+project inputs or external services can be discovered. Parent splitting still
+uses the existing automatic-sharding workflow.
 
 A committed [Evidence Shards map](skills/click/references/evidence-shards-v1.md) can split an exact parent suite into children. A passed sibling can remain reusable while another fails, subject to the same per-child rules. Invalid maps fall back to the original suite.
 
@@ -140,7 +147,7 @@ A recognized-only profile is not a claim that its native toolchain passed. Runti
 
 ## Can Observer stay off?
 
-**Yes. Off is the default.** Evidence recording, ordinary verification, the dashboard, and qualifying exact-receipt or safe-change reuse work with Observer off.
+**Yes.** New Evidence tasks select automatic capture for supported checks; Guarded defaults to off. Evidence recording, ordinary verification, the dashboard, and qualifying exact-receipt or safe-change reuse work with Observer off. An explicit off selection survives completed Evidence turns in the same session.
 
 ```text
 click-gate observer status
@@ -149,10 +156,21 @@ click-gate observer off
 
 Optional modes have different purposes:
 
+- `click-gate observer auto` prepares available local capture once, without installing tools or asking for privileges. With no owner dependency policy, complete signed inputs can support reuse without writing JSON. Incomplete capture leaves the original check running normally.
 - `click-gate observer shadow` collects non-authoritative telemetry on supported Linux, macOS, and Windows backends. Predictions never authorize reuse.
-- `click-gate observer authoritative` requires a separately approved Guarded contract, a supported direct CPython **3.12.3** unittest command, and the platform's native prerequisites. Enabling it alone is insufficient: reuse requires a complete signed observation.
+- `click-gate observer authoritative` explicitly prepares capture in active Evidence or an approved Guarded contract. Native profiles cover CPython **3.12.3–3.12.14** with direct `python -m unittest` or supported `python -m pytest` commands. Runtime, platform and input completeness still determine eligibility; enabling the mode grants no reuse.
+
+Output retention and input observation share one execution, including actionable diagnostics. The pytest input profile covers versions 8.4.2 and 9.1.1; cache writes, capture files, timing-sensitive plugins or workers can leave a check ineligible. Click preserves its original options and result. In automatic mode, Node/Vitest/Jest collect file and worker **candidates** with bounded diagnostic attempts; eligible seeds continue learning on requested executions. Raw candidates do not authorize reuse; separately attested conditional receipts can permit reuse without claiming input completeness. See [framework rollout and limits](docs/architecture/automatic-observation.md).
+
+Default `auto` verification also collects Linux Node 22.23.2 clock, random and shared-memory diagnostics, including workers and VM contexts, on the first actual execution of each check. Selected APIs record consumed-value digests; a matching native reader adds per-realm PRNG state and shared-byte samples. These samples do not prove all JavaScript inputs complete. Existing verified receipts and committed repository input policies continue to permit automatic reuse; raw diagnostics alone do not supply JavaScript reuse authority. `observer runtime` explicitly retries collection. See [default collection, conditional reuse and limits](docs/architecture/node-runtime-observation.md).
 
 Linux strace 6.8, macOS privileged `fs_usage`, and Windows inbox ETW profiles have native-host validation records. The automatic-sharding E2E record is Linux-scoped. Click does not install prerequisites or elevate privileges. Incomplete observation preserves the test's actual result, but does not establish future reuse authority. See [platform requirements and validation scope](skills/click/references/authoritative-observer-v2.md).
+
+Automatic preparation respects existing `evidence-reuse.json` owner policy.
+Structured diagnostics and bounded failure collection retain output from the
+same execution used for native input capture.
+
+Default JavaScript observation can also produce **conditional reuse** receipts without owner JSON: two normally requested executions establish an unchanged observed input set, and later requests recheck it. The dashboard and reports disclose that input completeness is unproven. Known dynamic inputs and collection gaps execute their child; some Vitest/Jest and worker invocations remain ineligible. See [conditional scope and limits](docs/architecture/node-runtime-observation.md).
 
 ## Dashboard: results and measured effect
 

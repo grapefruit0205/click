@@ -491,6 +491,8 @@
   "첫 기준 실행의 parent와 순차 shards 비교입니다. 절감 시간으로 집계하지 않습니다.": "Comparison of the parent command and sequential shards in the first baseline run. Not counted as time saved.",
   "Observer: Shadow 켜짐": "Observer: Shadow on",
   "Observer: 꺼짐": "Observer: off",
+  "Observer: 자동": "Observer: automatic",
+  "지원 환경에서 입력을 자동 수집합니다. 근거가 불완전한 묶음은 그대로 실행합니다.": "Inputs are collected automatically on supported environments. Checks with incomplete evidence still execute.",
   "완전하고 현재 계약에 결합된 v2 관찰만 observed-input 재사용 권한이 됩니다.": "Only complete v2 observations bound to the current contract grant observed-input reuse authority.",
   "예측 정확도를 측정하지만 검사 생략 권한은 만들지 않습니다.": "Measures prediction accuracy but does not grant permission to skip checks.",
   "Dashboard는 계속 볼 수 있으며 기존 exact·policy reuse는 정상 동작합니다.": "The dashboard remains available, and existing exact/policy reuse continues to work.",
@@ -631,5 +633,9 @@
   "현재는 원래 parent 검증을 계속 사용하세요.": "Continue using the original parent verification for now.",
   "표시된 설정 오류를 고친 뒤 상태를 다시 확인하세요.": "Fix the reported setup error, then check status again.",
   "같은 상태는 exact 근거로 재사용하고, 변경된 검사는 실행합니다. Observer는 선택 사항입니다.": "Reuse exact evidence for the same state and run checks affected by changes. Observer is optional.",
-  "현재 exact·정책·관찰 근거에 맞춰 실행하거나 재사용할 수 있습니다.": "Checks can now run or reuse results according to current exact, policy, and observation evidence."
+  "현재 exact·정책·관찰 근거에 맞춰 실행하거나 재사용할 수 있습니다.": "Checks can now run or reuse results according to current exact, policy, and observation evidence.",
+  "Observer: 런타임 진단": "Observer: runtime diagnostics",
+  "시간·난수·공유 메모리 사용을 진단합니다. 이 관찰로 재사용을 허용하지 않습니다.": "Diagnose clock, random and shared-memory use. This observation does not authorize reuse.",
+  "조건부 재사용: 관찰된 파일·환경이 유지됩니다. 미관찰 입력은 보증하지 않으며 입력 완전성은 미검증입니다.": "Conditional reuse: observed files and environment are unchanged. Unobserved inputs are not guaranteed; input completeness is unproven.",
+  "조건부 JS 재사용 {0}개 · 관찰 범위 기반 / 입력 완전성 미보증": "Conditional JS reuse: {0} checks · observed inputs only / completeness unproven"
 }

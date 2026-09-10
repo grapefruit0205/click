@@ -144,6 +144,7 @@
     'successor-evidence-safe-change-covered': '이전 작업의 실제 통과 결과를 가져와, 사전에 커밋된 안전 변경 정책이 이번 변경을 허용하는지 다시 확인해 재사용했습니다.',
     'successor-evidence-scope-mismatch': '이전 결과가 현재 호스트 세션과 작업 공간의 후속 작업 범위에 속하지 않아 실제 검사를 실행했습니다.',
     'successor-evidence-integrity-invalid': '이전 실행 사실의 무결성이나 출처를 확인할 수 없어 실제 검사를 실행했습니다.',
+    'conditional-observed-inputs-current': '조건부 재사용: 관찰된 파일·환경이 유지됩니다. 미관찰 입력은 보증하지 않으며 입력 완전성은 미검증입니다.',
     'observed-dependencies-unchanged': '이 검사가 실제로 읽었던 입력이 바뀌지 않아 이전 통과 결과를 재사용했습니다.',
     'safe-change-policy-covered': '저장소 소유자가 미리 허용한 안전 변경 범위 안이라 이전 결과를 재사용했습니다.',
     'no-passing-evidence': '재사용할 수 있는 이전 통과 결과가 없어 실제 검사를 실행했습니다.',
@@ -301,7 +302,9 @@
     $('executedDuration').textContent = view.executedText;
     $('reductionRate').textContent = view.reductionText;
     $('comparisonGuidance').textContent = view.guidance;
-    $('comparisonGuidance').hidden = view.comparisonReady;
+    const conditionalCount=(batch?.sources || []).filter(item=>item.status==='reused' && item.authority_source==='conditional-js-observation').length;
+    $('comparisonGuidance').hidden = view.comparisonReady && !conditionalCount;
+    if(conditionalCount) $('comparisonGuidance').textContent = msg`조건부 JS 재사용 ${conditionalCount}개 · 관찰 범위 기반 / 입력 완전성 미보증`;
     if (view.state === 'no-reuse') $('comparisonGuidance').textContent += ' '+[...new Set((batch?.sources || []).map(item=>reasonFor({...item,execution_status:item.status})))].slice(0,2).join(' ');
     $('fullBar').style.width = view.comparisonReady ? '100%' : '0';
     $('executedBar').style.width = view.comparisonReady ? `${view.currentPercent}%` : '0';
@@ -905,6 +908,8 @@
     const view=outcomePresentation(batch,summary,savings);
     const taskView=taskEfficiencyPresentation();
     const lines=[view.complete ? view.summaryText : `${view.heroValue} · ${view.summaryText}`];
+    const conditional=(batch?.sources || []).filter(item=>item.status==='reused' && item.authority_source==='conditional-js-observation').length;
+    if(conditional) lines.push(msg`조건부 JS 재사용 ${conditional}개 · 관찰 범위 기반 / 입력 완전성 미보증`);
     if(view.complete && summary.authoritative_reuse_count>0 && Number.isFinite(savings.omitted_test_execution_ms))
       lines.push(msg`절감 시간: ${estimatedDuration(savings.omitted_test_execution_ms)} [${savings.omitted_test_execution_status==='partial'?msg('부분 추정'):msg('추정')}]${savings.omitted_test_execution_status==='partial'?msg` · 시간 근거 ${view.coverageText}개`:''}.`);
     else lines.push(msg`절감 시간: ${view.heroValue} · ${view.heroStatus}`);
@@ -1161,9 +1166,15 @@
     $('shadowTiming').textContent = `${fmt(shadow.potential_ms)} / ${fmt(shadow.observer_overhead_ms)}`;
     $('observerTitle').textContent = data.task.observer_mode === 'authoritative'
       ? 'Observer: authoritative'
+      : data.task.observer_mode === 'auto' ? msg('Observer: 자동')
+      : data.task.observer_mode === 'runtime' ? msg('Observer: 런타임 진단')
       : data.task.observer_mode === 'shadow' ? msg('Observer: Shadow 켜짐') : msg('Observer: 꺼짐');
     $('observerBody').textContent = data.task.observer_mode === 'authoritative'
       ? msg('완전하고 현재 계약에 결합된 v2 관찰만 observed-input 재사용 권한이 됩니다.')
+      : data.task.observer_mode === 'auto'
+        ? msg('지원 환경에서 입력을 자동 수집합니다. 근거가 불완전한 묶음은 그대로 실행합니다.')
+      : data.task.observer_mode === 'runtime'
+        ? msg('시간·난수·공유 메모리 사용을 진단합니다. 이 관찰로 재사용을 허용하지 않습니다.')
       : data.task.observer_mode === 'shadow'
         ? msg('예측 정확도를 측정하지만 검사 생략 권한은 만들지 않습니다.')
         : msg('Dashboard는 계속 볼 수 있으며 기존 exact·policy reuse는 정상 동작합니다.');

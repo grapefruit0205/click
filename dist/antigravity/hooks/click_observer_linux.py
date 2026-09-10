@@ -365,6 +365,8 @@ def parse_strace(
     truncated: bool = False,
     allow_runtime_getrandom: bool = False,
     allow_workspace_root: bool = False,
+    allow_python_seed: bool = False,
+    require_process_lifecycle: bool = False,
 ) -> ParsedTrace:
     """Parse bounded strace text into repository-relative aggregate inputs."""
     try:
@@ -377,6 +379,14 @@ def parse_strace(
     except (OSError, ValueError):
         initial = root
 
+    if require_process_lifecycle:
+        if __package__:
+            from . import click_observer_process_tree
+        else:
+            import click_observer_process_tree
+        tree = click_observer_process_tree.inspect(raw, truncated=truncated)
+        raw = tree.trace
+        truncated = truncated or not tree.complete
     cwd_by_pid: dict[str, Path] = {"root": initial}
     inputs: dict[str, dict[str, Any]] = {}
     absolute_inputs: dict[str, dict[str, Any]] = {}
@@ -386,6 +396,7 @@ def parse_strace(
     unresolved = 1 if truncated else 0
     child_processes = 0
     root_exec_observed = False
+    seed_seen = False
 
     def add_path(
         path: Path | None,
@@ -503,6 +514,12 @@ def parse_strace(
             # The runner separately binds the canonical cwd.
             continue
         if (
+            call == "getrandom" and allow_python_seed and not seed_seen
+            and returned == 2496 and re.search(r",\s*2496,\s*GRND_NONBLOCK\s*$", arguments)
+        ):
+            seed_seen = True
+            continue
+        if (
             call == "getrandom"
             and allow_runtime_getrandom
             and returned == 8
@@ -562,6 +579,11 @@ def parse_strace(
             path_offset=offset,
             cwd=cwd,
         )
+        if path_text == "" and "AT_EMPTY_PATH" in arguments:
+            # statx/newfstatat may inspect a descriptor instead of a pathname.
+            # Bind its kernel-reported target, never the caller's cwd.
+            annotated = _fd_path(arguments, before=offset)
+            observed = Path(os.path.normpath(annotated)) if annotated.startswith("/") else None
         missing = result.startswith("-1 ENOENT")
         if call in _EXEC_CALLS:
             if returned == 0:
@@ -663,6 +685,7 @@ def run_command(
     system_name: str | None = None,
     already_traced: Callable[[], bool] = _already_traced,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
+    process_observer: Callable[..., None] | None = None,
 ) -> ShadowExecution:
     """Execute one command exactly once and collect best-effort Linux trace data."""
     try:
@@ -819,6 +842,11 @@ def run_command(
 
     command_duration_ms = max(0, int((time.monotonic() - command_started) * 1000))
     parsing_started = time.monotonic()
+    if process_observer is not None:
+        try:
+            process_observer(capture.data, truncated=capture.truncated or capture.failed)
+        except Exception:
+            pass  # Candidate analysis cannot change or repeat target execution.
     raw_trace = capture.data
     capture.data = b""
     try:
@@ -827,6 +855,8 @@ def run_command(
             workspace=observation_root or workspace,
             initial_cwd=workspace,
             truncated=capture.truncated or capture.failed,
+            allow_workspace_root=process_observer is not None,
+            require_process_lifecycle=process_observer is not None,
         )
     except Exception:
         capture.failed = True

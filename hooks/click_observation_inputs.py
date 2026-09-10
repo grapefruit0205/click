@@ -17,6 +17,11 @@ import sys
 import sysconfig
 import tempfile
 
+if __package__:
+    from . import click_observer_profiles as profiles
+else:
+    import click_observer_profiles as profiles
+
 MAX_INPUTS = 4096
 MAX_INDEX_FILES = 100_000
 MAX_INPUT_BYTES = 64 * 1024 * 1024
@@ -24,7 +29,7 @@ MAX_FILE_BYTES = 64 * 1024 * 1024
 PROFILE = "linux-cpython3123-strace68-v1"
 DARWIN_PROFILE = "darwin-cpython3123-fsusage-v1"
 WINDOWS_PROFILE = "windows-cpython3123-etw-v1"
-PROFILES = frozenset({PROFILE, DARWIN_PROFILE, WINDOWS_PROFILE})
+PROFILES = profiles.PROFILES
 DIGEST = re.compile(r"^[0-9a-f]{64}$")
 ARTIFACT_ID = re.compile(r"^click-native-observer-[a-zA-Z0-9_-]{1,64}$")
 
@@ -41,7 +46,7 @@ def digest(value) -> str:
 def metadata(path: Path):
     try:
         value = path.lstat()
-    except FileNotFoundError:
+    except (FileNotFoundError, NotADirectoryError):
         return None
     # Reading an input may legitimately refresh atime.  It is not part of the
     # value consumed by the target, so binding it would make the observer
@@ -83,11 +88,7 @@ def relative_name(value) -> bool:
 
 
 def _profile_platform(profile: str) -> str:
-    return {
-        PROFILE: "linux",
-        DARWIN_PROFILE: "darwin",
-        WINDOWS_PROFILE: "win32",
-    }.get(profile, "")
+    return profiles.PLATFORMS.get(profile, "")
 
 
 def _secure_artifact_directory(artifact: Path) -> bool:
@@ -236,15 +237,14 @@ def runtime_roots(
     if (
         profile not in PROFILES
         or sys.platform != _profile_platform(profile)
-        or sys.implementation.name != "cpython"
-        or sys.version_info[:3] != (3, 12, 3)
+        or not profiles.supported(profile)
         or not ARTIFACT_ID.fullmatch(artifact_id)
     ):
         raise InputError("unsupported-input-runtime")
     artifact = Path(tempfile.gettempdir()) / artifact_id
     if not _secure_artifact_directory(artifact):
         raise InputError("native-artifact-unavailable")
-    if profile != PROFILE:
+    if _profile_platform(profile) != "linux":
         result = _portable_runtime_roots(project, artifact)
         for role, path in result.items():
             if role == "project":
@@ -285,6 +285,12 @@ def runtime_roots(
         "lib-root": Path("/usr/lib"),
         "local-root": Path("/usr/local"),
         "local-lib-root": Path("/usr/local/lib"),
+        "ssl-config-root": Path("/etc/ssl"),
+        "ssl-runtime-root": Path("/usr/lib/ssl"),
+        "crypto-policy-root": Path("/proc/sys/crypto"),
+        "terminfo": Path("/usr/share/terminfo"),
+        "terminfo-config": Path("/etc/terminfo"),
+        "user-config-root": Path.home(),
     }
     environment_prefix = Path(sys.prefix).resolve()
     if environment_prefix != Path(sys.base_prefix).resolve():
@@ -293,6 +299,25 @@ def runtime_roots(
     if external_runtime is not None:
         result["external-runtime"] = external_runtime
         result.update(_linux_hosted_runtime_probe_roots(external_runtime))
+        # CPython's prefix discovery probes a stdlib archive above custom
+        # installations too. Bind those literal files (including absence),
+        # without granting a recursive ancestor-library input boundary.
+        for index, ancestor in enumerate(executable_directory.parents):
+            if index >= 64:
+                raise InputError("runtime-ancestor-limit")
+            label = "a" * (index // 26 + 1) + chr(ord("a") + index % 26)
+            result[f"python-archive-{label}"] = ancestor / "lib" / f"python{sys.version_info.major}{sys.version_info.minor}.zip"
+    # pytest searches every ancestor for configuration. Bind those literal
+    # lookups, including absent files, without recursively indexing ancestors.
+    config_names = {"ini": "pytest.ini", "hidden-ini": ".pytest.ini", "pyproject": "pyproject.toml",
+                    "tox": "tox.ini", "setup": "setup.cfg", "conftest": "conftest.py",
+                    "toml": "pytest.toml", "hidden-toml": ".pytest.toml", "setup-script": "setup.py"}
+    for index, ancestor in enumerate(resolved_project.parents):
+        if index >= 64:
+            raise InputError("configuration-ancestor-limit")
+        label = "a" * (index // 26 + 1) + chr(ord("a") + index % 26)
+        for config_role, config in config_names.items():
+            result[f"pytest-config-{label}-{config_role}"] = ancestor / config
     for role, path in result.items():
         if role == "project":
             continue
@@ -333,7 +358,7 @@ class InputSnapshot:
                 "usr-libraries", "windows-system",
             )
             if (
-                getattr(self, "profile", "") == DARWIN_PROFILE
+                _profile_platform(getattr(self, "profile", "")) == "darwin"
                 and role == "base-prefix"
             ):
                 # Framework builds keep launchers, Resources/Python.app,
@@ -377,6 +402,13 @@ class InputSnapshot:
                     self.enumerated.add(key)
                     for child in entries:
                         if role == "project" and child.name == ".git":
+                            self.before[_path_key(child)] = metadata(child)
+                            # pytest probes directories for virtual-environment
+                            # markers. Bind only those literal metadata lookups;
+                            # repository internals remain outside input authority.
+                            for relative in ("pyvenv.cfg", "conda-meta", "conda-meta/history"):
+                                probe = child / relative
+                                self.before[_path_key(probe)] = metadata(probe)
                             continue
                         if depth_limit is not None and depth >= depth_limit:
                             self.before[_path_key(child)] = metadata(child)
@@ -405,7 +437,9 @@ class InputSnapshot:
                 continue
             if role in ("binaries", "system-config") and "/" in relative:
                 continue
-            if role == "project" and (relative == ".git" or relative.startswith(".git/")):
+            if role == "project" and relative.startswith(".git/") and relative not in {
+                ".git/pyvenv.cfg", ".git/conda-meta", ".git/conda-meta/history",
+            }:
                 raise InputError("git-internal-input")
             if relative_name(relative):
                 candidates.append((len(root.parts), role, relative))
@@ -490,6 +524,8 @@ class InputSnapshot:
         for key in sorted(canonical):
             path, operations = canonical[key]
             role, relative = self.locator(path)
+            if role == "project" and (relative == ".git" or relative.startswith(".git/")) and operations != {"metadata"}:
+                raise InputError("git-internal-input")
             old = self.before.get(key)
             current = metadata(path)
             # Missing paths are valid only under a fully indexed parent.

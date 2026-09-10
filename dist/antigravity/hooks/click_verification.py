@@ -1029,6 +1029,9 @@ def _prepare_verification_impl(
             if candidate is not None:
                 successor_candidates[source_key] = candidate
                 previous, _ = candidate
+                sources[source_key]["automatic_observation_required"] = (
+                    click_verification_reuse.automatic_observation_required(previous)
+                )
                 _merge_source_policy(
                     sources[source_key],
                     {
@@ -1073,6 +1076,12 @@ def _prepare_verification_impl(
         reason_codes[source_key] = reason
         if not_evaluable:
             not_evaluable_keys.add(source_key)
+
+    if (
+        click_observer_control.mode(verification) == "auto"
+        and click_observer_control.batch_supports_capture(batch)
+    ):
+        click_observer_runtime.prepare_automatic(workspace, verification, grouped_checks)
 
     prepared_environment = _observer_environment(
         _verification_environment(cwd=workspace), verification
@@ -1338,7 +1347,7 @@ def _prepare_verification_impl(
                 }
                 authoritative_runtime = (
                     click_observer_runtime.state_from_verification(verification)
-                    if click_observer_control.mode(verification) == "authoritative"
+                    if click_observer_control.captures_inputs(verification)
                     else None
                 )
                 if (
@@ -1586,9 +1595,48 @@ def _prepare_verification_impl(
         if confirmed_bindings is None:
             return "", "Click could not resolve verification executables before confirming reuse.", ""
         confirmed_environment_digests, confirmed_executable_digests = confirmed_bindings
+        # Git equality does not imply equality of ignored files, missing-path
+        # lookups or runtime inputs. Recheck observed inputs for exact reuse too,
+        # including successor receipts, at the final common admission boundary.
+        observed_keys = {
+            key for key in reused_keys
+            if click_dependency_cache.bound_dependency_observation_is_reusable(
+                sources[key].get("verified_dependency_observation")
+            )
+        }
+        observed_checks = {key: grouped_checks[key] for key in observed_keys}
+        observed_runtime = click_observer_runtime.state_from_verification(verification)
+        if observed_keys and click_observer_runtime.validate(workspace, observed_runtime) is None:
+            observed_runtime = None
+        observed_policy = click_dependency_cache.observation_policy_bindings(
+            workspace, observed_checks,
+            declarations=_dependency_declarations(sources, observed_keys),
+            git_capture=git_capture,
+        ) if observed_keys else {}
+        observed_bindings = _authoritative_current_bindings(
+            sources=sources, source_keys=observed_keys,
+            group_digests=group_digests, cwd=workspace, workspace_root=Path(git_root),
+            environment_digests=confirmed_environment_digests,
+            executable_digests=confirmed_executable_digests,
+            host_coverage_digest=str(host_coverage.get("digest", "")),
+            policy_digests=observed_policy,
+        ) if observed_keys else {}
+        observed_receipts = click_dependency_cache.receipts_for_groups(
+            workspace, observed_checks,
+            declarations=_dependency_declarations(sources, observed_keys),
+            observations=_dependency_observations(sources, observed_keys),
+            authoritative_only=True, authoritative_runtime=observed_runtime,
+            authoritative_bindings=observed_bindings, git_capture=git_capture,
+        ) if observed_keys else {}
+        observed_drift = {
+            key for key in observed_keys
+            if observed_receipts.get(key, {}).get("dependency_digest")
+            != sources[key].get("verified_dependency_digest")
+        }
         invalidated = {
             key for key in reused_keys
             if workspace_drift
+            or key in observed_drift
             or confirmed_environment_digests[key] != current_environment_digests[key]
             or confirmed_executable_digests[key] != current_executable_digests[key]
             or (
@@ -1611,7 +1659,7 @@ def _prepare_verification_impl(
                 if confirmed_environment_digests[key] != current_environment_digests[key]
                 else "executable-binding-changed"
                 if confirmed_executable_digests[key] != current_executable_digests[key]
-                else "dependency-changed"
+                else "observed-input-changed"
             )
             if workspace_drift:
                 not_evaluable_keys.add(key)
@@ -1718,6 +1766,13 @@ def _prepare_verification_impl(
         reuse_message = (
             f"Click reused {' and '.join(reuse_parts)} verification receipts"
         )
+        conditional_count = sum(
+            click_dependency_cache.conditional_dependency_observation_is_valid(
+                sources[key].get("verified_dependency_observation")) for key in reused_keys
+        )
+        if conditional_count:
+            reuse_message += (f" - 조건부 JS 재사용 {conditional_count}개"
+                              " - 관찰 범위 기반 / 입력 완전성 미보증")
         return (
             f"echo {reuse_message}",
             "",
@@ -1910,6 +1965,7 @@ class VerificationRunResult:
     source_durations_ms: dict[str, int | float] | None = None
     dependency_observations: dict[str, dict[str, Any]] | None = None
     authoritative_observations: dict[str, dict[str, Any]] | None = None
+    framework_observer_records: dict[str, dict[str, Any]] | None = None
     shadow_observer_records: dict[str, dict[str, Any]] | None = None
     shadow_intelligence_baselines: dict[str, dict[str, Any]] | None = None
     shadow_source_exit_codes: dict[str, int] | None = None
@@ -1981,6 +2037,7 @@ def _record_verification_result(
     source_durations_ms: dict[str, int | float] | None = None,
     dependency_observations: dict[str, dict[str, Any]] | None = None,
     authoritative_observations: dict[str, dict[str, Any]] | None = None,
+    framework_observer_records: dict[str, dict[str, Any]] | None = None,
     shadow_observer_records: dict[str, dict[str, Any]] | None = None,
     shadow_intelligence_baselines: dict[str, dict[str, Any]] | None = None,
     shadow_source_exit_codes: dict[str, int] | None = None,
@@ -2174,7 +2231,7 @@ def _record_verification_result(
             }
     authoritative_runtime = (
         click_observer_runtime.state_from_verification(verification)
-        if selected_observer_mode == "authoritative"
+        if selected_observer_mode in {"authoritative", "auto"}
         else None
     )
     if (
@@ -2212,8 +2269,9 @@ def _record_verification_result(
     )
     trusted_observations: dict[str, dict[str, Any]] = {}
     if (
-        authoritative_runtime is not None
+        selected_observer_mode in {"authoritative", "auto", "runtime"}
         and isinstance(authoritative_observations, dict)
+        and authoritative_observations
         and workspace_digest
         and re.fullmatch(r"[0-9a-f]{64}", workspace_digest)
     ):
@@ -2224,7 +2282,10 @@ def _record_verification_result(
             envelope = authoritative_observations.get(source_key)
             if envelope is None:
                 continue
-            verified = click_authoritative_observer.verified_observation(
+            verifier = (click_dependency_cache.conditional_observer().verify
+                        if isinstance(envelope, dict) and click_dependency_cache.conditional_dependency_observation_is_valid(envelope.get("observation"))
+                        else click_authoritative_observer.verified_observation)
+            verified = verifier(
                 envelope,
                 secret=runner_token,
                 expected_binding={
@@ -2287,6 +2348,7 @@ def _record_verification_result(
     verification["running_executable_component_digests"] = {}
     verification["running_host_coverage"] = {}
     verification["running_host_coverage_digest"] = ""
+    invalidated_reuse_keys: set[str] = set()
     if workspace_changed:
         previous_revision = revision
         revision += 1
@@ -2467,6 +2529,15 @@ def _record_verification_result(
                 source["last_exit_code"] = None
 
         argv_keys = _evidence_keys_for_kind(sources, "argv")
+        invalidated_reuse_keys = click_verification_reuse.changed_observed_inputs(
+            sources,
+            {key for key in argv_keys - running_keys
+             if _evidence_is_current(sources.get(key), revision)},
+            project=Path(workspace_root or Path.cwd()), runtime=authoritative_runtime,
+        )
+        for key in invalidated_reuse_keys:
+            click_evidence.clear_successor_receipt(sources[key])
+            sources[key].update(status="ready", verified_revision=-1, last_exit_code=None)
         if argv_keys and all(
             _evidence_is_current(sources.get(source_key), revision)
             for source_key in argv_keys
@@ -2492,6 +2563,23 @@ def _record_verification_result(
             verification["failed_revision"] = (
                 revision if exit_code != 0 or precise_failure else -1
             )
+    if framework_observer_records:
+        (framework_observer,) = click_import_bootstrap.load_siblings(__package__, "click_framework_observer")
+        framework_observer.store(verification, {
+            key: value for key, value in framework_observer_records.items()
+            if framework_observer.record_valid(value)
+            and value["capture"]["binding"]["mutation_revision"] == revision
+            and value["capture"]["binding"]["check_digest"] == _verification_group_digest(grouped_checks.get(key, []))
+        })
+        for key, value in framework_observer_records.items():
+            if (key in sources and framework_observer.record_valid(value)
+                    and value["capture"]["binding"]["mutation_revision"] == revision
+                    and value["capture"]["binding"]["check_digest"] == _verification_group_digest(grouped_checks.get(key, []))
+                    and framework_observer.conditional.eligible_record(value)
+                    and not click_change_policy.receipt_is_valid(sources[key].get("verified_safe_change_receipt"))):
+                # A learning seed is not a reusable receipt, including at the
+                # same Git revision: ignored inputs still need a bound snapshot.
+                sources[key]["automatic_observation_required"] = True
     if shadow_observer_records:
         try:
             click_observer_common.store_records(
@@ -2533,6 +2621,7 @@ def _record_verification_result(
         click_incremental.record_execution(
             verification, measured_durations, source_results=source_results,
             reused_keys=reused_keys, exit_code=exit_code,
+            invalidated_reuse_keys=invalidated_reuse_keys,
             workspace_changed=workspace_changed,
             runner_duration_ms=(
                 (time.perf_counter_ns() - runner_started_ns) / 1_000_000
@@ -2863,7 +2952,7 @@ def _claim_verification_run(
     }
     authoritative_runtime = (
         click_observer_runtime.state_from_verification(verification)
-        if click_observer_control.mode(verification) == "authoritative"
+        if click_observer_control.captures_inputs(verification)
         else None
     )
     if (
@@ -2904,6 +2993,7 @@ def _claim_verification_run(
     }
     batch["_click_mutation_revision"] = claim_binding["mutation_revision"]
     batch["_click_observer_mode"] = click_observer_control.mode(verification)
+    batch["_click_framework_previous"] = verification.get("framework_observations", {})
     return batch, ""
 
 
@@ -3295,8 +3385,20 @@ def _run_verification(
     authoritative_contexts = batch.pop("_click_authoritative_contexts", {})
     shadow_revision = batch.pop("_click_mutation_revision", -1)
     observer_mode = batch.pop("_click_observer_mode", "off")
+    framework_previous = batch.pop("_click_framework_previous", {})
+    framework_observer = None
+    if observer_mode in {"auto", "runtime"} and execute_commands is _execute_argv_commands and any(
+        Path(check["argv"][0]).name.lower() in {"node", "node.exe", "npm", "npm.cmd", "npx", "npx.cmd", "pnpm", "yarn", "vitest", "jest"}
+        for check in checks
+    ):
+        (framework_observer,) = click_import_bootstrap.load_siblings(__package__, "click_framework_observer")
     shadow_enabled = observer_mode == "shadow"
-    authoritative_enabled = observer_mode == "authoritative"
+    authoritative_enabled = bool(
+        observer_mode in {"authoritative", "auto"}
+        and isinstance(authoritative_runtime, dict)
+        and click_observer_control.batch_supports_capture(batch)
+        and (execute_commands is _execute_argv_commands or authoritative_execute is not None)
+    )
     active_shadow_execute = shadow_execute
     if shadow_enabled and active_shadow_execute is None:
         (click_dependency_trace,) = click_import_bootstrap.load_siblings(
@@ -3342,6 +3444,7 @@ def _run_verification(
     source_completed_commands: dict[str, int] = {}
     per_source_shadow_records: dict[str, list[dict[str, Any]]] = {}
     authoritative_envelopes: dict[str, dict[str, Any]] = {}
+    framework_records: dict[str, dict[str, Any]] = {}
     source_key = ""
     command_plan: dict[str, Any] | None = None
     command_actual_started_ns: int | None = None
@@ -3533,6 +3636,37 @@ def _run_verification(
                         click_inspection.execution_argv(argv) == argv
                         and not click_inspection.is_git_remote_output_request(argv)
                     )
+                    framework_name = framework_observer.framework(argv) if framework_observer else None
+                    previous = framework_previous.get(source_key) if isinstance(framework_previous, dict) else None
+                    if (framework_name and observer_compatible
+                            and len(grouped_checks.get(source_key, [])) == 1
+                            and isinstance(check_digest, str)
+                            and framework_observer.should_collect(previous, check_digest, shadow_revision)):
+
+                        candidate = framework_observer.run_command(
+                            argv, workspace=Path.cwd(), observation_root=shadow_workspace,
+                            environment=verification_environment, evidence_key=source_key,
+                            check_digest=check_digest, mutation_revision=shadow_revision,
+                            execute_unobserved=execute_unobserved,
+                            resolve_backend=_resolve_read_only_executable, digest_file=file_content_digest,
+                            capture_output=capture_box, capture_limit_bytes=int(reporting["max_bytes"]),
+                            capture_tee=reporting["format"] == "raw",
+                            runtime_inputs=True,
+                            previous=previous,
+                            conditional_context={**authoritative_context, "workspace_tree_digest": before["digest"]}
+                                if isinstance(authoritative_context, dict) and isinstance(before, dict) else None,
+                            conditional_secret=runner_token,
+                        )
+                        if candidate.envelope is not None:
+                            authoritative_envelopes[source_key] = candidate.envelope
+                        framework_records[source_key] = candidate.record
+                        runtime = candidate.record.get("runtime", {})
+                        detected = [key for key, count in runtime.get("counts", {}).items() if count]
+                        print("[Click framework observer] " +
+                              ("runtime inputs detected: " + ", ".join(sorted(detected)) if detected else "runtime inputs: " + str(runtime.get("status", "unavailable"))) +
+                              ("; conditional reuse eligible: observed inputs only, completeness unproven"
+                               if candidate.envelope else "; no conditional receipt; capture incomplete, dynamic, or learning baseline"), flush=True)
+                        return candidate.exit_code
                     if can_record_authoritative and observer_compatible:
                         assert isinstance(authoritative_context, dict)
                         authoritative_result = active_authoritative_execute(
@@ -3549,6 +3683,11 @@ def _run_verification(
                             execute_unobserved=execute_unobserved,
                             resolve_backend=_resolve_read_only_executable,
                             digest_file=file_content_digest,
+                            **({
+                                "capture_output": capture_box,
+                                "capture_limit_bytes": int(reporting["max_bytes"]),
+                                "capture_tee": reporting["format"] == "raw",
+                            } if authoritative_execute is None else {}),
                         )
                         authoritative_envelopes[source_key] = (
                             authoritative_result.envelope
@@ -4020,6 +4159,7 @@ def _run_verification(
                 runner_started_ns=runner_started_ns,
                 shadow_observer_records=combined_shadow_records,
                 authoritative_observations=authoritative_envelopes,
+                framework_observer_records=framework_records,
                 shadow_intelligence_baselines=shadow_intelligence_baselines,
                 shadow_source_exit_codes=shadow_source_exit_codes,
                 shadow_execution_contexts=(
@@ -4037,6 +4177,13 @@ def _run_verification(
         return exit_code or 2
     try:
         result_state = json.loads(state_path.read_text(encoding="utf-8"))
+        measured_batch = click_incremental.current_batch(result_state.get("verification"))
+        if any(source.get("execution_reason_code") == "observed-input-changed"
+               for source in (measured_batch or {}).get("sources", [])):
+            sys.stderr.write(
+                "[Click] Inputs of previously reused checks changed during execution. "
+                "Those checks require verification again; their reuse was not counted.\n"
+            )
         message = click_incremental.host_summary(result_state.get("verification"))
         if message:
             print(message, flush=True)

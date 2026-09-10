@@ -1,0 +1,193 @@
+"""Conditional confidence is explicit and never upgraded to complete authority."""
+import copy
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from hooks import click_conditional_observer as conditional
+from hooks import click_dependency_cache as dependencies
+from hooks import click_framework_observer as framework
+from hooks import click_node_observer as node
+from hooks import click_verification_reuse as reuse
+from hooks import click_incremental as incremental
+from tests import click_gate_test_support as support
+
+
+class ConditionalSnapshotTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / 'input.txt').write_text('one')
+        self.rows = [{'path':'input.txt','kind':'file','operations':['read']},
+                     {'path':'optional.cfg','kind':'missing','operations':['metadata']}]
+
+    def test_ignored_missing_and_unrelated_inputs(self):
+        before = conditional.snapshot(self.root, self.rows)
+        (self.root / 'unrelated.txt').write_text('unrelated')
+        self.assertTrue(conditional.current(self.root, before))
+        (self.root / 'optional.cfg').write_text('present')
+        self.assertFalse(conditional.current(self.root, before))
+        (self.root / 'optional.cfg').unlink()
+        (self.root / 'input.txt').write_text('two')
+        self.assertFalse(conditional.current(self.root, before))
+
+    def test_read_then_overwrite_does_not_become_reusable(self):
+        before = conditional.snapshot(self.root, self.rows)
+        (self.root / 'input.txt').write_text('changed by test')
+        self.assertFalse(conditional.current(self.root, before))
+
+    def test_missing_below_symlink_is_not_a_local_snapshot(self):
+        (self.root / 'alias').symlink_to(self.root, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            conditional.snapshot(self.root, [{'path':'alias/missing','kind':'missing','operations':['read']}])
+
+    def test_external_alias_and_target_are_both_bound(self):
+        (self.root / 'alias').symlink_to(self.root / 'input.txt')
+        before = conditional.external_snapshot([{'path':str(self.root / 'alias'),'kind':'file','operations':['read']}])
+        self.assertTrue(conditional.external_valid(before))
+        (self.root / 'input.txt').write_text('two')
+        self.assertNotEqual(conditional.external_snapshot(before), before)
+
+    def test_readonly_opened_directory_is_bound_without_guessing_enumeration(self):
+        directory=self.root/'locale'
+        directory.mkdir()
+        rows=[{'path':str(directory),'kind':'file','operations':['read']}]
+        before=conditional.external_snapshot(rows)
+        self.assertEqual(conditional.external_snapshot(rows),before)
+        (directory/'new').write_text('new')
+        self.assertNotEqual(conditional.external_snapshot(rows),before)
+
+    def test_conditional_reason_cannot_masquerade_as_complete_authority(self):
+        value=incremental.decision(source_key='a'*64,decision='reuse-dependency',
+            reason_code='conditional-observed-inputs-current',current_revision=1,
+            previous_revision=0,check_digest='b'*64,authority_source='conditional-js-observation',
+            estimated_avoided_ms=None)
+        self.assertTrue(incremental.decision_is_valid(value))
+        value['authority_source']='runtime-dependency-observation'
+        self.assertFalse(incremental.decision_is_valid(value))
+
+    def test_malformed_projection_never_raises_or_becomes_eligible(self):
+        for value in (None, {}, {'conditional_capture': {'inputs':None,'external':[]}},
+                      {'conditional_capture': {'inputs':[{}],'external':[]}}):
+            self.assertFalse(conditional.eligible_record(value))
+
+    def test_projection_keeps_application_proc_read_and_unknown_calls_ineligible(self):
+        directory = self.root / 'observer'
+        base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
+        for line in ('100 openat(AT_FDCWD, "/proc/meminfo", O_RDONLY) = 3</proc/meminfo>',
+                     '100 mystery_input(1) = 0'):
+            raw=(base+line+'\n100 exit_group(0) = ?\n100 +++ exited with 0 +++\n').encode()
+            self.assertIsNone(conditional.project_capture(raw, project=self.root, cwd=self.root, directory=directory))
+
+
+@unittest.skipUnless(sys.platform == 'linux' and shutil.which('node') and shutil.which('strace'), 'Linux Node and strace required')
+class RealConditionalTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.node = shutil.which('node')
+        if subprocess.check_output([cls.node,'--version']).strip().decode() != node.VERSION:
+            raise unittest.SkipTest('supported Node profile unavailable')
+
+    def test_real_execution_attestation_and_per_input_invalidation(self):
+        with tempfile.TemporaryDirectory(prefix='click-js-conditional-') as tmp:
+            root=Path(tmp)
+            (root/'input.txt').write_text('ok')
+            (root/'check.cjs').write_text("const fs=require('node:fs');if(fs.readFileSync('input.txt','utf8')!=='ok')process.exitCode=1;console.log('RAN-ONCE');\n")
+            context={key:'a'*64 for key in dependencies.AUTHORITATIVE_BINDING_FIELDS if key!='execution_digest'}
+            context['mutation_revision']=0
+            previous=None
+            for learning in (True,False):
+                output={}
+                execution=framework.run_command([self.node,str(root/'check.cjs')],workspace=root,observation_root=root,
+                    environment=dict(os.environ),evidence_key='a'*64,check_digest='a'*64,mutation_revision=0,
+                    execute_unobserved=lambda:99,resolve_backend=lambda name,**kw:(shutil.which(name),''),
+                    digest_file=node.digest_file,capture_output=output,previous=previous,
+                    conditional_context=context,conditional_secret='runner-secret')
+                self.assertEqual(execution.exit_code,0)
+                self.assertEqual(output['process'].stdout.data.count(b'RAN-ONCE'),1)
+                self.assertTrue(framework.record_valid(execution.record),execution.record)
+                self.assertTrue(conditional.eligible_record(execution.record),execution.record)
+                self.assertEqual(execution.envelope is None,learning,execution.record)
+                previous=execution.record
+            envelope=execution.envelope
+            observation=conditional.verify(envelope,secret='runner-secret',expected_binding=context)
+            self.assertIsNotNone(observation)
+            self.assertFalse(dependencies.authoritative_dependency_observation_is_complete(observation))
+            self.assertTrue(dependencies.bound_dependency_observation_is_reusable(observation))
+            binding={key:context[key] for key in dependencies.AUTHORITATIVE_CURRENT_BINDING_FIELDS}
+            self.assertTrue(conditional.matches(observation,project=root,binding=binding))
+            self.assertIsNone(conditional.verify(envelope,secret='other-token',expected_binding=context))
+            for key in ('evidence_key','environment_digest','executable_digest','shard_digest'):
+                changed={**context,key:'b'*64}
+                self.assertIsNone(conditional.verify(envelope,secret='runner-secret',expected_binding=changed))
+            forged=copy.deepcopy(envelope);forged['observation']['runtime_inputs_complete']=True
+            self.assertIsNone(conditional.verify(forged,secret='runner-secret',expected_binding=context))
+            (root/'unrelated.txt').write_text('unrelated')
+            self.assertTrue(conditional.matches(observation,project=root,binding=binding))
+            (root/'input.txt').write_text('changed')
+            self.assertFalse(conditional.matches(observation,project=root,binding=binding))
+            source={'verified_dependency_observation':observation,'verified_dependency_provider':dependencies.AUTOMATIC_PROVIDER_NAME}
+            self.assertEqual(reuse.changed_observed_inputs({'key':source},{'key'},project=root,runtime=None),{'key'})
+            dynamic=copy.deepcopy(previous);dynamic['runtime']['counts']['clock']=1;dynamic['runtime']['reasons'].append('clock');dynamic['runtime']['reasons'].sort()
+            self.assertFalse(conditional.eligible_record(dynamic))
+
+
+@unittest.skipUnless(sys.platform == 'linux' and shutil.which('node') and shutil.which('strace'), 'Linux Node and strace required')
+class ConditionalHookTests(support.ClickGateTestCase):
+    def test_default_hook_learns_then_reuses_and_reruns_changed_child(self):
+        if subprocess.check_output(['node','--version']).strip().decode() != node.VERSION:
+            self.skipTest('supported Node profile unavailable')
+        (self.workspace/'.gitignore').write_text('local.cfg\n')
+        (self.workspace/'local.cfg').write_text('ready')
+        for name in ('alpha','beta'):
+            source="const fs=require('node:fs'); const assert=require('node:assert/strict');\n"
+            if name=='alpha': source+="assert.equal(fs.readFileSync('local.cfg','utf8'),'ready');\n"
+            source+=f"console.log('ran-{name}');\n"
+            (self.workspace/(name+'.cjs')).write_text(source)
+        # A tiny deterministic check-runner fixture exercises the existing
+        # recognized Jest command boundary; actual Node observation is real.
+        runner=self.workspace/'jest'
+        runner.write_text('#!/usr/bin/env node\nrequire(require("node:path").resolve(process.argv[2]));\n')
+        runner.chmod(0o755)
+        self.initialize_git('.gitignore','alpha.cjs','beta.cjs','jest')
+        commands=[[str(runner),name+'.cjs'] for name in ('alpha','beta')]
+        def run(turn):
+            payload=self.verify_gate(commands,turn,evidence_ids=['ALPHA','BETA'])
+            self.assertIn("updatedInput",payload["hookSpecificOutput"],payload)
+            result=self.run_rewritten(payload)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            state=json.loads(next((self.plugin_data/'gate-state').glob('session-contract-*.json')).read_text())
+            return state,result
+        run('learn-1')
+        state,result=run('learn-2')
+        for source in state['evidence_state']['sources'].values():
+            self.assertTrue(conditional.valid(source.get('verified_dependency_observation')), result.stdout + result.stderr + '\n' + json.dumps(state['verification'].get('framework_observations')))
+        state,result=run('reuse')
+        decisions=state['verification']['incremental_plan']['decisions']
+        self.assertTrue(all(row['authority_source']=='conditional-js-observation' for row in decisions),decisions)
+        self.assertNotIn('ran-alpha',result.stdout)
+        self.assertNotIn('ran-beta',result.stdout)
+        self.assertIn('입력 완전성 미보증',result.stdout)
+        # Git is unchanged; the ignored input must still invalidate only alpha.
+        (self.workspace/'local.cfg').write_text('ready\n')
+        (self.workspace/'local.cfg').write_text('ready')
+        state,result=run('ignored-input-change')
+        self.assertEqual(result.stdout.count('ran-alpha'),1,result.stdout)
+        self.assertNotIn('ran-beta',result.stdout)
+        unrelated=self.workspace/'unrelated.md'
+        patch=f"*** Begin Patch\n*** Add File: {unrelated}\n+Unrelated note\n*** End Patch"
+        self.pre_tool('apply_patch',patch,'unrelated-change',tool_use_id='unrelated-edit')
+        unrelated.write_text('Unrelated note\n')
+        self.tool_hook('post-tool','apply_patch',{'patch':patch},turn_id='unrelated-change',tool_use_id='unrelated-edit')
+        state,result=run('unrelated-change')
+        self.assertNotIn('ran-alpha',result.stdout)
+        self.assertNotIn('ran-beta',result.stdout)
+        decisions=state['verification']['incremental_plan']['decisions']
+        self.assertTrue(all(row['decision']=='reuse-dependency' for row in decisions),decisions)
+        self.assertTrue(all(row['authority_source']=='conditional-js-observation' for row in decisions),decisions)

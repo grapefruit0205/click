@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit lifecycle-local control for Shadow and authoritative observation."""
+"""Lifecycle-local selection of automatic, Shadow and explicit observation."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 CONTROL_FIELD = "observer_control"
 CONTROL_VERSION = 1
-MODES = frozenset({"off", "shadow", "authoritative"})
+MODES = frozenset({"off", "shadow", "authoritative", "auto", "runtime"})
 _FIELDS = frozenset({"version", "mode", "updated_at"})
 
 
@@ -39,7 +39,7 @@ def set_mode(
     verification: dict[str, Any], selected: str, *, updated_at: int | None = None
 ) -> None:
     if selected not in MODES:
-        raise ValueError("observer mode must be off, shadow, or authoritative")
+        raise ValueError("observer mode must be off, shadow, authoritative, auto, or runtime")
     timestamp = int(time.time()) if updated_at is None else updated_at
     value = {"version": CONTROL_VERSION, "mode": selected, "updated_at": timestamp}
     if not state_is_valid(value):
@@ -55,3 +55,44 @@ def projection(verification: Any) -> dict[str, Any]:
         "authoritative": selected == "authoritative",
         "reuse_authorized": selected == "authoritative",
     }
+
+
+def captures_inputs(verification: Any) -> bool:
+    """Selection permits capture, never reuse without a verified receipt."""
+    return mode(verification) in {"authoritative", "auto"}
+
+
+def batch_supports_capture(batch: dict[str, Any]) -> bool:
+    """Output retention and input observation share one target execution."""
+    return True
+
+
+def description(verification: Any) -> str:
+    selected = mode(verification)
+    if selected == "runtime":
+        return "runtime input diagnostics, never automatic reuse authority"
+    if selected == "authoritative":
+        return "prepared profile, reuse requires a complete bound observation"
+    if selected == "auto":
+        attempt = verification.get("automatic_observer_attempt", {})
+        if isinstance(attempt, dict) and attempt.get("status") == "unavailable":
+            return "capture unavailable, normal verification remains available"
+        return "automatic capture for supported checks, reuse requires complete bound inputs"
+    return "input capture disabled, existing receipt and policy reuse remain available"
+
+
+def carry_selection(previous: Any, current: dict[str, Any]) -> None:
+    """Retain explicit off and cached capability across completed Evidence turns."""
+    if not isinstance(previous, dict):
+        return
+    value = previous.get(CONTROL_FIELD)
+    if not state_is_valid(value):
+        return
+    if value["mode"] == "off" and value["updated_at"] == 0:
+        return  # Migrate the old implicit Evidence default, not an explicit off.
+    current[CONTROL_FIELD] = dict(value)
+    if captures_inputs(previous) or mode(previous) == "runtime":
+        # These are capability candidates only; the runner revalidates them.
+        for key in ("authoritative_observer", "automatic_observer_attempt", "framework_observations"):
+            if isinstance(previous.get(key), dict):
+                current[key] = dict(previous[key])

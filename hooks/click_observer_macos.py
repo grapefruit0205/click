@@ -315,6 +315,8 @@ def _spawn_suspended_macos(
     *,
     cwd: Path,
     env: Mapping[str, str],
+    stdout: Any = None,
+    stderr: Any = None,
 ) -> _SuspendedProcess:
     """Spawn the actual target suspended, in its own process group."""
 
@@ -373,6 +375,9 @@ def _spawn_suspended_macos(
     add_inherit = getattr(libc, "posix_spawn_file_actions_addinherit_np")
     add_inherit.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int]
     add_inherit.restype = ctypes.c_int
+    add_dup2 = libc.posix_spawn_file_actions_adddup2
+    add_dup2.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_int, ctypes.c_int]
+    add_dup2.restype = ctypes.c_int
     libc.posix_spawnp.argtypes = [
         ctypes.POINTER(ctypes.c_int),
         ctypes.c_char_p,
@@ -413,7 +418,9 @@ def _spawn_suspended_macos(
         if error:
             raise OSError(error, os.strerror(error))
         for descriptor in (0, 1, 2):
-            error = int(add_inherit(ctypes.byref(actions), descriptor))
+            stream = stdout if descriptor == 1 else stderr if descriptor == 2 else None
+            error = int(add_inherit(ctypes.byref(actions), descriptor) if stream is None
+                        else add_dup2(ctypes.byref(actions), stream.fileno(), descriptor))
             if error:
                 raise OSError(error, os.strerror(error))
         error = int(

@@ -75,7 +75,30 @@ probe_windows_version = click_observer_windows.probe_windows_version
 click_process = click_observer_linux.click_process
 
 
-def run_command(
+@click_process.termination_as_interrupt()
+def run_command(argv: Sequence[str], *, capture_output: dict | None = None,
+                capture_limit_bytes: int = 65536, capture_tee: bool = False, **kwargs) -> ShadowExecution:
+    if capture_output is None:
+        return _run_command(argv, **kwargs)
+    output = click_process.OutputCapture(limit=capture_limit_bytes, tee=capture_tee)
+    spawner = kwargs.pop("spawn_argv", click_process.spawn_argv)
+    collector = kwargs.pop("macos_collector", click_observer_macos.collect_command)
+    result = None
+    try:
+        result = _run_command(
+            argv, **kwargs,
+            spawn_argv=lambda argv, **options: output.spawn(spawner, argv, **options),
+            macos_collector=lambda *args, **options: collector(*args, **options,
+                spawn_suspended=lambda argv, **values: output.spawn(click_observer_macos._spawn_suspended_macos, argv, **values)),
+        )
+        return result
+    finally:
+        captured = output.finish(argv, result.exit_code if result else 130)
+        if captured is not None:
+            capture_output.update(status="complete", process=captured)
+
+
+def _run_command(
     argv: Sequence[str],
     *,
     workspace: Path,
@@ -98,6 +121,7 @@ def run_command(
     macos_collector: MacOSCollector = click_observer_macos.collect_command,
     windows_collector: WindowsCollector = click_observer_windows.collect_command,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
+    process_observer: Callable[..., None] | None = None,
 ) -> ShadowExecution:
     """Select one backend and execute the target exactly once."""
 
@@ -141,6 +165,7 @@ def run_command(
             system_name=system,
             already_traced=already_traced,
             capture_limit=capture_limit,
+            process_observer=process_observer,
         )
     if capability.backend_name == "fs_usage":
         return click_observer_macos.run_command(

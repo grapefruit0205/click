@@ -18,9 +18,19 @@ HOOK_FILES = (
     "click_shard_proposal.py",
     "click_sharding_setup.py",
     "click_authoritative_observer.py",
+    "click_framework_observer.py",
+    "click_conditional_observer.py",
+    "click_node_observer.py",
+    "click_node_bootstrap.mjs",
+    "click_node_controller.cjs",
+    "click_node_value_probe.js",
+    "click_node_state.py",
+    "click_node_state.cc",
     "click_observation_inputs.py",
     "click_observation_cache.py",
     "click_observer_runtime.py",
+    "click_observer_profiles.py",
+    "click_observer_process_tree.py",
     "click_observer_bootstrap.py",
     "click_observer_native.c",
     "click_collector_runtime.py",
@@ -90,7 +100,7 @@ ANTIGRAVITY_HOOK_EXCLUDES = frozenset(
         "click_windows.py",
     }
 )
-ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c"})
+ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c", "click_node_bootstrap.mjs", "click_node_controller.cjs", "click_node_value_probe.js", "click_node_state.cc"})
 DASHBOARD_ASSETS = (
     "index.html", "styles.css", "app.js",
     "locales/ko.json", "locales/en.json", "locales/zh-CN.json",

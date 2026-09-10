@@ -1130,12 +1130,12 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         final = json.loads(
             self.run_control("click-gate sharding status", "turn-e1").stdout
         )
-        self.assertEqual(final["status"], "sharding-ready", final)
+        self.assertEqual(final["status"], "reuse-ready", final)
         self.assertTrue(final["sharding_ready"])
         self.assertTrue(final["reuse_ready"])
-        self.assertEqual(final["reuse_status"], "exact")
+        self.assertEqual(final["reuse_status"], "authoritative-v2")
         self.assertEqual(final["exact_reuse_status"], "available")
-        self.assertEqual(final["authoritative_reuse_status"], "unavailable")
+        self.assertEqual(final["authoritative_reuse_status"], "available")
         state = self.contract_state()
         batch = CLICK_VERIFICATION.click_incremental.current_batch(
             state["verification"]
@@ -1156,7 +1156,7 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         self.assertFalse(stale["reuse_ready"])
         self.run_control("click-gate sharding refresh", "turn-e1")
         refreshed = json.loads(self.run_control("click-gate sharding status", "turn-e1").stdout)
-        self.assertEqual(refreshed["status"], "sharding-ready", refreshed)
+        self.assertEqual(refreshed["status"], "reuse-ready", refreshed)
 
     def run_setting_free_end_to_end(self) -> dict[str, object]:
         self.assertFalse((self.workspace / ".click").exists())
@@ -1282,6 +1282,21 @@ class ShardingGateIntegrationTests(ClickGateTestCase):
         self.assertEqual(report["reuse_status"], "authoritative-v2")
         self.assertEqual(report["exact_reuse_status"], "available")
         self.assertEqual(report["authoritative_reuse_status"], "available")
+
+        partial_observer = json.loads(json.dumps(contract_state))
+        for source in partial_observer["evidence_state"]["sources"].values():
+            if source.get("verified_dependency_observation"):
+                source["verified_dependency_observation"] = {}
+                source["verified_dependency_observation_digest"] = ""
+                break
+        with mock.patch.dict(os.environ, {
+            "PLUGIN_DATA": str(self.plugin_data),
+            "CLICK_CONFIG_HOME": str(self.plugin_data),
+        }):
+            partial_report = setup.status(self.workspace, partial_observer)
+        self.assertEqual(partial_report["status"], "sharding-ready")
+        self.assertEqual(partial_report["authoritative_reuse_status"], "partially-available")
+        self.assertEqual(partial_report["exact_reuse_status"], "available")
 
         self.assertEqual(
             contract_state["auto_sharding_setup"]["status"], "reuse-ready"

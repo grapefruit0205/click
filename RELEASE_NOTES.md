@@ -1,5 +1,54 @@
 # Release notes
 
+## Unreleased v0.97 candidate — automatic Evidence observation
+
+Draft stabilization: an earlier intermittent child-decision mismatch remains
+unclassified. Current binding and ignored-input regressions pass locally, but
+stable publication is pending that investigation and native CI results. See
+`docs/architecture/automatic-observation.md`. Installed release remains v0.96.0.
+
+- Default supported JS checks can issue separately attested conditional receipts.
+  Two requested executions learn and compare inputs; unchanged observed files,
+  environment and execution bindings can then reuse, including ignored inputs.
+  Dashboard, shared reports and host output disclose unproven completeness.
+  Known dynamic inputs, unknown events and unsupported process coverage run;
+  no claim is made that all Vitest/Jest invocations qualify. See the conditional
+  runtime assumptions in `docs/architecture/node-runtime-observation.md`.
+
+- Supported Evidence checks prepare local input capture automatically. Complete
+  signed inputs can establish per-check reuse without owner-written dependency
+  JSON; existing owner declarations and shard partition rules remain intact.
+- Explicit off survives Evidence rollover. Missing native prerequisites preserve
+  normal execution, with no installation, privilege request or telemetry rerun.
+- Exact reuse now rechecks complete observations, including ignored files and
+  runtime inputs outside Git's tree snapshot. One incomplete child does not
+  disable an unaffected sibling's eligible receipt.
+- Losing automatic input capture after a successful observed baseline no longer
+  downgrades that child to Git-only reuse. Complete capture or a validated owner
+  input policy is required before its reuse resumes, including successor turns.
+- Completion rechecks reused inputs after sibling execution. Changed inputs
+  invalidate only the affected evidence and its claimed savings; actual command
+  output and exit status remain intact, with a notice that verification is needed.
+- Native output retention and input observation now share one execution,
+  including actionable failure diagnostics and bounded failure collection.
+- SIGTERM retains captured output and terminates the admitted target. Cancellation
+  during input preparation cannot start an unobserved fallback execution.
+- Added bounded CPython 3.12 patch-family profiles and pytest 8.4.2/9.1.1
+  observation. Interpreter, headers, ABI and collector rules bind artifacts.
+  Original capture/cache/plugin options remain unchanged; incomplete inputs run.
+- Added interleaved worker lifecycle tracking and Node/Vitest/Jest input
+  candidates. JavaScript runtime completeness remains unavailable: these
+  candidates never authorize reuse and are collected once per exact check
+  across the Evidence lineage. No production savings claim follows from fixtures.
+- Framework file capture now reassembles interleaved Linux events, binds
+  descriptor metadata targets, and closes idle threads on their group's exit.
+  Captured worker termination is distinguished from input/value completeness;
+  writes cannot erase earlier read dependencies or grant observation-only reuse.
+- JavaScript collection now records actual Date.now/Math.random/Atomics return values without a second input call, preserving thrown identity and argument coercions. An exact-binary native reader captures per-realm V8 PRNG state and bounded shared-byte samples across workers. State discontinuities and missing/coerced/exception inputs remain explicit gaps; samples do not grant observation-only reuse authority.
+- Default `auto` verification now collects Linux Node 22.23.2 clock/random/shared-memory diagnostics across workers, forks and VM contexts, including repositories with existing input policies. Verified receipts and committed owner policies still permit automatic reuse; the diagnostics alone cannot authorize it. `observer runtime` retries collection. Hidden `node --test` children retain their requested concurrency.
+- Documentation distinguishes native authority, framework candidates and the
+  remaining runtime/OS limitations. Existing sharding and owner policies remain.
+
 ## v0.96.0 — 2026-09-09
 
 - Parent-relative cost selection rejects splits whose selected child plus

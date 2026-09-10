@@ -84,7 +84,7 @@ Click 会核对精确命令、工作区与变更状态、相关输入、环境�
 | --- | --- |
 | 同一修订 | 精确检查已有成功凭据，且当前绑定条件仍然一致。 |
 | 已提交的安全变更策略 | `.click/evidence-reuse.json` 在**基准执行之前**已提交且保持不变，并允许该精确检查对应的全部净变更路径。无需 Observer。 |
-| 权威输入观测 | 来自受支持且明确启用的 Guarded 执行的完整、签名输入快照，并重新核对所有复用条件。 |
+| 权威输入观测 | 来自受支持的 Evidence 自动观测或已批准的 Guarded 执行的完整、签名输入快照，并重新核对所有复用条件。 |
 
 例如，在 revision 12 之前，仓库已为精确的认证测试命令提交策略，允许 `README.md` 变更：
 
@@ -139,7 +139,7 @@ click-gate sharding refresh
 
 ## Observer 可以一直关闭吗？
 
-**可以，关闭就是默认状态。** Observer 关闭时，Evidence 记录、普通验证、仪表板，以及满足条件的精确凭据或安全变更复用仍可使用。
+**可以。** 新的 Evidence 任务为受支持的检查选择自动观测，Guarded 默认关闭。Observer 关闭时，Evidence 记录、普通验证、仪表板，以及满足条件的精确凭据或安全变更复用仍可使用。明确关闭的选择会保留到同一会话中后续的 Evidence 任务。
 
 ```text
 click-gate observer status
@@ -149,9 +149,20 @@ click-gate observer off
 可选模式各有用途：
 
 - `click-gate observer shadow` 在受支持的 Linux、macOS 和 Windows 后端上收集非权威遥测。预测不会授予复用权限。
-- `click-gate observer authoritative` 需要单独批准的 Guarded 合约、受支持的直接 CPython **3.12.3** unittest 命令，以及平台所需的原生运行条件。仅启用模式还不够；复用需要完整的签名观测。
+- `click-gate observer auto` 仅准备一次已安装的本地采集工具，不安装工具或提升权限。没有所有者依赖策略时，完整签名输入可支持免写 JSON 的复用。观测不完整时仍执行原始检查。
+- `click-gate observer authoritative` 在活动 Evidence 或已批准的 Guarded 中明确准备采集。原生配置支持 CPython **3.12.3–3.12.14** 的直接 `python -m unittest` 及受支持的 `python -m pytest` 命令。仍须满足运行时、平台和输入完整性条件；启用模式本身不授予复用权限。
+
+输出、失败诊断与输入观测来自同一次执行。pytest 输入配置覆盖 8.4.2 和 9.1.1；缓存写入、输出捕获文件、依赖时间的插件或 worker 可能导致观测不完整。原有参数和结果保持不变。自动模式下，Node/Vitest/Jest 以有界诊断采集文件与 worker **候选信息**；符合条件的输入会在后续正常请求的执行中继续核对。JavaScript 运行时输入完整性尚未得到证明，因此这些候选不能授权复用。参见[框架扩展与限制](docs/architecture/automatic-observation.md)。
+
+默认 `auto` 验证会在每项检查首次实际执行时采集 Linux Node 22.23.2 的时间、随机数及共享内存调用诊断，包括 worker 和 VM 上下文。部分 API 会记录实际消费值的摘要；匹配的原生采集器还会记录各上下文的随机数状态及共享缓冲区字节样本。这些样本不代表所有 JavaScript 输入已被完整捕获。经过验证的执行凭据及已提交的仓库输入策略仍可允许自动复用；诊断信息本身不能授权 JavaScript 复用。`observer runtime` 可显式重试采集。参见[默认采集、条件复用与限制](docs/architecture/node-runtime-observation.md)。
+
+自动观测按检查逐项判断；即使 Git 树相同，也会重新核对已观测的忽略文件。这不代表能完整发现所有语言、worker 或外部数据库输入。父命令拆分仍使用现有自动分片流程，采集不会额外重跑检查。
+
+已有 `evidence-reuse.json` 所有者策略时，自动准备不会改变该复用路径。结构化诊断与有界后续失败收集保留与原生输入观测同一次执行的输出。
 
 Linux strace 6.8、macOS 特权 `fs_usage` 和 Windows 内置 ETW 配置均有原生主机验证记录。自动分片端到端记录的范围是 Linux。Click 不会安装前置工具或提升权限。观测不完整时保留测试的实际结果，但不能据此建立未来复用的权威依据。详见[平台要求与验证范围](skills/click/references/authoritative-observer-v2.md)。
+
+默认 JavaScript 观测也可在无需所有者 JSON 的情况下生成**条件复用**凭据：两次正常请求的执行学习并核对观测输入，之后每次请求重新检查。仪表板和报告明确标注输入完整性未获证明。已知动态输入或采集缺口会执行对应子检查；部分 Vitest/Jest 和 worker 执行仍不符合条件。参见[条件范围与限制](docs/architecture/node-runtime-observation.md)。
 
 ## 仪表板：结果与实测效果
 

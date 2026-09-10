@@ -29,25 +29,49 @@ class ClickObserverControlTests(ClickGateTestCase):
         )
 
     def test_control_parser_accepts_only_public_observer_actions(self) -> None:
-        for action in ("off", "shadow", "authoritative", "status"):
+        for action in ("off", "shadow", "authoritative", "auto", "runtime", "status"):
             self.assertEqual(
                 CLICK_LIFECYCLE.control_request(f"click-gate observer {action}"),
                 ("observer", action, ""),
             )
         parsed = CLICK_LIFECYCLE.control_request("click-gate observer automatic")
         self.assertEqual(parsed[0], "")
-        self.assertIn("observer off|shadow|authoritative|status", parsed[2])
+        self.assertIn("observer off|shadow|authoritative|auto|runtime|status", parsed[2])
 
-    def test_status_without_runtime_reports_safe_default(self) -> None:
+    def test_rollover_migrates_implicit_off_but_preserves_explicit_off(self) -> None:
+        previous = {CLICK_OBSERVER_CONTROL.CONTROL_FIELD: CLICK_OBSERVER_CONTROL.fresh_state()}
+        current = {}
+        CLICK_OBSERVER_CONTROL.set_mode(current, "auto", updated_at=0)
+        CLICK_OBSERVER_CONTROL.carry_selection(previous, current)
+        self.assertEqual(CLICK_OBSERVER_CONTROL.mode(current), "auto")
+        CLICK_OBSERVER_CONTROL.set_mode(previous, "off", updated_at=1)
+        CLICK_OBSERVER_CONTROL.carry_selection(previous, current)
+        self.assertEqual(CLICK_OBSERVER_CONTROL.mode(current), "off")
+
+    def test_evidence_default_reports_automatic_capture_without_reuse_claim(self) -> None:
         payload = self.pre_tool("Bash", "click-gate observer status")
         self.assertIsNotNone(payload)
         assert payload is not None
         result = self.run_rewritten(payload)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("observer mode: off", result.stdout)
-        self.assertIn("reuse disabled", result.stdout)
+        self.assertIn("observer mode: auto", result.stdout)
+        self.assertIn("reuse requires complete bound inputs", result.stdout)
         self.assertIn("base reuse implemented", result.stdout)
         self.assertIn("static configuration implemented", result.stdout)
+
+    def test_explicit_off_survives_completed_evidence_rollover(self) -> None:
+        payload = self.pre_tool("Bash", "click-gate observer off")
+        result = self.run_rewritten(payload)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        before = json.loads(state_path.read_text())
+        result = self.run_rewritten(self.verify_gate([self.verification_argv()]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = self.pre_tool("Bash", "click-gate observer status", "turn-3")
+        self.assertIn("observer mode: off", self.run_rewritten(payload).stdout)
+        after = json.loads(state_path.read_text())
+        self.assertNotEqual(before["evidence_session_id"], after["evidence_session_id"])
+        self.assertEqual(CLICK_OBSERVER_CONTROL.mode(after["verification"]), "off")
 
     def test_setting_preserves_revision_evidence_and_dashboard(self) -> None:
         self.approve_contract()
