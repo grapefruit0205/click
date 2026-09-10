@@ -29,7 +29,7 @@ class ClickVerificationTests(unittest.TestCase):
         }
         lifecycle = {"click_verification_" + name for name in allowed}
         for name, dependencies in allowed.items():
-            source = (root / ("click_verification_" + name + ".py")).read_text()
+            source = (root / ("click_verification_" + name + ".py")).read_text(encoding="utf-8")
             imported = {
                 argument.value
                 for node in ast.walk(ast.parse(source))
