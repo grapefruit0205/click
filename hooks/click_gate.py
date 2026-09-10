@@ -609,12 +609,13 @@ def _verification_progress_report(event: dict[str, Any]) -> dict[str, Any]:
                 for key, source in candidate_registry.items()
                 if key in origins
             }
-    return click_diagnostics.enrich_progress(
+    (readiness,) = click_import_bootstrap.load_siblings(__package__, "click_reuse_readiness")
+    return {"readiness": readiness.projection(state), **click_diagnostics.enrich_progress(
         click_incremental.progress_projection(
             state, sources, successor_candidates=candidates
         ),
         state,
-    )
+    )}
 
 
 def _save_sharding_projection(
@@ -900,9 +901,11 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                         "authoritative "
                         f"{support['authoritative_observer']['status']}"
                     )
-                    _allow_rewritten(
-                        f"echo Click observer mode: {selected} - {detail} - {tiers}"
-                    )
+                    (readiness,) = click_import_bootstrap.load_siblings(__package__, "click_reuse_readiness")
+                    _allow_rewritten(_json_report_command({
+                        "message": f"Click observer mode: {selected} - {detail} - {tiers}",
+                        "readiness": readiness.projection(runtime_state),
+                    }))
                     return
                 current_status = click_lifecycle.read_state(event).get("status")
                 evidence_active = runtime_state.get("status") == "evidence"

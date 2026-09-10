@@ -488,6 +488,7 @@ class ClickObserverWindowsTests(unittest.TestCase):
         self.assertEqual(result.root_pid, 100)
         self.assertEqual(result.exit_code, 0)
         self.assertFalse(result.failed)
+        self.assertEqual(result.failure_codes, ())
         self.assertTrue(result.process_scope_complete)
         self.assertEqual(spawned, [["tool", "--flag"]])
         self.assertEqual(target.wait_calls, 1)
@@ -536,6 +537,7 @@ class ClickObserverWindowsTests(unittest.TestCase):
         )
         self.assertFalse(result.target_started)
         self.assertTrue(result.failed)
+        self.assertIn("session-start-failed", result.failure_codes)
         spawned.assert_not_called()
 
     def test_target_spawn_failure_stops_both_started_sessions(self) -> None:
@@ -613,6 +615,43 @@ class ClickObserverWindowsTests(unittest.TestCase):
         self.assertEqual(
             sum(call[1] == "stop" for call in interrupted_calls), 2
         )
+
+    def test_conversion_timeout_preserves_single_target_and_content_free_diagnostic(self) -> None:
+        import io
+        target = _FakeTarget()
+        spawned = mock.Mock(return_value=target)
+        def control(argv, **kwargs):
+            if argv[1] == "start":
+                Path(argv[argv.index("-o") + 1]).write_bytes(b"etl")
+            elif argv[0] == "tracerpt.exe":
+                raise subprocess.TimeoutExpired("private-secret-command", 1)
+            return subprocess.CompletedProcess(argv, 0, b"", b"")
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr):
+            result = click_observer_windows.collect_command(
+                ["private-secret-command"], workspace=Path.cwd(), environment={},
+                logman_executable="logman.exe", tracerpt_executable="tracerpt.exe",
+                run_control=control, spawn_argv=spawned, wait_for_sessions=lambda _: None,
+            )
+        spawned.assert_called_once()
+        self.assertTrue(result.target_started)
+        self.assertEqual(result.exit_code, 0)
+        self.assertFalse(result.process_scope_complete)
+        self.assertEqual(result.failure_codes, ("conversion-timeout",))
+        self.assertIn("conversion-timeout", stderr.getvalue())
+        self.assertNotIn("private-secret", stderr.getvalue())
+        broken_stderr = mock.Mock()
+        broken_stderr.write.side_effect = BrokenPipeError()
+        with mock.patch("sys.stderr", broken_stderr):
+            repeated = click_observer_windows.collect_command(
+                ["tool"], workspace=Path.cwd(), environment={},
+                logman_executable="logman.exe", tracerpt_executable="tracerpt.exe",
+                run_control=control, spawn_argv=lambda *_a, **_k: _FakeTarget(),
+                wait_for_sessions=lambda _: None,
+            )
+        self.assertTrue(repeated.target_started)
+        self.assertEqual(repeated.exit_code, 0)
+        self.assertEqual(repeated.failure_codes, ("conversion-timeout",))
 
     def test_unavailable_tools_use_fallback_exactly_once(self) -> None:
         fallback = mock.Mock(return_value=7)

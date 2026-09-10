@@ -26,6 +26,7 @@ import platform
 import re
 import secrets
 import subprocess
+import sys
 import tempfile
 import time
 from typing import Any
@@ -129,6 +130,7 @@ class CollectedExecution:
     command_duration_ms: int
     collector_overhead_ms: int
     process_scope_complete: bool = True
+    failure_codes: tuple[str, ...] = ()
 
 
 def _bounded_add(left: int, right: int) -> int:
@@ -704,6 +706,7 @@ def collect_command(
     root_pid: int | None = None
     exit_code = 127
     failed = False
+    failure_codes: set[str] = set()
     truncated = False
     raw_documents: list[bytes] = []
     sessions: list[str] = []
@@ -747,6 +750,7 @@ def collect_command(
                         runner=run_control,
                     )
                     if int(result.returncode) != 0:
+                        failure_codes.add("session-start-failed")
                         failed = True
                         break
                     sessions.append(session)
@@ -766,6 +770,7 @@ def collect_command(
                     click_process.target_started()
                     exit_code = _wait_for_target(target)
             except KeyboardInterrupt:
+                failure_codes.add("interrupted")
                 failed = True
                 exit_code = 130
             except (
@@ -775,6 +780,7 @@ def collect_command(
                 TypeError,
                 ValueError,
             ):
+                failure_codes.add("target-wait-failed" if target_started else "target-preparation-failed")
                 failed = True
             finally:
                 if not target_started:
@@ -801,11 +807,13 @@ def collect_command(
                             runner=run_control,
                         )
                         if int(stopped.returncode) != 0:
+                            failure_codes.add("session-stop-failed")
                             failed = True
                     except KeyboardInterrupt:
                         failed = True
                         exit_code = 130
                     except Exception:
+                        failure_codes.add("session-stop-failed")
                         failed = True
                 cleanup_ms = max(
                     0, int((time.monotonic() - cleanup_started) * 1000)
@@ -814,6 +822,7 @@ def collect_command(
                 for _session, stem, _provider, _keywords in definitions:
                     etl = _trace_path(trace_root, stem)
                     if etl is None:
+                        failure_codes.add("etl-missing")
                         failed = True
                         continue
                     xml_path = trace_root / f"{stem}.xml"
@@ -833,23 +842,34 @@ def collect_command(
                             environment=environment,
                             runner=run_control,
                         )
+                    except subprocess.TimeoutExpired:
+                        failure_codes.add("conversion-timeout")
+                        failed = True
+                        continue
                     except Exception:
+                        failure_codes.add("conversion-failed")
                         failed = True
                         continue
                     if int(converted.returncode) != 0:
+                        failure_codes.add("conversion-failed")
                         failed = True
                         continue
                     raw, was_truncated = _read_bounded(xml_path, bounded_limit)
                     if not raw:
+                        failure_codes.add("xml-unavailable")
                         failed = True
+                    if was_truncated:
+                        failure_codes.add("xml-truncated")
                     raw_documents.append(raw)
                     truncated = bool(truncated or was_truncated)
     except KeyboardInterrupt:
+        failure_codes.add("interrupted")
         failed = True
         exit_code = 130
         if target is not None and target.poll() is None:
             terminate_group(target)
     except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError):
+        failure_codes.add("collector-failed")
         failed = True
         if target_started and target is not None:
             try:
@@ -869,6 +889,15 @@ def collect_command(
         and not truncated
         and len(raw_documents) == 2
     )
+    if failed or truncated:
+        failure_codes = failure_codes or {"collector-failed"}
+        # Stage codes only: raw ETW paths, command lines and error text stay private.
+        try:
+            print("[Click Windows observer] " + ", ".join(sorted(failure_codes)), file=sys.stderr)
+        except (OSError, ValueError):
+            # A closed host output pipe must not lose target_started and cause
+            # the caller to execute an already completed target again.
+            pass
     return CollectedExecution(
         exit_code=exit_code,
         raw=tuple(raw_documents),
@@ -879,6 +908,7 @@ def collect_command(
         command_duration_ms=duration_ms,
         collector_overhead_ms=overhead_ms,
         process_scope_complete=process_scope_complete,
+        failure_codes=tuple(sorted(failure_codes)),
     )
 
 

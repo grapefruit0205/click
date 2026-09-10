@@ -65,6 +65,8 @@ HOOK_FILES = (
     "click_receipt_runtime.py",
     "click_host_coverage.py",
     "click_incremental.py",
+    "click_incremental_records.py",
+    "click_reuse_readiness.py",
     "click_host_router.py",
     "click_import_bootstrap.py",
     "click_inspection.py",

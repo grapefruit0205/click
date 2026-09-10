@@ -127,6 +127,57 @@ class NativePreparationPublicationTests(unittest.TestCase):
 
 
 class AutomaticPreparationTests(unittest.TestCase):
+    def test_new_python_headers_allow_one_preparation_retry(self) -> None:
+        verification = {}
+        groups = {"source": [{"argv": [sys.executable, "-m", "unittest"]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with mock.patch.object(observer.inventory, "project_root", return_value=root), mock.patch.object(observer.sysconfig, "get_path", return_value=str(root)), mock.patch.object(observer, "prepare", side_effect=observer.inventory.AnalysisError("native-build-header-unavailable")) as prepare:
+                observer.prepare_automatic(root, verification, groups)
+                observer.prepare_automatic(root, verification, groups)
+                self.assertEqual(prepare.call_count, 1)
+                (root / "Python.h").write_text("installed header")
+                observer.prepare_automatic(root, verification, groups)
+                observer.prepare_automatic(root, verification, groups)
+                self.assertEqual(prepare.call_count, 2)
+
+    def test_changed_environment_retries_failed_preparation_once(self) -> None:
+        verification = {}
+        groups = {"source": [{"argv": [sys.executable, "-m", "unittest"]}]}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(observer.inventory, "project_root", return_value=Path(directory)), mock.patch.object(observer, "prepare", side_effect=observer.inventory.AnalysisError("backend-missing")) as prepare:
+            with mock.patch.dict(os.environ, {"PYTHONHASHSEED": "77"}):
+                observer.prepare_automatic(Path(directory), verification, groups)
+                prepare.assert_not_called()
+            with mock.patch.dict(os.environ, {"PYTHONHASHSEED": "0", "PYTHONDONTWRITEBYTECODE": "1"}):
+                observer.prepare_automatic(Path(directory), verification, groups)
+                observer.prepare_automatic(Path(directory), verification, groups)
+                prepare.assert_called_once()
+        self.assertEqual(len(verification["automatic_observer_context"]), 64)
+        self.assertNotIn(observer.STATE_FIELD, verification)
+
+    def test_policy_removed_at_repository_root_retries_from_subdirectory(self) -> None:
+        verification = {}
+        groups = {"source": [{"argv": [sys.executable, "-m", "unittest"]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".click").mkdir()
+            policy = root / ".click/evidence-reuse.json"
+            policy.write_text("{}")
+            with mock.patch.object(observer.inventory, "project_root", return_value=root), mock.patch.object(observer, "prepare", side_effect=observer.inventory.AnalysisError("backend-missing")) as prepare:
+                observer.prepare_automatic(root / "nested", verification, groups)
+                prepare.assert_not_called()
+                policy.unlink()
+                observer.prepare_automatic(root / "nested", verification, groups)
+                observer.prepare_automatic(root / "nested", verification, groups)
+                prepare.assert_called_once()
+
+    def test_retry_context_failure_does_not_block_normal_verification(self) -> None:
+        for effect in (OSError("private path"), ["a" * 64, OSError("private path")]):
+            verification = {}
+            with mock.patch.object(observer, "_automatic_context", side_effect=effect), mock.patch.object(observer.inventory, "project_root", return_value=Path.cwd()):
+                observer.prepare_automatic(Path.cwd(), verification, {"source": [{"argv": [sys.executable, "-m", "unittest"]}]})
+            self.assertEqual(verification["automatic_observer_attempt"], {"status": "unavailable", "reason": "native-preparation-unavailable"})
+
     def test_diagnostics_and_bounded_failure_keep_their_output_capture(self) -> None:
         self.assertTrue(control.batch_supports_capture({}))
         self.assertTrue(control.batch_supports_capture({"reporting": {"format": "actionable"}}))
@@ -248,6 +299,7 @@ class AutomaticEvidenceTests(ClickGateTestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         state = self.read_state()
         decisions = self.decisions(state)
+        self.last_capture_output = result.stdout + result.stderr
         for name in ("alpha", "beta"):
             source_key = CLICK_EVIDENCE.evidence_key(name.upper())
             executed = decisions[source_key] in {"run", "not-evaluable"}
@@ -284,6 +336,8 @@ class AutomaticEvidenceTests(ClickGateTestCase):
                 "project_inputs": [row for row in observation.get("inputs", [])
                                    if row.get("root") == "project"],
             }
+        details["preparation"] = state.get("verification", {}).get("automatic_observer_attempt")
+        details["capture_output"] = getattr(self, "last_capture_output", "")
         self.assertEqual(self.decisions(state), expected, json.dumps(details, sort_keys=True))
 
     def test_no_policy_reuses_unaffected_child_and_tracks_ignored_shared_inputs(self) -> None:

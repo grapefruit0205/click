@@ -21,7 +21,9 @@ def state_is_valid(value: Any) -> bool:
     return bool(
         isinstance(value, dict)
         and set(value) == _FIELDS
+        and type(value.get("version")) is int
         and value.get("version") == CONTROL_VERSION
+        and isinstance(value.get("mode"), str)
         and value.get("mode") in MODES
         and isinstance(value.get("updated_at"), int)
         and not isinstance(value.get("updated_at"), bool)
@@ -53,7 +55,7 @@ def projection(verification: Any) -> dict[str, Any]:
         "mode": selected,
         "enabled": selected != "off",
         "authoritative": selected == "authoritative",
-        "reuse_authorized": selected == "authoritative",
+        "reuse_authorized": False,  # Mode selection never supplies a receipt.
     }
 
 
@@ -77,7 +79,7 @@ def description(verification: Any) -> str:
         attempt = verification.get("automatic_observer_attempt", {})
         if isinstance(attempt, dict) and attempt.get("status") == "unavailable":
             return "capture unavailable, normal verification remains available"
-        return "automatic capture for supported checks, reuse requires complete bound inputs"
+        return "automatic capture for supported checks, reuse requires complete bound inputs or an explicitly conditional JS receipt"
     return "input capture disabled, existing receipt and policy reuse remain available"
 
 
@@ -96,3 +98,6 @@ def carry_selection(previous: Any, current: dict[str, Any]) -> None:
         for key in ("authoritative_observer", "automatic_observer_attempt", "framework_observations"):
             if isinstance(previous.get(key), dict):
                 current[key] = dict(previous[key])
+        context = previous.get("automatic_observer_context")
+        if isinstance(context, str) and len(context) == 64:
+            current["automatic_observer_context"] = context

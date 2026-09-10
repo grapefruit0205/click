@@ -122,14 +122,14 @@ click-gate sharding refresh
 
 每一步之间查看 `status` 并按其下一步提示操作。状态会分别显示命令执行、自动清单与拆分、精确复用、已提交策略复用和权威观测复用；其中一条路径就绪不代表其他路径也已就绪。后续测试发现结果发生变化时，会生成限定范围的 diff；刷新只更新与 Click 先前已提交内容谱系一致的策略，不覆盖用户拥有或修改过的策略。
 
-自动清单与精确拆分已在有限定范围的 unittest、固定版本的 Vitest 5 和 Jest 30 配置中通过本地验证。保守的 pytest collect-only 配置已经实现并分配给固定版本 pytest CI，但此 checkout 的最终本地运行没有 pytest。Vitest 与 Jest 仅支持受限的静态配置；不支持或存在歧义的收集会保留父命令。详见[自动分片指南](skills/click/references/automatic-sharding-setup.md)及[两个项目的端到端记录](docs/history/auto-sharding/e2e.md)。
+自动清单与精确拆分已在有限定范围的 unittest、固定版本的 Vitest 5 和 Jest 30 配置中通过本地验证。保守的 pytest collect-only 配置由固定版本集成与观测 CI 覆盖；实际支持范围取决于命令和配置。Vitest 与 Jest 仅支持受限的静态配置；不支持或存在歧义的收集会保留父命令。详见[自动分片指南](skills/click/references/automatic-sharding-setup.md)及[两个项目的端到端记录](docs/history/auto-sharding/e2e.md)。
 
 支持范围按验证工具配置管理，而不是只按编程语言名称管理。
 
 | 工具/配置 | 实际本地执行 | 自动清单与拆分 |
 | --- | --- | --- |
 | CPython unittest | 已验证 | 受限配置 |
-| pytest | 收集器与配置已实现；已分配固定版本 CI；最终本地运行不可用 | 受限配置 |
+| pytest | 受限 collect-only 配置；固定版本集成 CI | 受限配置 |
 | Vitest 5 / Jest 30 | 已使用固定 fixture 验证 | 受限配置、精确文件子项 |
 | Node test/check、npm test、Go test | 已验证 | 仅父命令执行 |
 | JSON/YAML/Markdown/SVG 项目验证器、jq | 已验证 fixture | 仅父命令执行 |
@@ -141,6 +141,8 @@ click-gate sharding refresh
 
 **可以。** 新的 Evidence 任务为受支持的检查选择自动观测，Guarded 默认关闭。Observer 关闭时，Evidence 记录、普通验证、仪表板，以及满足条件的精确凭据或安全变更复用仍可使用。明确关闭的选择会保留到同一会话中后续的 Evidence 任务。
 
+`click-gate observer status`、`click-gate verification status` 及仪表板会显示准备失败原因、恢复操作和最近逐项检查的决策。这些只读视图不授予复用权限。[从代码生成的支持表](docs/architecture/runtime-support.md)区分普通执行、自动拆分、完整观测和条件 JS 复用，并列出平台前置条件。相关环境或工具变化后会重试准备，也可使用 `click-gate observer auto` 显式重试。
+
 ```text
 click-gate observer status
 click-gate observer off
@@ -149,10 +151,10 @@ click-gate observer off
 可选模式各有用途：
 
 - `click-gate observer shadow` 在受支持的 Linux、macOS 和 Windows 后端上收集非权威遥测。预测不会授予复用权限。
-- `click-gate observer auto` 仅准备一次已安装的本地采集工具，不安装工具或提升权限。没有所有者依赖策略时，完整签名输入可支持免写 JSON 的复用。观测不完整时仍执行原始检查。
+- `click-gate observer auto` 准备已安装的本地采集工具，并在相关环境或工具变化后重试，不安装工具或提升权限。没有所有者依赖策略时，完整签名输入可支持免写 JSON 的复用。观测不完整时仍执行原始检查。
 - `click-gate observer authoritative` 在活动 Evidence 或已批准的 Guarded 中明确准备采集。原生配置支持 CPython **3.12.3–3.12.14** 的直接 `python -m unittest` 及受支持的 `python -m pytest` 命令。仍须满足运行时、平台和输入完整性条件；启用模式本身不授予复用权限。
 
-输出、失败诊断与输入观测来自同一次执行。pytest 输入配置覆盖 8.4.2 和 9.1.1；缓存写入、输出捕获文件、依赖时间的插件或 worker 可能导致观测不完整。原有参数和结果保持不变。自动模式下，Node/Vitest/Jest 以有界诊断采集文件与 worker **候选信息**；符合条件的输入会在后续正常请求的执行中继续核对。JavaScript 运行时输入完整性尚未得到证明，因此这些候选不能授权复用。参见[框架扩展与限制](docs/architecture/automatic-observation.md)。
+输出、失败诊断与输入观测来自同一次执行。pytest 输入配置覆盖 8.4.2 和 9.1.1；缓存写入、输出捕获文件、依赖时间的插件或 worker 可能导致观测不完整。原有参数和结果保持不变。自动模式下，Node/Vitest/Jest 以有界诊断采集文件与 worker **候选信息**；符合条件的输入会在后续正常请求的执行中继续核对。原始候选不能授权复用；单独签署并重新核验的条件凭据可以允许复用，同时明确披露输入完整性尚未得到证明。参见[框架扩展与限制](docs/architecture/automatic-observation.md)。
 
 默认 `auto` 验证会在每项检查首次实际执行时采集 Linux Node 22.23.2 的时间、随机数及共享内存调用诊断，包括 worker 和 VM 上下文。部分 API 会记录实际消费值的摘要；匹配的原生采集器还会记录各上下文的随机数状态及共享缓冲区字节样本。这些样本不代表所有 JavaScript 输入已被完整捕获。经过验证的执行凭据及已提交的仓库输入策略仍可允许自动复用；诊断信息本身不能授权 JavaScript 复用。`observer runtime` 可显式重试采集。参见[默认采集、条件复用与限制](docs/architecture/node-runtime-observation.md)。
 

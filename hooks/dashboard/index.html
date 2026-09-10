@@ -30,6 +30,12 @@
       <section class="panel readiness-panel" aria-labelledby="readinessTitle">
         <div class="readiness-copy"><p class="eyebrow"><span data-i18n="현재 프로젝트 준비 상태">현재 프로젝트 준비 상태</span></p><h2 id="readinessTitle"><span data-i18n="사용하던 검증 도구는 그대로. 반복 검증은 근거 있게.">사용하던 검증 도구는 그대로. 반복 검증은 근거 있게.</span></h2><p id="readinessNext"><span data-i18n="지원되는 검증 명령을 선택하면 준비 상태를 확인할 수 있습니다.">지원되는 검증 명령을 선택하면 준비 상태를 확인할 수 있습니다.</span></p></div>
         <div class="readiness-items" aria-label="검증 기능 준비 상태" data-i18n-aria-label="검증 기능 준비 상태"><article><span data-i18n="명령 실행">명령 실행</span><strong id="commandReadiness">—</strong></article><article><span data-i18n="자동 목록·분할">자동 목록·분할</span><strong id="inventoryReadiness">—</strong></article><article><span data-i18n="같은 상태 재사용">같은 상태 재사용</span><strong id="exactReadiness">—</strong></article><article><span data-i18n="커밋 정책 재사용">커밋 정책 재사용</span><strong id="policyReadiness">—</strong></article><article><span data-i18n="관찰 기반 재사용">관찰 기반 재사용</span><strong id="authoritativeReadiness">—</strong></article></div>
+        <div class="observer-readiness">
+          <p id="observerPreparation" role="status"></p>
+          <p id="observerNext" class="muted"></p>
+          <p class="muted" data-i18n="준비 상태는 재사용 승인이 아닙니다. 조건부 JS 재사용은 관찰된 입력만 확인하며 완전성은 입증되지 않았습니다.">준비 상태는 재사용 승인이 아닙니다. 조건부 JS 재사용은 관찰된 입력만 확인하며 완전성은 입증되지 않았습니다.</p>
+          <details><summary data-i18n="검사별 재실행 이유와 다음 동작">검사별 재실행 이유와 다음 동작</summary><ul id="observerChecks" class="readiness-checks"></ul></details>
+        </div>
       </section>
       <div class="impact-grid">
         <section class="panel savings-hero" aria-labelledby="impactTitle">

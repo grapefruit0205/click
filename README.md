@@ -130,14 +130,14 @@ For an eligible proposal, the normal sequence is:
 
 Read `status` between steps and follow its next action. Status separates command execution, automatic inventory/split, exact reuse, committed-policy reuse, and authoritative-observation reuse; one ready route does not imply the others are ready. Later discovery changes produce a bounded diff; refresh updates only policy matching Click's previously committed lineage and does not overwrite user-owned or modified policy.
 
-Automatic inventory and exact splitting are locally verified for bounded unittest, pinned Vitest 5, and pinned Jest 30 profiles. The conservative pytest collect-only profile is implemented and assigned to pinned pytest CI; this checkout has no pytest runtime. Vitest and Jest use profile-limited static configuration; unsupported or ambiguous collection retains the parent command. See the [automatic sharding guide](skills/click/references/automatic-sharding-setup.md) and [two-project E2E record](docs/history/auto-sharding/e2e.md).
+Automatic inventory and exact splitting are locally verified for bounded unittest, pinned Vitest 5, and pinned Jest 30 profiles. The conservative pytest collect-only profile has pinned integration and observation CI coverage; actual eligibility depends on the command and configuration. Vitest and Jest use profile-limited static configuration; unsupported or ambiguous collection retains the parent command. See the [automatic sharding guide](skills/click/references/automatic-sharding-setup.md) and [two-project E2E record](docs/history/auto-sharding/e2e.md).
 
 Support is tracked by tool profile rather than by language name alone:
 
 | Tool/profile | Actual local execution | Automatic inventory/split |
 | --- | --- | --- |
 | CPython unittest | Verified | Profile-limited |
-| pytest | Collector/profile implemented; pinned CI assigned, unavailable in this local final run | Profile-limited |
+| pytest | Bounded collect-only profile; pinned integration CI | Profile-limited |
 | Vitest 5 / Jest 30 | Verified with pinned fixtures | Profile-limited, exact file children |
 | Node test/check, npm test, Go test | Verified | Parent execution only |
 | JSON/YAML/Markdown/SVG project validators, jq | Verified fixtures | Parent execution only |
@@ -149,6 +149,8 @@ A recognized-only profile is not a claim that its native toolchain passed. Runti
 
 **Yes.** New Evidence tasks select automatic capture for supported checks; Guarded defaults to off. Evidence recording, ordinary verification, the dashboard, and qualifying exact-receipt or safe-change reuse work with Observer off. An explicit off selection survives completed Evidence turns in the same session.
 
+Preparation failure reasons and recovery actions appear in `click-gate observer status`, `click-gate verification status`, and the dashboard. These read-only views never grant reuse permission. The [code-derived support matrix](docs/architecture/runtime-support.md) separates execution, splitting, complete observation and conditional JS reuse, with platform prerequisites. A failed preparation retries when relevant capabilities change; explicit `click-gate observer auto` also permits a retry.
+
 ```text
 click-gate observer status
 click-gate observer off
@@ -156,7 +158,7 @@ click-gate observer off
 
 Optional modes have different purposes:
 
-- `click-gate observer auto` prepares available local capture once, without installing tools or asking for privileges. With no owner dependency policy, complete signed inputs can support reuse without writing JSON. Incomplete capture leaves the original check running normally.
+- `click-gate observer auto` prepares available local capture and retries after relevant capability changes, without installing tools or asking for privileges. With no owner dependency policy, complete signed inputs can support reuse without writing JSON. Incomplete capture leaves the original check running normally.
 - `click-gate observer shadow` collects non-authoritative telemetry on supported Linux, macOS, and Windows backends. Predictions never authorize reuse.
 - `click-gate observer authoritative` explicitly prepares capture in active Evidence or an approved Guarded contract. Native profiles cover CPython **3.12.3–3.12.14** with direct `python -m unittest` or supported `python -m pytest` commands. Runtime, platform and input completeness still determine eligibility; enabling the mode grants no reuse.
 

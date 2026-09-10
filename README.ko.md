@@ -183,14 +183,14 @@ click-gate sharding refresh
 
 단계 사이에 `status`를 확인하고 표시된 다음 동작을 따릅니다. 상태는 명령 실행, 자동 목록·분할, exact 재사용, 커밋 정책 재사용, 권위 관찰 재사용을 분리하므로 한 경로가 준비되어도 다른 경로까지 준비된 것은 아닙니다. 이후 테스트 목록이 바뀌면 제한된 변경 내역을 제시하며, `refresh`는 Click이 이전에 커밋한 이력과 일치하는 정책만 갱신합니다. 사용자가 소유하거나 수정한 정책을 덮어쓰지 않습니다.
 
-자동 목록과 정확한 분할은 제한된 unittest, 고정된 Vitest 5, 고정된 Jest 30 프로필에서 로컬 검증했습니다. 보수적인 pytest collect-only 프로필은 구현되어 고정 버전 pytest CI에 배정했지만 이 checkout의 최종 로컬 실행에는 pytest가 없습니다. Vitest와 Jest는 제한된 정적 설정만 지원하며, 미지원 또는 불명확한 수집에서는 상위 명령을 유지합니다. [자동 샤딩 안내](skills/click/references/automatic-sharding-setup.md)와 [두 프로젝트 E2E 기록](docs/history/auto-sharding/e2e.md)을 참고하세요.
+자동 목록과 정확한 분할은 제한된 unittest, 고정된 Vitest 5, 고정된 Jest 30 프로필에서 로컬 검증했습니다. 보수적인 pytest collect-only 프로필은 고정 버전 통합·관찰 CI 대상으로 관리하며 실제 지원 여부는 명령과 설정에 따라 결정됩니다. Vitest와 Jest는 제한된 정적 설정만 지원하며, 미지원 또는 불명확한 수집에서는 상위 명령을 유지합니다. [자동 샤딩 안내](skills/click/references/automatic-sharding-setup.md)와 [두 프로젝트 E2E 기록](docs/history/auto-sharding/e2e.md)을 참고하세요.
 
 지원 범위는 언어 이름 하나가 아니라 검증 도구 프로필별로 관리합니다.
 
 | 도구/프로필 | 실제 로컬 실행 | 자동 목록·분할 |
 | --- | --- | --- |
 | CPython unittest | 검증함 | 제한된 프로필 |
-| pytest | 수집기·프로필 구현, 고정 버전 CI 배정, 최종 로컬 실행에서는 사용 불가 | 제한된 프로필 |
+| pytest | 제한된 collect-only 프로필, 고정 버전 통합 CI | 제한된 프로필 |
 | Vitest 5 / Jest 30 | 고정 fixture로 검증함 | 제한된 프로필, 정확한 파일 child |
 | Node test/check, npm test, Go test | 검증함 | parent 실행만 |
 | JSON/YAML/Markdown/SVG 프로젝트 validator, jq | fixture 검증함 | parent 실행만 |
@@ -202,6 +202,8 @@ click-gate sharding refresh
 
 **네.** 새 Evidence 작업은 지원되는 검사에 자동 관찰을 선택하며 Guarded의 기본값은 Off입니다. Observer를 꺼도 Evidence 기록, 일반 검증, 대시보드, 조건을 충족한 정확한 영수증·안전 변경 정책 재사용이 동작합니다. 명시적으로 끈 설정은 같은 세션의 완료된 Evidence 작업 다음에도 유지됩니다.
 
+`click-gate observer status`, `click-gate verification status`와 대시보드에서 준비 실패 이유·다음 행동·최근 검사별 판정을 확인할 수 있습니다. 이 읽기 전용 표시는 재사용을 승인하지 않습니다. [코드에서 생성한 지원 표](docs/architecture/runtime-support.md)는 일반 실행·자동 분할·완전한 관찰·조건부 JS 재사용과 플랫폼별 준비 조건을 구분합니다. 준비 실패 후 관련 환경이나 도구가 바뀌면 다시 시도하며, `click-gate observer auto`로 명시적으로 재시도할 수도 있습니다.
+
 ```text
 click-gate observer status
 click-gate observer off
@@ -210,10 +212,10 @@ click-gate observer off
 선택 모드는 목적이 다릅니다.
 
 - `click-gate observer shadow`: 지원되는 Linux·macOS·Windows 백엔드에서 관찰 정보를 수집합니다. 예측은 재사용 권한을 부여하지 않습니다.
-- `click-gate observer auto`: 설치된 수집 도구를 한 번 준비합니다. 도구 설치나 권한 상승은 하지 않습니다. 소유자 의존성 정책이 없으면 완전한 서명 입력으로 JSON 작성 없이 재사용할 수 있습니다. 관찰이 불완전하면 원래 검사를 실행합니다.
+- `click-gate observer auto`: 설치된 수집 도구를 준비하고 관련 환경·도구가 바뀌면 다시 시도합니다. 도구 설치나 권한 상승은 하지 않습니다. 소유자 의존성 정책이 없으면 완전한 서명 입력으로 JSON 작성 없이 재사용할 수 있습니다. 관찰이 불완전하면 원래 검사를 실행합니다.
 - `click-gate observer authoritative`: 활성 Evidence 또는 승인된 Guarded에서 명시적으로 준비합니다. CPython **3.12.3–3.12.14**의 직접 `python -m unittest`, 지원되는 `python -m pytest` 명령을 대상으로 합니다. 런타임·플랫폼·입력 관찰 조건을 충족해야 하며, 모드를 켜는 것만으로 재사용이 허용되지는 않습니다.
 
-로그·실패 진단과 입력 관찰은 같은 한 번의 실행에서 수집합니다. pytest 입력 프로필은 8.4.2와 9.1.1을 대상으로 하며 캐시 쓰기, 캡처 파일, 시간에 의존하는 플러그인, worker 때문에 재사용 근거가 불완전할 수 있습니다. 기존 실행 옵션과 결과는 유지합니다. Node/Vitest/Jest는 자동 모드에서 파일·worker **후보 정보**를 제한된 횟수로 수집하며, 조건부 대상인 입력은 다음 요청된 실행에서 대조합니다. JavaScript 런타임 입력의 완전성은 아직 입증되지 않아 이 후보로 재사용을 허용하지 않습니다. 자세한 범위는 [프레임워크 확장과 제한](docs/architecture/automatic-observation.md)에 있습니다.
+로그·실패 진단과 입력 관찰은 같은 한 번의 실행에서 수집합니다. pytest 입력 프로필은 8.4.2와 9.1.1을 대상으로 하며 캐시 쓰기, 캡처 파일, 시간에 의존하는 플러그인, worker 때문에 재사용 근거가 불완전할 수 있습니다. 기존 실행 옵션과 결과는 유지합니다. Node/Vitest/Jest는 자동 모드에서 파일·worker **후보 정보**를 제한된 횟수로 수집하며, 조건부 대상인 입력은 다음 요청된 실행에서 대조합니다. 원시 후보만으로 재사용을 허용하지 않습니다. 별도로 서명하고 재검증한 조건부 영수증은 입력 완전성이 미입증임을 표시하며 재사용할 수 있습니다. 자세한 범위는 [프레임워크 확장과 제한](docs/architecture/automatic-observation.md)에 있습니다.
 
 기본 `auto` 검증은 각 검사의 첫 실제 실행에서 Linux Node 22.23.2의 시간·난수·공유 메모리 호출을 worker·VM 실행 공간까지 수집합니다. 일부 API는 실제 소비한 값의 해시를 기록하며, 일치하는 네이티브 수집기가 있으면 실행 공간별 난수 상태와 공유 버퍼 바이트 표본도 기록합니다. 이 표본만으로 모든 JavaScript 입력의 완전성을 증명하지는 않습니다. 검증된 실행 영수증과 커밋된 저장소 입력 정책에 따른 자동 재사용은 허용하며, 진단 정보만으로 JavaScript 재사용 권한을 만들지는 않습니다. `observer runtime`은 수집을 명시적으로 다시 시도할 때 사용합니다. [기본 수집·조건부 재사용과 제한](docs/architecture/node-runtime-observation.md)을 참고하세요.
 

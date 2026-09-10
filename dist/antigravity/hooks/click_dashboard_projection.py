@@ -20,6 +20,7 @@ from typing import Any
 if __package__:
     from . import (
         click_dependency_cache,
+        click_reuse_readiness,
         click_observer_common,
         click_incremental,
         click_observer_control,
@@ -28,6 +29,7 @@ if __package__:
     )
 else:  # Executed beside the bundled hook modules.
     import click_dependency_cache
+    import click_reuse_readiness
     import click_observer_common
     import click_incremental
     import click_observer_control
@@ -35,9 +37,9 @@ else:  # Executed beside the bundled hook modules.
     import click_shadow_intelligence
 
 
-PROJECTION_VERSION = 9
+PROJECTION_VERSION = 10
 LEGACY_PROJECTION_VERSION = 4
-LEGACY_PROJECTION_VERSIONS = frozenset({4, 5, 6, 7, 8})
+LEGACY_PROJECTION_VERSIONS = frozenset({4, 5, 6, 7, 8, 9})
 PROJECTION_MODE = "incremental-verification"
 MAX_SOURCES = click_shadow_intelligence.MAX_STATE_SOURCES
 MAX_INPUTS = click_shadow_intelligence.MAX_PROJECTION_INPUTS
@@ -63,7 +65,8 @@ _V5_FIELDS = _V4_FIELDS | {"batch_summaries"}
 _V6_FIELDS = _V5_FIELDS | {"setup"}
 _V7_FIELDS = _V6_FIELDS | {"retained_impact"}
 _V8_FIELDS = _V7_FIELDS | {"task_efficiency"}
-_FIELDS = _V8_FIELDS
+_V9_FIELDS = _V8_FIELDS
+_FIELDS = _V9_FIELDS | {"readiness"}
 _TASK_EFFICIENCY_FIELDS = frozenset(
     {"kind", "version", "generated_at", "measurement_status", "measurement_reason", "presentations"}
 )
@@ -546,6 +549,7 @@ def dashboard_projection(
     projection = {
         "version": PROJECTION_VERSION,
         "mode": PROJECTION_MODE,
+        "readiness": click_reuse_readiness.projection(raw_state),
         "generated_at": projection_generated_at,
         "task": {
             "runtime_mode": runtime_mode,
@@ -620,7 +624,8 @@ def projection_is_valid(value: Any) -> bool:
     legacy = version == 4
     expected_fields = (
         _V4_FIELDS if version == 4 else _V5_FIELDS if version == 5
-        else _V6_FIELDS if version == 6 else _V7_FIELDS if version == 7 else _FIELDS
+        else _V6_FIELDS if version == 6 else _V7_FIELDS if version == 7
+        else _V9_FIELDS if version in {8, 9} else _FIELDS
     )
     if (
         not isinstance(value, dict)
@@ -630,6 +635,8 @@ def projection_is_valid(value: Any) -> bool:
         or not _is_count(value.get("generated_at"), minimum=1)
         or len(_canonical_bytes(value)) > MAX_BYTES
     ):
+        return False
+    if version == PROJECTION_VERSION and not click_reuse_readiness.is_valid(value.get("readiness")):
         return False
     task = value.get("task")
     engine = value.get("engine")
@@ -753,19 +760,19 @@ def projection_is_valid(value: Any) -> bool:
                 if incremental[field] != selected["incremental"][field]:
                     return False
 
-    if version in {7, 8, PROJECTION_VERSION} and not click_incremental.retained_impact_is_valid(value.get("retained_impact")):
+    if version in {7, 8, 9, PROJECTION_VERSION} and not click_incremental.retained_impact_is_valid(value.get("retained_impact")):
         return False
-    if version in {7, 8, PROJECTION_VERSION} and (
+    if version in {7, 8, 9, PROJECTION_VERSION} and (
         value["retained_impact"]["completed_request_count"] > history["retained_batch_count"]
         or value["retained_impact"]["reused_group_request_count"] > value["accounting"]["reuse_numerator"]
     ):
         return False
-    if version in {6, 7, 8, PROJECTION_VERSION}:
+    if version in {6, 7, 8, 9, PROJECTION_VERSION}:
         setup = value.get("setup")
         if (
             not isinstance(setup, dict)
             or set(setup)
-            != (_SETUP_FIELDS if version == PROJECTION_VERSION else _LEGACY_SETUP_FIELDS)
+            != (_SETUP_FIELDS if version >= 9 else _LEGACY_SETUP_FIELDS)
             or setup.get("version") != click_sharding_setup.VERSION
             or not isinstance(setup.get("status"), str)
             or re.fullmatch(r"[a-z0-9-]{1,64}", setup["status"]) is None
@@ -797,7 +804,7 @@ def projection_is_valid(value: Any) -> bool:
         ):
             return False
 
-    if version in {8, PROJECTION_VERSION}:
+    if version in {8, 9, PROJECTION_VERSION}:
         task_efficiency = value.get("task_efficiency")
         if (
             not isinstance(task_efficiency, dict)

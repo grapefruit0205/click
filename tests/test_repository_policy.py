@@ -41,6 +41,26 @@ def _reference(name: str) -> str:
 class RepositoryPolicyTests(core.RepositoryPolicyTests):
     """Keep runtime policy strict without freezing README marketing prose."""
 
+    def test_runtime_support_document_matches_capability_sources(self) -> None:
+        from scripts import generate_runtime_support
+        self.assertEqual(
+            (ROOT / generate_runtime_support.TARGET).read_text(encoding="utf-8"),
+            generate_runtime_support.render(ROOT),
+        )
+
+    def test_incremental_record_schema_has_no_lifecycle_imports(self) -> None:
+        import ast
+        from hooks import click_incremental, click_incremental_records
+        tree = ast.parse((ROOT / "hooks/click_incremental_records.py").read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                self.assertFalse(node.level)
+                self.assertFalse((node.module or "").startswith(("hooks", "click_")))
+            if isinstance(node, ast.Import):
+                self.assertFalse(any(alias.name.startswith(("hooks", "click_")) for alias in node.names))
+        for name in ("decision", "decision_is_valid", "is_duration", "baseline_is_valid"):
+            self.assertIs(getattr(click_incremental, name), getattr(click_incremental_records, name))
+
     def test_manifest_declares_click_one_shot_release(self) -> None:
         manifest = json.loads(
             (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
