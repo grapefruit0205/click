@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 import os
 from pathlib import Path
 import subprocess
 import shutil
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -17,6 +20,110 @@ from hooks import click_observer_runtime as observer
 from hooks import click_observer_control as control
 from hooks import click_verification_bindings as bindings
 from hooks import click_incremental as incremental
+
+
+class NativePreparationPublicationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        self.project = root / "project"
+        self.project.mkdir()
+        self.cache = root / "cache"
+        self.cache.mkdir()
+        include = root / "include"
+        include.mkdir()
+        (include / "Python.h").write_text("fixture headers")
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        for target, name, value in (
+            (observer.inventory, "project_root", self.project),
+            (observer, "_profile_for_current_runtime", observer.PROFILE),
+            (observer.profiles, "supported", True),
+            (observer.sysconfig, "get_path", str(include)),
+            (observer.tempfile, "gettempdir", str(self.cache)),
+            (observer, "_compiler_identity", (root / "cc", "a" * 64)),
+            (observer, "_backend_identity", (None, {"name": "strace", "version": "6.8", "digest": "b" * 64})),
+            (observer, "_source_digest", "c" * 64),
+            (observer, "_build_environment", {}),
+        ):
+            stack.enter_context(mock.patch.object(target, name, return_value=value))
+        stack.enter_context(mock.patch.object(observer, "_build_command",
+            side_effect=lambda selected, **kwargs: [str(kwargs["artifact"])]))
+
+    def test_concurrent_builds_publish_only_complete_candidates(self):
+        compiling = threading.Barrier(2)
+        def compile_candidate(command, **kwargs):
+            path = Path(command[0])
+            path.write_bytes(b"partial")
+            compiling.wait(timeout=5)
+            self.assertTrue(all("-building-" in item.name for item in self.cache.iterdir()))
+            compiling.wait(timeout=5)
+            path.write_bytes(b"complete")
+            return subprocess.CompletedProcess(command, 0)
+        with mock.patch.object(observer.subprocess, "run", side_effect=compile_candidate), ThreadPoolExecutor(2) as pool:
+            futures = [pool.submit(observer.prepare, self.project) for _ in range(2)]
+            builds = [future.result(timeout=10) for future in futures]
+        self.assertEqual(builds[0], builds[1])
+        self.assertEqual(Path(builds[0]["artifact"]).read_bytes(), b"complete")
+        self.assertEqual(len(list(self.cache.iterdir())), 1)
+
+    def test_failed_builder_does_not_remove_a_concurrent_winner(self):
+        compiling = threading.Barrier(2)
+        published = threading.Event()
+        def compile_candidate(command, **kwargs):
+            path = Path(command[0])
+            path.write_bytes(b"complete")
+            winner = compiling.wait(timeout=5) == 0
+            if winner:
+                return subprocess.CompletedProcess(command, 0)
+            self.assertTrue(published.wait(timeout=5))
+            return subprocess.CompletedProcess(command, 1)
+        def prepare():
+            try:
+                build = observer.prepare(self.project)
+                published.set()
+                return build
+            except observer.inventory.AnalysisError as error:
+                return str(error)
+        with mock.patch.object(observer.subprocess, "run", side_effect=compile_candidate), ThreadPoolExecutor(2) as pool:
+            futures = [pool.submit(prepare) for _ in range(2)]
+            results = [future.result(timeout=10) for future in futures]
+        self.assertIn("native-build-failed", results)
+        build = next(result for result in results if isinstance(result, dict))
+        self.assertEqual(Path(build["artifact"]).read_bytes(), b"complete")
+        with mock.patch.object(observer.subprocess, "run") as compile_again:
+            self.assertEqual(observer.prepare(self.project), build)
+        compile_again.assert_not_called()
+        self.assertEqual(len(list(self.cache.iterdir())), 1)
+
+    def test_invalid_published_cache_is_not_rebuilt_or_deleted(self):
+        def compile_candidate(command, **kwargs):
+            Path(command[0]).write_bytes(b"complete")
+            return subprocess.CompletedProcess(command, 0)
+        with mock.patch.object(observer.subprocess, "run", side_effect=compile_candidate):
+            build = observer.prepare(self.project)
+        artifact = Path(build["artifact"])
+        (artifact.parent / "build.json").write_text("invalid")
+        with mock.patch.object(observer.subprocess, "run") as compile_again:
+            with self.assertRaisesRegex(observer.inventory.AnalysisError, "native-build-cache-invalid"):
+                observer.prepare(self.project)
+        compile_again.assert_not_called()
+        self.assertEqual(artifact.read_bytes(), b"complete")
+
+    def test_bootstrap_and_build_record_are_published_with_the_artifact(self):
+        def compile_candidate(command, **kwargs):
+            candidate = Path(command[0])
+            candidate.write_bytes(b"complete")
+            (candidate.parent / "compiler-intermediate").write_text("temporary")
+            return subprocess.CompletedProcess(command, 0)
+        with mock.patch.object(observer, "_profile_for_current_runtime", return_value=observer.DARWIN_PROFILE), mock.patch.object(observer.subprocess, "run", side_effect=compile_candidate):
+            build = observer.prepare(self.project)
+        artifact = Path(build["artifact"])
+        self.assertEqual({item.name for item in artifact.parent.iterdir()},
+                         {artifact.name, "sitecustomize.py", "build.json"})
+        self.assertEqual((artifact.parent / "sitecustomize.py").read_bytes(),
+                         Path(observer.__file__).with_name("click_observer_bootstrap.py").read_bytes())
 
 
 class AutomaticPreparationTests(unittest.TestCase):
@@ -222,6 +329,30 @@ class AutomaticEvidenceTests(ClickGateTestCase):
         second = self.run_checks(commands, "turn-2")
         self.assertEqual(self.decisions(second), {alpha: "reuse-dependency", beta: "run"})
 
+    def test_ignored_input_failure_is_executed_and_reported(self) -> None:
+        commands = self.fixture()
+        self.run_checks(commands, "turn-1")
+        self.patch_file("alpha.py", "VALUE = 1", "VALUE = 2", "turn-2")
+        self.run_checks(commands, "turn-2")
+        alpha, beta = [CLICK_EVIDENCE.evidence_key(name) for name in ("ALPHA", "BETA")]
+
+        # The ignored mutation makes alpha actually fail. This is a negative
+        # oracle for false reuse, not merely a comparison of decision labels.
+        self.patch_file("local.cfg", "ready", "", "turn-3")
+        payload = self.verify_gate(commands, "turn-3", evidence_ids=["ALPHA", "BETA"])
+        self.assert_decisions(self.read_state(), {alpha: "run", beta: "reuse-exact"})
+        result = self.run_rewritten(payload)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.count("ran-alpha"), 1, result.stdout)
+        self.assertEqual(result.stdout.count("ran-beta"), 0, result.stdout)
+        state = self.read_state()
+        self.assertEqual(state["verification"]["status"], "failed")
+        self.assertEqual(state["evidence_state"]["sources"][alpha]["status"], "failed")
+        self.assertEqual(state["evidence_state"]["sources"][beta]["status"], "passed")
+        parent = subprocess.run([sys.executable, "-m", "unittest", "alpha", "beta"],
+                                cwd=self.workspace, capture_output=True, text=True)
+        self.assertEqual(parent.returncode, result.returncode, parent.stdout + parent.stderr)
+
     def test_request_order_does_not_exchange_child_input_ownership(self) -> None:
         commands = self.fixture()
         beta_path = self.workspace / "beta.py"
@@ -340,6 +471,33 @@ class AutomaticEvidenceTests(ClickGateTestCase):
         self.run_checks(commands, "turn-4")
         restored = self.run_checks(commands, "turn-4")
         self.assertEqual(self.decisions(restored), {alpha: "reuse-exact", beta: "reuse-exact"})
+
+    def test_private_companion_loss_cannot_hide_ignored_input_failure(self) -> None:
+        cache = Path(self.temporary.name) / "private-cache"
+        cache.mkdir()
+        # Both the driver and real Hook children use only this fixture's cache.
+        # This models the historical teardown without deleting a shared runtime.
+        with mock.patch.dict(os.environ, {"TMPDIR": str(cache)}), mock.patch.object(tempfile, "tempdir", str(cache)):
+            commands = self.fixture()
+            self.run_checks(commands, "turn-1")
+            alpha, beta = [CLICK_EVIDENCE.evidence_key(name) for name in ("ALPHA", "BETA")]
+            self.patch_file("alpha.py", "VALUE = 1", "VALUE = 2", "turn-2")
+            payload = self.verify_gate(commands, "turn-2", evidence_ids=["ALPHA", "BETA"])
+            planned = self.read_state()
+            self.assert_decisions(planned, {alpha: "run", beta: "reuse-dependency"})
+            artifact = observer.artifact_path(planned["verification"][observer.STATE_FIELD])
+            self.assertEqual(artifact.parent.parent, cache)
+            shutil.rmtree(artifact.parent)
+            result = self.run_rewritten(payload)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            self.patch_file("local.cfg", "ready", "", "turn-3")
+            payload = self.verify_gate(commands, "turn-3", evidence_ids=["ALPHA", "BETA"])
+            self.assert_decisions(self.read_state(), {alpha: "run", beta: "run"})
+            result = self.run_rewritten(payload)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.count("ran-alpha"), 1, result.stdout)
+            self.assertEqual(self.read_state()["verification"]["status"], "failed")
 
     def test_unavailable_runtime_keeps_the_previous_child_input_requirement(self) -> None:
         commands = self.fixture()

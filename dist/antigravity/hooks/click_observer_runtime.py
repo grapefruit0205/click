@@ -369,18 +369,52 @@ def validate(project: Path, value: object) -> Path | None:
         return None
 
 
-def discard(value: object) -> None:
-    if not state_is_valid(value):
-        return
-    assert isinstance(value, dict)
-    directory = artifact_path(value).parent
+def _cached_build(directory: Path, selected: str, source_digest: str,
+                  compiler_digest: str, backend: dict) -> dict:
+    artifact = directory / ARTIFACT_NAMES[selected]
+    bootstrap = directory / "sitecustomize.py"
+    build_record = directory / "build.json"
     try:
-        if directory.parent == Path(tempfile.gettempdir()).resolve() and ARTIFACT_ID.fullmatch(directory.name):
-            for child in directory.iterdir():
-                child.unlink(missing_ok=True)
-            directory.rmdir()
-    except OSError:
-        pass
+        info = directory.lstat()
+        cached = json.loads(build_record.read_text(encoding="utf-8"))
+        if (
+            stat.S_ISLNK(info.st_mode)
+            or not stat.S_ISDIR(info.st_mode)
+            or (
+                os.name != "nt"
+                and (
+                    info.st_uid != os.getuid()
+                    or stat.S_IMODE(info.st_mode) != 0o700
+                )
+            )
+            or not artifact.is_file()
+            or artifact.is_symlink()
+            or cached.get("artifact") != str(artifact)
+            or cached.get("profile") != selected
+            or cached.get("source_digest") != source_digest
+            or cached.get("compiler_digest") != compiler_digest
+            or cached.get("backend") != backend
+            or cached.get("artifact_digest") != _digest_file(artifact)
+            or (
+                selected in BOOTSTRAP_PROFILES
+                and (
+                    not bootstrap.is_file()
+                    or bootstrap.is_symlink()
+                    or _digest_file(bootstrap)
+                    != _digest_file(
+                        Path(__file__).with_name("click_observer_bootstrap.py")
+                    )
+                )
+            )
+            or cached.get("candidate_only") is not True
+            or cached.get("authority") is not False
+        ):
+            raise inventory.AnalysisError("native-build-cache-invalid")
+        return cached
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        if isinstance(error, inventory.AnalysisError):
+            raise
+        raise inventory.AnalysisError("native-build-cache-invalid") from error
 
 
 def prepare(project: Path, *, profile: str | None = None) -> dict:
@@ -409,97 +443,48 @@ def prepare(project: Path, *, profile: str | None = None) -> dict:
     if inventory.inside(root, directory.resolve()):
         raise inventory.AnalysisError("temporary-directory-inside-project")
     artifact = directory / ARTIFACT_NAMES[selected]
-    bootstrap = directory / "sitecustomize.py"
-    build_record = directory / "build.json"
-    try:
-        directory.mkdir(mode=0o700)
-        if os.name != "nt":
-            directory.chmod(0o700)
-    except FileExistsError:
-        try:
-            info = directory.lstat()
-            cached = json.loads(build_record.read_text(encoding="utf-8"))
-            if (
-                stat.S_ISLNK(info.st_mode)
-                or not stat.S_ISDIR(info.st_mode)
-                or (
-                    os.name != "nt"
-                    and (
-                        info.st_uid != os.getuid()
-                        or stat.S_IMODE(info.st_mode) != 0o700
-                    )
-                )
-                or not artifact.is_file()
-                or artifact.is_symlink()
-                or cached.get("artifact") != str(artifact)
-                or cached.get("profile") != selected
-                or cached.get("source_digest") != source_digest
-                or cached.get("compiler_digest") != compiler_digest
-                or cached.get("backend") != backend
-                or cached.get("artifact_digest") != _digest_file(artifact)
-                or (
-                    selected in BOOTSTRAP_PROFILES
-                    and (
-                        not bootstrap.is_file()
-                        or bootstrap.is_symlink()
-                        or _digest_file(bootstrap)
-                        != _digest_file(
-                            Path(__file__).with_name("click_observer_bootstrap.py")
-                        )
-                    )
-                )
-                or cached.get("candidate_only") is not True
-                or cached.get("authority") is not False
-            ):
-                raise inventory.AnalysisError("native-build-cache-invalid")
-            return cached
-        except (OSError, ValueError, json.JSONDecodeError) as error:
-            if isinstance(error, inventory.AnalysisError):
-                raise
-            raise inventory.AnalysisError("native-build-cache-invalid") from error
-    command = _build_command(
-        selected,
-        compiler=compiler,
-        include=include,
-        source=source,
-        artifact=artifact,
-    )
-    environment = _build_environment(root, selected)
-    try:
+    if directory.exists() or directory.is_symlink():
+        return _cached_build(directory, selected, source_digest, compiler_digest, backend)
+    # Only publish a fully built directory. Concurrent builders own independent
+    # staging paths; a failed build can never clean up another process's cache.
+    with tempfile.TemporaryDirectory(prefix=directory.name + "-building-",
+                                     dir=directory.parent) as temporary:
+        staging = Path(temporary)
+        candidate = staging / ARTIFACT_NAMES[selected]
+        candidate_bootstrap = staging / "sitecustomize.py"
+        command = _build_command(selected, compiler=compiler, include=include,
+                                 source=source, artifact=candidate)
+        environment = _build_environment(root, selected)
         if selected in BOOTSTRAP_PROFILES:
-            bootstrap.write_bytes(
+            candidate_bootstrap.write_bytes(
                 Path(__file__).with_name("click_observer_bootstrap.py").read_bytes()
             )
-        completed = subprocess.run(command, cwd=directory, env=environment, capture_output=True,
+        completed = subprocess.run(command, cwd=staging, env=environment, capture_output=True,
                                    timeout=30, check=False)
-        if completed.returncode or not artifact.is_file():
+        if completed.returncode or not candidate.is_file():
             raise inventory.AnalysisError("native-build-failed")
         _, current_compiler_digest = _compiler_identity(root, selected)
-        if (
-            _source_digest(selected) != source_digest
-            or current_compiler_digest != compiler_digest
-        ):
+        if _source_digest(selected) != source_digest or current_compiler_digest != compiler_digest:
             raise inventory.AnalysisError("native-build-input-changed")
         if selected in BOOTSTRAP_PROFILES:
-            for child in directory.iterdir():
-                if child not in {artifact, bootstrap}:
+            for child in staging.iterdir():
+                if child not in {candidate, candidate_bootstrap}:
                     child.unlink(missing_ok=True)
         result = {"version": 1, "profile": selected, "artifact": str(artifact),
-                  "artifact_digest": _digest_file(artifact),
+                  "artifact_digest": _digest_file(candidate),
                   "source_digest": source_digest,
                   "compiler_digest": compiler_digest,
                   "backend": backend,
                   "candidate_only": True, "authority": False}
-        build_record.write_text(json.dumps(result, sort_keys=True) + "\n")
-        return result
-    except BaseException:
+        (staging / "build.json").write_text(json.dumps(result, sort_keys=True) + "\n")
         try:
-            for child in directory.iterdir():
-                child.unlink(missing_ok=True)
-            directory.rmdir()
+            staging.rename(directory)
         except OSError:
-            pass
-        raise
+            # A concurrent winner publishes a nonempty directory atomically.
+            # Validate its identities instead of replacing or deleting it.
+            if not directory.exists() and not directory.is_symlink():
+                raise
+        return _cached_build(directory, selected, source_digest, compiler_digest, backend)
 
 
 def main() -> int:

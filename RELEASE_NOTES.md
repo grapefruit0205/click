@@ -2,10 +2,16 @@
 
 ## Unreleased v0.97 candidate — automatic Evidence observation
 
-Draft stabilization: an earlier intermittent child-decision mismatch remains
-unclassified. Current binding and ignored-input regressions pass locally, but
-stable publication is pending that investigation and native CI results. See
-`docs/architecture/automatic-observation.md`. Installed release remains v0.96.0.
+Draft stabilization: companion loss reproduces the earlier opposite-child
+decision when capture-loss safeguards are disabled in an isolated control.
+Current safeguards report the affected child's failure; the exact historical
+trigger remains unconfirmed. Stable publication is pending review and native
+CI results. See `docs/architecture/automatic-observation.md`.
+
+- Native preparation publishes complete cache directories atomically. Concurrent
+  preparation no longer mistakes an in-progress build for an invalid cache;
+  failed builders clean only their own staging directories. The unused shared
+  companion deletion helper was removed.
 
 - Default supported JS checks can issue separately attested conditional receipts.
   Two requested executions learn and compare inputs; unchanged observed files,

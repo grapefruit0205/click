@@ -186,9 +186,101 @@ mismatch has more evidence than the initial failure. A global
 failed its baseline expectations; it did not reproduce the historical ownership
 mismatch and is not a supported-profile success test.
 
-The historical cause remains unclassified. Keep this work as a draft PR pending
-that classification and native CI results; do not tag, publish or reinstall it
-as a completed stable release on the strength of passing retries alone.
+The historical physical trigger remains unconfirmed. The follow-up below
+reproduces the same unsafe decision through companion loss and contrasts it
+with the current safeguards. Keep this work as a draft pending review and
+native CI results; passing retries alone do not establish historical cause.
+
+### Bounded child-decision investigation (2026-09-10)
+
+The original ignored-input scenario was exercised through the actual Hook and
+runner in independent synthetic repositories. Normal, reversed and alternating
+request order were compared with fresh driver processes (no forced hash seed).
+Before/after Hook and runner states, input content/metadata fingerprints,
+stdout/stderr and exit status were retained in local diagnostic artifacts.
+
+| Condition | Result |
+| --- | --- |
+| Existing native cache, serial, three request orders | 3/3 passed |
+| Existing native cache, three concurrent drivers, two rounds | 6/6 passed |
+| New private native cache, three concurrent drivers | 1/3 passed; 2 initialization failures |
+| Same private cache after its build completed, three concurrent drivers | 3/3 passed |
+| Ignored input changed to cause an actual test failure, three baseline request orders | 3/3 passed |
+
+The two cold-cache failures identified a separate preparation race, not
+opposite child decisions. `prepare()` creates the shared content-addressed
+directory before compiling its artifact and writing `build.json`. Another
+process sees the directory, fails to read a completed build record, and reports
+`native-build-cache-invalid`. Both children actually ran and passed; the fixture
+failed its expectation of a complete observed baseline. Automatic preparation
+records the unavailable result instead of retrying within that lifecycle.
+The same cache passed concurrent runs after preparation completed. This race
+cannot by itself establish the historical sequence, whose first complete
+baseline had already passed. No shared cache was deleted or changed to create
+this experiment. The subsequent publication fix is described below.
+
+The negative oracle is now a permanent test:
+`AutomaticEvidenceTests.test_ignored_input_failure_is_executed_and_reported`.
+Emptying ignored `local.cfg` after an observed baseline and one source revision
+executes alpha, preserves beta's valid reuse, reports failure, and agrees with
+the same-state full parent result. The three test cases passed because they
+observed the expected failure, not because the synthetic target succeeded.
+
+In total, 18 scenario invocations yielded 16 passes and the 2 classified
+cold-start failures. No opposite-child reuse was reproduced. This narrows the
+investigation and preserves evidence for future failures; it does not establish
+the original trigger, native Windows/macOS behavior, or production performance.
+
+### Cache publication fix and reproduced unsafe decision chain
+
+Native preparation now builds in a private staging directory and publishes the
+complete artifact, bootstrap and `build.json` together by directory rename.
+Concurrent winners are validated using the same source, compiler, backend and
+artifact digests. A losing or failed builder cleans only its own staging path;
+an existing invalid published cache is rejected without rebuilding or deleting
+it. First-time contenders may compile separate candidates, but later requests
+use the normal validated cache. No polling service, unbounded retry, test rerun
+or weaker reuse policy was added. The formerly unused `discard()` helper was
+removed so lifecycle code cannot accidentally delete another session's shared
+companion through that API. The cold-cache scenario that previously failed
+2 of 3 baselines now passed all 3 real Hook/runner scenarios.
+
+The first failure's local execution history was also recovered. It confirms
+that another suite containing the then-present
+`AuthoritativeObserverRuntimeTests.tearDownClass -> observer_runtime.discard`
+overlapped the failing suite. The exact instant of teardown relative to each
+child's observation was not recorded. The following controlled experiment
+therefore establishes a causal mechanism, not a claim to have recovered every
+event of that historical run:
+
+1. Establish complete alpha/beta observations, edit alpha, and plan alpha's
+   execution with beta's valid reuse.
+2. Remove only this synthetic fixture's private companion before its runner.
+   Alpha still passes its actual test, but its new input capture is unavailable.
+3. Empty ignored `local.cfg`, which must make alpha fail while Git stays equal.
+
+In an isolated negative-control copy, disabling only the later-added
+capture-loss and completion safeguards produced **alpha `reuse-exact`, beta
+`run`, exit 0**. This matches the original opposite-child decision and actually
+hides alpha's failure. No source-to-child swap was required: alpha had lost its
+receipt and incorrectly fell back to Git-only reuse; beta still had observed
+inputs whose runtime was no longer valid, so beta ran.
+
+With the current safeguards, the identical scenario plans both children to
+run, executes alpha, and reports **exit 1 / failed**. The input requirement
+survives capture loss, and completion invalidates reused evidence when its
+companion disappears. The permanent regression is
+`AutomaticEvidenceTests.test_private_companion_loss_cannot_hide_ignored_input_failure`.
+The isolated weakened copy is not part of the plugin or distribution. The
+current protection was already implemented during stabilization; this follow-up
+establishes the complete reproduced failure chain and guards it against regression.
+
+Final focused validation after the publication change: automatic observation
+and cache lifecycle **24/24**, sharding setup/boundaries/child reuse **28/28**,
+distribution and repository shard inventory **22/22**. All **74** checks passed;
+distribution validation, maintained local documentation links and whitespace
+checks also passed. The intentionally weakened negative control failed its
+safety assertion as expected and is not included in these passing checks.
 
 Focused Linux validation: **125 tests passed** in 254.191 seconds with CPython
 3.12.3 and pytest 9.1.1. This covers automatic observation, evidence state,
