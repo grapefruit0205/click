@@ -288,7 +288,7 @@ class ConditionalHookTests(support.ClickGateTestCase):
             "new Worker('./worker.cjs').on('message',value=>{console.log('ran-alpha',value)});\n"
         )
         plain_source = "console.log('ran-alpha',require('node:fs').readFileSync('worker.cfg','utf8'));\n"
-        (self.workspace / 'alpha.cjs').write_text(worker_source)
+        (self.workspace / 'alpha.cjs').write_text(plain_source)
         (self.workspace / 'worker.cjs').write_text(
             "require('node:worker_threads').parentPort.postMessage(require('node:fs').readFileSync('worker.cfg','utf8'));\n"
         )
@@ -307,9 +307,23 @@ class ConditionalHookTests(support.ClickGateTestCase):
             state = json.loads(next((self.plugin_data / 'gate-state').glob('session-contract-*.json')).read_text())
             return state, result
 
-        first, _ = run('worker-learn-1')
+        def replace_source(before, after, turn):
+            target = self.workspace / 'alpha.cjs'
+            patch = '\n'.join([
+                '*** Begin Patch', f'*** Update File: {target}', '@@',
+                *('-' + line for line in before.splitlines()),
+                *('+' + line for line in after.splitlines()), '*** End Patch',
+            ])
+            self.pre_tool('apply_patch', patch, turn, tool_use_id=turn + '-edit')
+            target.write_text(after)
+            self.tool_hook('post-tool', 'apply_patch', {'patch': patch}, turn_id=turn, tool_use_id=turn + '-edit')
+
+        run('conditional-learn-1')
+        learned, _ = run('conditional-learn-2')
+        self.assertTrue(conditional.valid(learned['evidence_state']['sources'][alpha_key]['verified_dependency_observation']))
+        replace_source(plain_source, worker_source, 'add-worker')
+        first, _ = run('worker-capture')
         self.assertTrue(first['evidence_state']['sources'][alpha_key]['automatic_observation_required'])
-        second, _ = run('worker-learn-2')
         (self.workspace / 'worker.cfg').write_text('changed')
         third, result = run('worker-input-changed')
         self.assertIn('ran-alpha changed', result.stdout)
@@ -318,11 +332,7 @@ class ConditionalHookTests(support.ClickGateTestCase):
         self.assertEqual(first['verification']['framework_observations'][alpha_key],
                          third['verification']['framework_observations'][alpha_key])
 
-        target = self.workspace / 'alpha.cjs'
-        patch = f'*** Begin Patch\n*** Update File: {target}\n@@\n-' + worker_source.replace('\n', '\n-').rstrip('-') + '+' + plain_source + '*** End Patch'
-        self.pre_tool('apply_patch', patch, 'remove-worker', tool_use_id='remove-worker-edit')
-        target.write_text(plain_source)
-        self.tool_hook('post-tool', 'apply_patch', {'patch': patch}, turn_id='remove-worker', tool_use_id='remove-worker-edit')
+        replace_source(worker_source, plain_source, 'remove-worker')
         recovered, result = run('recover-learning')
         self.assertIn('ran-alpha changed', result.stdout)
         self.assertTrue(conditional.eligible_record(recovered['verification']['framework_observations'][alpha_key]))

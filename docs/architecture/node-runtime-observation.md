@@ -263,19 +263,26 @@ binds their actual consumed paths; unrelated existing file contents are not
 added just because they belong to the repository. Regression fixtures mutate
 configuration, a dynamically imported module and an ignored input separately.
 
-A recorded framework capture now requires observation evidence even when the
-first attempt is incomplete or uses workers. It cannot silently fall back to
-same-tree exact reuse while an ignored worker input changes. An explicit owner
-input receipt still has its separate current-policy admission checks. Unsupported
-or incomplete inputs cause that child to execute; they do not invalidate an
-otherwise complete shard partition.
+A child with an established conditional observation keeps requiring that evidence
+if a later edit introduces unsupported worker inputs or capture becomes incomplete.
+It cannot fall back to same-tree exact reuse while an ignored worker input changes.
+Explicit owner policy and the existing exact-reuse path outside conditional
+observation retain their established rules; neither claims complete JS coverage.
+Input uncertainty in the conditional path executes that child and does not
+invalidate an otherwise complete shard partition.
 
-An unsupported attempt is bounded to one capture at an unchanged project
-revision. After a code change, Click retries capture on the next requested
-execution, including when the previous attempt produced no input projection.
-Removing an unsupported worker can therefore recover into the ordinary
-conditional learning path without resetting Click state. A learning execution
-is still a user-requested execution, never an extra test launched to learn.
+Automatic mode can retry a previously started Inspector capture on the next
+requested execution after a code change, even when it produced no input projection.
+Removing an unsupported worker can therefore recover into conditional learning
+without resetting Click state. Unchanged unsupported executions, unsupported
+launchers such as `node --test`, and diagnostic-only runtime mode keep their
+existing repeated-collection limits. No extra test is launched to learn.
+
+Framework record version 4 stores the already-computed workspace content digest
+for this retry decision. Evidence task revisions restart at zero, so a revision
+counter alone cannot distinguish a new task from a code change. This digest only
+schedules collection and grants no reuse authority. Versions 1–3 remain readable;
+a version 3 capture with a started Inspector can be refreshed once in auto mode.
 
 Environment binding remains conservative: the canonical execution environment
 is bound per command, so a changed inherited variable can rerun multiple children.

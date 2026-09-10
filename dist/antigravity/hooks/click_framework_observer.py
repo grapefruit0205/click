@@ -50,11 +50,17 @@ def record_valid(value) -> bool:
     if not isinstance(value, dict) or type(value.get("version")) is not int:
         return False
     fields = {"version", "framework", "capture", "workers", "runtime_inputs_complete", "reuse_authorized", "reason"}
-    if value.get("version") in {2, 3}:
+    if value.get("version") in {2, 3, 4}:
         fields.add("runtime")
         if not node_observer.valid(value.get("runtime")):
             return False
-    if value.get("version") == 3:
+    if value.get("version") == 4:
+        fields.add("workspace_digest")
+        workspace_digest = value.get("workspace_digest")
+        if (not isinstance(workspace_digest, str)
+                or workspace_digest and not conditional.DIGEST.fullmatch(workspace_digest)):
+            return False
+    if value.get("version") in {3, 4}:
         fields.add("conditional_capture")
         projection = value.get("conditional_capture")
         if projection is not None:
@@ -73,7 +79,7 @@ def record_valid(value) -> bool:
                 return False
     return bool(isinstance(value, dict)
                 and set(value) == fields
-                and value.get("version") in {1, 2, 3} and value.get("framework") in FRAMEWORKS
+                and value.get("version") in {1, 2, 3, 4} and value.get("framework") in FRAMEWORKS
                 and value.get("runtime_inputs_complete") is False and value.get("reuse_authorized") is False
                 and value.get("reason") == "runtime-input-completeness-unavailable"
                 and dependencies.shadow_observer_record_is_valid(value.get("capture"))
@@ -100,20 +106,25 @@ class Execution:
     envelope: dict | None = None
 
 
-def should_collect(previous, check_digest, revision=None):
-    if not record_valid(previous) or previous.get("version") != 3 or previous["capture"]["binding"]["check_digest"] != check_digest:
+def should_collect(previous, check_digest, revision=None, *, recover_missing_projection=False, workspace_digest=""):
+    if not record_valid(previous) or previous.get("version") not in {3, 4} or previous["capture"]["binding"]["check_digest"] != check_digest:
         return True
     # Continue learning on requested executions when a usable seed exists.
-    # A changed project can remove an unsupported worker or dynamic input.
-    # Retry once at that revision even when the old capture had no projection;
-    # unchanged unsupported executions still avoid repeated Inspector startup.
+    # Evidence task revisions restart at zero. Use the already-computed Git
+    # content binding for automatic recovery, not a cross-task counter. This
+    # digest schedules collection only; it never authorizes result reuse.
+    recovering = (recover_missing_projection and previous["runtime"]["sessions"] > 0
+                  and isinstance(workspace_digest, str)
+                  and conditional.DIGEST.fullmatch(workspace_digest)
+                  and workspace_digest != previous.get("workspace_digest"))
     return (conditional.eligible_record(previous) or
             type(revision) is int and revision >= 0
-            and previous["capture"]["binding"]["mutation_revision"] != revision)
+            and bool(recovering or (previous.get("conditional_capture") is not None
+                and previous["capture"]["binding"]["mutation_revision"] != revision)))
 
 
 def run_command(argv, *, runtime_inputs: bool = True, previous=None,
-                conditional_context=None, conditional_secret="", **kwargs) -> Execution:
+                conditional_context=None, conditional_secret="", workspace_digest="", **kwargs) -> Execution:
     name = framework(argv)
     if name is None:
         raise ValueError("unsupported framework candidate command")
@@ -145,7 +156,8 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
         if collector:
             collector.close()
     value = {
-        "version": 3, "framework": name, "capture": result.record, "runtime": runtime,
+        "version": 4, "framework": name, "capture": result.record, "runtime": runtime,
+        "workspace_digest": workspace_digest if isinstance(workspace_digest, str) and conditional.DIGEST.fullmatch(workspace_digest) else "",
         "conditional_capture": projection,
         "workers": {"processes": tree.processes if tree else 0,
                     "threads": tree.threads if tree else 0,

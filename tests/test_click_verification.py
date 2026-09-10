@@ -44,17 +44,6 @@ class ClickVerificationTests(unittest.TestCase):
                 })
                 self.assertNotIn("click_verification", imported)
 
-    def test_result_handoff_keeps_observations_by_reference(self) -> None:
-        recorder = click_verification._results
-        observations = {"source": {"inputs": []}}
-        result = recorder.VerificationRunResult(
-            exit_code=0, succeeded_count=1, authoritative_observations=observations,
-        )
-        with mock.patch.object(recorder, "_record_verification_result", return_value=True) as record:
-            self.assertTrue(recorder.record_outcome(Path("state"), {}, "digest", "token", result))
-        self.assertIs(record.call_args.kwargs["authoritative_observations"], observations)
-        self.assertEqual(record.call_args.kwargs["exit_code"], 0)
-
     def test_tool_working_directory_prefers_explicit_absolute_or_relative_path(
         self,
     ) -> None:

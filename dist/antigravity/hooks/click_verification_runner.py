@@ -407,7 +407,11 @@ def _run_verification(
                     if (framework_name and observer_compatible
                             and len(grouped_checks.get(source_key, [])) == 1
                             and isinstance(check_digest, str)
-                            and framework_observer.should_collect(previous, check_digest, shadow_revision)):
+                            and framework_observer.should_collect(
+                                previous, check_digest, shadow_revision,
+                                recover_missing_projection=observer_mode == "auto",
+                                workspace_digest=before.get("digest", "") if isinstance(before, dict) else "",
+                            )):
 
                         candidate = framework_observer.run_command(
                             argv, workspace=Path.cwd(), observation_root=shadow_workspace,
@@ -419,6 +423,7 @@ def _run_verification(
                             capture_tee=reporting["format"] == "raw",
                             runtime_inputs=True,
                             previous=previous,
+                            workspace_digest=before.get("digest", "") if isinstance(before, dict) else "",
                             conditional_context={**authoritative_context, "workspace_tree_digest": before["digest"]}
                                 if isinstance(authoritative_context, dict) and isinstance(before, dict) else None,
                             conditional_secret=runner_token,

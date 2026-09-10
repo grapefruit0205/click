@@ -380,5 +380,3 @@ def _verification_claim_binding(state: Any) -> dict[str, Any] | None:
         "mutation_revision": verification["mutation_revision"],
         **{field: state.get(field) for field in identity_fields},
     }
-
-

@@ -28,12 +28,29 @@ class CaptureRetryTests(unittest.TestCase):
             "runtime_inputs_complete": False, "reuse_authorized": False,
             "reason": "runtime-input-completeness-unavailable",
         }
+        previous.update(version=4, workspace_digest="a" * 64)
         self.assertTrue(observer.record_valid(previous))
-        for revision in (2, None, -1, True, "3"):
+        def collect(revision, digest, automatic=True):
+            return observer.should_collect(previous, "b" * 64, revision,
+                recover_missing_projection=automatic, workspace_digest=digest)
+        self.assertFalse(collect(3, "b" * 64))  # Unsupported launcher never started.
+        previous["runtime"].update(status="partial", sessions=1, contexts=1, installed=1)
+        self.assertTrue(observer.record_valid(previous))
+        for revision in (None, -1, True, "3"):
             with self.subTest(revision=revision):
-                self.assertFalse(observer.should_collect(previous, "b" * 64, revision))
-        self.assertTrue(observer.should_collect(previous, "b" * 64, 3))
+                self.assertFalse(collect(revision, "b" * 64))
+        for revision in (0, 1, 2, 3):
+            with self.subTest(revision=revision):
+                self.assertFalse(collect(revision, "a" * 64))
+                self.assertTrue(collect(revision, "b" * 64))
+                self.assertFalse(collect(revision, "b" * 64, automatic=False))
+        self.assertFalse(collect(3, ""))
         self.assertTrue(observer.should_collect(previous, "c" * 64, 2))
+        previous.update(version=3)
+        previous.pop("workspace_digest")
+        self.assertTrue(observer.record_valid(previous))
+        self.assertTrue(collect(0, "b" * 64))  # One capture migrates a legacy attempt.
+
 
 
 class ProcessTreeTests(unittest.TestCase):

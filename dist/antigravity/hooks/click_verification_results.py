@@ -658,11 +658,11 @@ def _record_verification_result(
         for key, value in framework_observer_records.items():
             if (key in sources and framework_observer.record_valid(value)
                     and value["capture"]["binding"]["mutation_revision"] == revision
-                    and value["capture"]["binding"]["check_digest"] == _verification_group_digest(grouped_checks.get(key, []))):
-                # A failed/unsupported capture is not an exact-reuse fallback.
-                # Keep this requirement even before a usable learning seed:
-                # worker and ignored inputs need a bound observation. Explicit
-                # owner input receipts retain their separate admission checks.
+                    and value["capture"]["binding"]["check_digest"] == _verification_group_digest(grouped_checks.get(key, []))
+                    and framework_observer.conditional.eligible_record(value)
+                    and not click_change_policy.receipt_is_valid(sources[key].get("verified_safe_change_receipt"))):
+                # A learning seed is not a reusable receipt, including at the
+                # same Git revision: ignored inputs still need a bound snapshot.
                 sources[key]["automatic_observation_required"] = True
     if shadow_observer_records:
         try:
