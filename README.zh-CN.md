@@ -80,7 +80,9 @@ claude plugin marketplace update click
 claude plugin update click@click
 ```
 
-当前版本：**v0.97.0**。更新后请重启，并使用新任务。详见[版本说明](RELEASE_NOTES.md)。
+当前版本：**v0.96.1**。更新后请重启，并使用新任务。
+
+本 README 也描述 `main` 上自动观测、条件 JS 复用与恢复的**未发布 v0.97 候选源码**。公开版本仍为 **v0.96.1**；更新该版本不会安装候选改动。详见[版本说明](RELEASE_NOTES.md)。
 
 ## 从下一次代码修改开始
 

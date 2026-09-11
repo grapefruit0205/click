@@ -87,7 +87,9 @@ claude plugin marketplace update click
 claude plugin update click@click
 ```
 
-Current release: **v0.97.0**. Restart and start a new task after updating. See [release notes](RELEASE_NOTES.md).
+Current release: **v0.96.1**. Restart and start a new task after updating.
+
+This README also describes the **unreleased v0.97 candidate** source on `main`: automatic observation, conditional JS reuse and recovery. The published release remains **v0.96.1**; updating it does not install candidate changes. See [release notes](RELEASE_NOTES.md).
 
 ## Try it on your next change
 

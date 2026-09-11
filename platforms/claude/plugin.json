@@ -1,7 +1,7 @@
 {
   "name": "click",
   "displayName": "Click",
-  "version": "0.97.0",
+  "version": "0.96.1",
   "description": "Incremental verification for Claude Code: rerun affected checks, reuse authoritative passing evidence with revision-aware receipts, and keep an optional Guarded approval boundary for higher-risk work.",
   "author": {
     "name": "Junseok Pak",
