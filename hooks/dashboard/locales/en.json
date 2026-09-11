@@ -682,5 +682,10 @@
   "보관된 그룹 요청 {0}개 판정: {1} · 재실행 사유 상위: {2}. 이 분포는 설명용이며 어떤 결합도 완화하지 않습니다.": "Retained group requests decided: {0} — {1} · Top rerun reasons: {2}. This distribution is explanatory and relaxes no binding.",
   "보관된 그룹 요청 판정이 아직 없습니다.": "No retained group request decisions yet.",
   "실행": "Executed",
-  "판정 불가": "Not evaluable"
+  "판정 불가": "Not evaluable",
+  "다시 읽지 않은 출력": "Output not read again",
+  "{0}{1} · 약 {2} 토큰": "{0}{1} · about {2} tokens",
+  "이상": "at least ",
+  "재사용된 {0}개 묶음 중 {1}개의 마지막 성공 출력 합계입니다. 호스트가 다시 읽지 않은 실행 출력이며, 시간·비용 절감을 증명하지 않습니다.": "Sum of the last passing output of {1} of the {0} reused groups. It is execution output the host did not read again; it proves no time or cost saving.",
+  "재사용된 묶음의 출력 기록이 아직 없습니다.": "No output record for reused groups yet."
 }

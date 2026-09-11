@@ -48,9 +48,10 @@ Before implementation, read the [anti-loop policy](anti-loop-policy.md) and [str
 Collect each assigned source once after the last mutation that can invalidate it. Reuse successful evidence, keep Browser or hosted work out of a shadow verification suite, and stop verification when each condition has current evidence. Treat repeat, retry, and timing notices as non-authoritative guidance, not permission failures; active runner conflicts, Browser receipt binding, and verification-time repository mutation remain hard. Stop any managed service before declaring completion. A failed or stale source may be repaired or replaced under the documented retry rules; it is not a reason to accumulate another proof path.
 
 Verification `reporting` and `failure_collection` are presentation and bounded
-execution-policy options, not new authority. Keep the compatibility defaults of
-raw output and source-order fail-fast unless the user or task explicitly selects
-the versioned alternatives. Actionable diagnostics may summarize only the
+execution-policy options, not new authority. Guarded keeps the compatibility
+defaults of raw output and source-order fail-fast unless the user or task
+explicitly selects the versioned alternatives; only Evidence defaults supported
+unittest/pytest checks to the `actionable` summary. Actionable diagnostics may summarize only the
 original one-time execution and point to owner-readable bounded local detail.
 Bounded failure collection may continue only across caller-declared independent
 submitted sources and must recheck claim, workspace, environment and executable

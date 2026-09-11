@@ -963,7 +963,10 @@ def _run_verification(
                 "[Click] Inputs of previously reused checks changed during execution. "
                 "Those checks require verification again; their reuse was not counted.\n"
             )
-        message = click_incremental.host_summary(result_state.get("verification"))
+        message = click_incremental.host_summary(
+            result_state.get("verification"),
+            (result_state.get("evidence_state") or {}).get("sources"),
+        )
         if message:
             print(message, flush=True)
     except (OSError, ValueError, TypeError):

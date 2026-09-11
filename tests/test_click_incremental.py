@@ -60,6 +60,54 @@ class ClickIncrementalPlanTests(unittest.TestCase):
         self.assertFalse(click_incremental.retained_reuse_reasons_is_valid({**reasons, "run_reasons": list(reversed(reasons["run_reasons"]))}))
         self.assertFalse(click_incremental.retained_reuse_reasons_is_valid({**reasons, "window": "current"}))
 
+    def test_avoided_output_sums_last_passing_output_of_reused_sources(self) -> None:
+        records = [
+            {"source_key": "a" * 64, "capture": {"stdout_bytes": 3000, "stderr_bytes": 500, "truncated": False, "status": "complete"}},
+            {"source_key": "a" * 64, "capture": {"stdout_bytes": 1000, "stderr_bytes": 0, "truncated": True, "status": "partial"}},
+            {"source_key": "b" * 64, "capture": {"stdout_bytes": 10, "stderr_bytes": 0, "truncated": False, "status": "complete"}},
+            {"source_key": "b" * 64, "capture": {"stdout_bytes": "bad", "stderr_bytes": 0}},
+        ]
+        record = click_incremental.build_output_record(
+            records, source_key="a" * 64, check_digest="c" * 64, reporting={"format": "raw"}
+        )
+        self.assertEqual(record, {"version": 1, "check_digest": "c" * 64, "bytes": 4500, "lower_bound": True, "format": "raw"})
+        self.assertTrue(click_incremental.output_record_is_valid(record))
+        self.assertIsNone(click_incremental.build_output_record(records, source_key="z" * 64, check_digest="c" * 64, reporting={}))
+        self.assertIsNone(click_incremental.build_output_record(records, source_key="a" * 64, check_digest="short", reporting={}))
+        other = click_incremental.build_output_record(records, source_key="b" * 64, check_digest="d" * 64, reporting={"format": "actionable"})
+        self.assertEqual((other["bytes"], other["lower_bound"], other["format"]), (10, False, "actionable"))
+
+        plan = click_incremental.build_plan([
+            self.item("a", "reuse-exact", "same-revision-receipt-current", "exact-receipt"),
+            self.item("b", "reuse-exact", "same-revision-receipt-current", "exact-receipt"),
+            self.item("c", "run", "no-passing-evidence", "runner"),
+        ], current_revision=12)
+        batch = click_incremental.new_batch(plan, batch_id="e" * 32, revision=12, prepared_ms=1)
+        for source in batch["sources"]:
+            if source["decision"] == "reuse-exact":
+                source["status"] = "reused"
+        sources = {
+            "a" * 64: {"last_success_output": {**record, "check_digest": batch["sources"][0]["check_digest"]}},
+            "b" * 64: {"last_success_output": {**other, "check_digest": "0" * 64}},
+        }
+        partial = click_incremental.avoided_output(batch, sources)
+        self.assertTrue(click_incremental.avoided_output_is_valid(partial))
+        self.assertEqual((partial["bytes"], partial["estimated_tokens"], partial["status"]), (4500, 1125, "partial"))
+        self.assertEqual((partial["reused_source_count"], partial["measured_source_count"], partial["lower_bound"]), (2, 1, True))
+        sources["b" * 64]["last_success_output"]["check_digest"] = batch["sources"][1]["check_digest"]
+        complete = click_incremental.avoided_output(batch, sources)
+        self.assertEqual((complete["bytes"], complete["status"], complete["measured_source_count"]), (4510, "estimated", 2))
+        unmeasured = click_incremental.avoided_output(batch, {})
+        self.assertEqual((unmeasured["bytes"], unmeasured["status"], unmeasured["reused_source_count"]), (None, "unmeasured", 2))
+        self.assertTrue(click_incremental.avoided_output_is_valid(unmeasured))
+        self.assertFalse(click_incremental.avoided_output_is_valid({**complete, "estimated_tokens": 1}))
+        self.assertFalse(click_incremental.avoided_output_is_valid({**complete, "status": "partial"}))
+        verification = {}
+        click_incremental.store_batch(verification, batch)
+        line = click_incremental.host_summary(verification, sources)
+        self.assertIn("재사용으로 다시 읽지 않은 출력: 이상 4.4 KB (약 1,127 토큰, 추정)", line)
+        self.assertNotIn("다시 읽지 않은 출력", click_incremental.host_summary(verification))
+
     def test_history_projection_uses_one_retention_window_without_sharing_state(self) -> None:
         plan = click_incremental.build_plan([
             self.item("a", "run", "no-passing-evidence", "runner"),

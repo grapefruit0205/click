@@ -64,6 +64,37 @@ _SENSITIVE_PARTS = frozenset(
 )
 
 
+def reporting_was_omitted(raw: Any) -> bool:
+    """Whether a verification request left `reporting` to the mode default."""
+    if not isinstance(raw, str) or len(raw) > 512 * 1024:
+        return False
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return False
+    return isinstance(value, dict) and "reporting" not in value
+
+
+def supports_actionable(argv: Any) -> bool:
+    """Only the CPython unittest/pytest runners have an actionable parser."""
+    if not isinstance(argv, list) or not argv:
+        return False
+    if __package__:
+        from . import click_verification_adapters as adapters
+    else:  # Executed directly from the bundled hooks directory.
+        import click_verification_adapters as adapters
+    profile = adapters.command_profile([str(item) for item in argv])
+    return bool(profile) and profile.get("adapter_id") in {
+        adapters.UNITTEST_ADAPTER,
+        adapters.PYTEST_ADAPTER,
+    }
+
+
+def actionable_reporting(reporting: Any) -> dict[str, Any]:
+    base = dict(reporting) if isinstance(reporting, dict) else default_reporting()
+    return {**base, "format": "actionable"}
+
+
 def default_reporting() -> dict[str, Any]:
     return {
         "version": REPORTING_VERSION,

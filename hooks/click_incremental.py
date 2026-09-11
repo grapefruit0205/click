@@ -1147,6 +1147,135 @@ def revalidation_savings_is_valid(value: Any) -> bool:
     return bool((full != 0) == ("zero-denominator" not in reasons))
 
 
+OUTPUT_RECORD_VERSION = 1
+# Rough conversion used only for the disclosed token estimate; the byte count
+# is the measured quantity.
+OUTPUT_BYTES_PER_TOKEN_ESTIMATE = 4
+
+
+def build_output_record(
+    diagnostic_records: Any,
+    *,
+    source_key: str,
+    check_digest: str,
+    reporting: Any,
+) -> dict[str, Any] | None:
+    """Sum the bounded output one passing source produced in this batch."""
+    if not isinstance(diagnostic_records, list) or not _DIGEST.fullmatch(str(check_digest)):
+        return None
+    total = 0
+    truncated = False
+    matched = 0
+    for record in diagnostic_records:
+        if not isinstance(record, dict) or record.get("source_key") != source_key:
+            continue
+        capture = record.get("capture")
+        if not isinstance(capture, dict):
+            continue
+        stdout_bytes = capture.get("stdout_bytes")
+        stderr_bytes = capture.get("stderr_bytes")
+        if not _is_integer(stdout_bytes) or not _is_integer(stderr_bytes):
+            continue
+        matched += 1
+        total += stdout_bytes + stderr_bytes
+        truncated = truncated or capture.get("truncated") is True or capture.get("status") != "complete"
+    if not matched:
+        return None
+    output_format = reporting.get("format") if isinstance(reporting, dict) else None
+    return {
+        "version": OUTPUT_RECORD_VERSION,
+        "check_digest": str(check_digest),
+        "bytes": total,
+        "lower_bound": truncated,
+        "format": output_format if output_format in {"raw", "actionable"} else "raw",
+    }
+
+
+def output_record_is_valid(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and set(value) == {"version", "check_digest", "bytes", "lower_bound", "format"}
+        and value.get("version") == OUTPUT_RECORD_VERSION
+        and isinstance(value.get("check_digest"), str)
+        and _DIGEST.fullmatch(value["check_digest"])
+        and _is_integer(value.get("bytes"))
+        and isinstance(value.get("lower_bound"), bool)
+        and value.get("format") in {"raw", "actionable"}
+    )
+
+
+def avoided_output(batch: Any, sources: Any) -> dict[str, Any]:
+    """Estimate the output that reused checks did not produce for the host.
+
+    Each reused source contributes the bounded output of its last recorded
+    pass of the same check. The figure describes host reading avoided by a
+    reuse that already happened; it grants nothing and is never a savings claim
+    for wall-clock time or model cost beyond the disclosed byte count.
+    """
+    unmeasured = {
+        "bytes": None, "estimated_tokens": None, "status": "unmeasured",
+        "reused_source_count": 0, "measured_source_count": 0, "lower_bound": False,
+        "bytes_per_token": OUTPUT_BYTES_PER_TOKEN_ESTIMATE,
+    }
+    if not isinstance(batch, dict) or not isinstance(sources, dict) or not batch_is_valid(batch):
+        return unmeasured
+    reused = [item for item in batch["sources"] if item["status"] == "reused"]
+    if not reused:
+        return unmeasured
+    total = 0
+    measured = 0
+    lower_bound = False
+    for item in reused:
+        source = sources.get(item["source_key"])
+        record = source.get("last_success_output") if isinstance(source, dict) else None
+        if not output_record_is_valid(record) or record["check_digest"] != item["check_digest"]:
+            continue
+        measured += 1
+        total += record["bytes"]
+        lower_bound = lower_bound or record["lower_bound"]
+    if not measured:
+        return {**unmeasured, "reused_source_count": len(reused)}
+    return {
+        "bytes": total,
+        "estimated_tokens": total // OUTPUT_BYTES_PER_TOKEN_ESTIMATE,
+        "status": "estimated" if measured == len(reused) else "partial",
+        "reused_source_count": len(reused),
+        "measured_source_count": measured,
+        "lower_bound": lower_bound,
+        "bytes_per_token": OUTPUT_BYTES_PER_TOKEN_ESTIMATE,
+    }
+
+
+def avoided_output_is_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != set(avoided_output(None, None)):
+        return False
+    if value["bytes_per_token"] != OUTPUT_BYTES_PER_TOKEN_ESTIMATE or value["status"] not in {"unmeasured", "partial", "estimated"}:
+        return False
+    if not _is_integer(value["reused_source_count"]) or not _is_integer(value["measured_source_count"]):
+        return False
+    if value["measured_source_count"] > value["reused_source_count"] or not isinstance(value["lower_bound"], bool):
+        return False
+    if value["status"] == "unmeasured":
+        return value["bytes"] is None and value["estimated_tokens"] is None and value["measured_source_count"] == 0
+    return bool(
+        _is_integer(value["bytes"]) and value["estimated_tokens"] == value["bytes"] // OUTPUT_BYTES_PER_TOKEN_ESTIMATE
+        and value["measured_source_count"] > 0
+        and (value["status"] == "estimated") == (value["measured_source_count"] == value["reused_source_count"])
+    )
+
+
+def _host_output(value: dict[str, Any]) -> str:
+    if value["status"] == "unmeasured":
+        return ""
+    kilobytes = value["bytes"] / 1024
+    size = f"{kilobytes:.1f}".rstrip("0").rstrip(".") + " KB" if value["bytes"] >= 1024 else f"{value['bytes']} B"
+    qualifier = "이상 " if value["lower_bound"] else ""
+    partial = "" if value["status"] == "estimated" else f" · 표본 {value['measured_source_count']}/{value['reused_source_count']}"
+    return (
+        f"; 재사용으로 다시 읽지 않은 출력: {qualifier}{size} (약 {value['estimated_tokens']:,} 토큰, 추정{partial})"
+    )
+
+
 def _host_duration(value: Any, *, estimated: bool = False) -> str:
     if value is None or not is_duration(value):
         return "측정 정보 없음"
@@ -1162,10 +1291,11 @@ def _host_duration(value: Any, *, estimated: bool = False) -> str:
     return f"약 {rendered}" if estimated else rendered
 
 
-def host_summary(verification: Any) -> str:
+def host_summary(verification: Any, sources: Any = None) -> str:
     batch = current_batch(verification)
     if batch is None:
         return ""
+    output = _host_output(avoided_output(batch, sources)) if isinstance(sources, dict) else ""
     summary = batch_summary(batch)
     savings = revalidation_savings(batch)
     prior = sum(item["status"] == "reused" and item.get("reuse_origin") is not None for item in batch["sources"])
@@ -1235,7 +1365,7 @@ def host_summary(verification: Any) -> str:
         f"이전 계약 재판정 {prior}개; "
         "과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외."
         + limitation
-    )
+    ) + output
 
 
 
@@ -1932,6 +2062,7 @@ def progress_projection(
                     "estimated_avoided_ms",
                 )
             },
+            "avoided_output": avoided_output(batch, active_sources),
         } if batch is not None else None),
         "checks": checks,
     }
