@@ -30,13 +30,12 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   dashboard show the output the host did not read again as an estimate (bytes
   and an approximate token count at four bytes per token). It is a disclosed
   estimate of avoided reading, never a time or cost claim.
-- The conditional JS receipt no longer rejects a projection because the
-  runtime read its own cgroup, memory-limit or mapping pseudo-files after the
-  collector's acknowledgement. libuv issues that probe when a Worker starts,
-  and a Worker can start on either side of the acknowledgement, so about half
-  of such runs discarded an otherwise complete capture and the check re-ran
-  instead of learning a receipt. Those probes are a runtime facility in both
-  phases; every other pseudo-file read after the acknowledgement stays dynamic.
+- The conditional JS receipt no longer discards a projection because glibc's
+  allocator read `/proc/sys/vm/overcommit_memory` after the collector's
+  acknowledgement. The probe happens on the first large allocation, on either
+  side of the acknowledgement, so about half of otherwise complete captures
+  were rejected and the check re-ran instead of learning a receipt. Every
+  other pseudo-file read after the acknowledgement remains dynamic.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
