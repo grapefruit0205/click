@@ -10,6 +10,7 @@ with `python3`, or reconstruct the runner path yourself.
 
 ```text
 click-gate status
+click-gate status --json
 click-gate verify '<request JSON>'
 click-gate receipt export
 ```

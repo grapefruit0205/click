@@ -126,6 +126,59 @@ class ClickRunnerTransportTests(unittest.TestCase):
             )
             self.assertFalse(report_path.exists())
 
+    def test_status_summary_falls_back_to_the_bounded_file_runner(self) -> None:
+        calls: list[list[str]] = []
+
+        def renderer(arguments: list[str]) -> str:
+            calls.append(arguments)
+            return "exit 2" if arguments[1] == "-c" else "bounded-summary"
+
+        report = {
+            "task": {"runtime_mode": "evidence", "mutation_revision": 2, "verification_completion": "complete"},
+            "summary": {"actual_execution_count": 1, "reused_check_count": 0, "tracked_check_count": 1},
+            "actionable_report": {"next_action": {"kind": "review-completion-conditions"}},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            with (
+                mock.patch.dict(os.environ, {"PLUGIN_DATA": temporary, "CLICK_LANGUAGE": "en"}),
+                mock.patch.object(
+                    click_gate.click_runner_transport,
+                    "render_runner_shell_command",
+                    side_effect=renderer,
+                ),
+            ):
+                command = click_gate._json_report_command(report, summary=True)
+            self.assertEqual(command, "bounded-summary")
+            # The inline attempt carried the rendered lines, never the report.
+            self.assertEqual(calls[0][1], "-c")
+            self.assertEqual(calls[0][3], "Executed 1 · Reused 0")
+            self.assertEqual(calls[1][-3:-1], ["run-json-report", calls[1][-2]])
+            self.assertEqual(calls[1][-1], click_gate.JSON_REPORT_SUMMARY_FLAG)
+            report_path = Path(calls[1][-2])
+            self.assertTrue(report_path.is_file())
+
+            stdout_bytes = io.BytesIO()
+            stdout = io.TextIOWrapper(stdout_bytes, encoding="cp1252")
+            stderr = io.StringIO()
+            runner_argv = [calls[1][1], *calls[1][2:]]
+            with (
+                mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}),
+                mock.patch.object(sys, "argv", runner_argv),
+                mock.patch.object(sys, "stdout", stdout),
+                mock.patch.object(sys, "stderr", stderr),
+            ):
+                returncode = click_gate.main()
+            stdout.flush()
+            self.assertEqual(returncode, 0, stderr.getvalue())
+            self.assertEqual(
+                stdout_bytes.getvalue().decode("utf-8").splitlines(),
+                ["실행 1 · 재사용 0", "Evidence 모드 · 변경 2 · 검증 완료", "다음: 완료 조건 검토"],
+            )
+            self.assertFalse(report_path.exists())
+            with mock.patch.object(sys, "stdout", io.StringIO()), mock.patch.object(sys, "stderr", io.StringIO()):
+                self.assertEqual(click_gate._run_json_report([str(report_path), "other"]), 2)
+                self.assertEqual(click_gate._run_json_report([]), 2)
+
     def test_inline_json_report_is_ascii_safe_for_windows_consoles(self) -> None:
         calls: list[list[str]] = []
 

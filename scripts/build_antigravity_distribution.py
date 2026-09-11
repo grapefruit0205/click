@@ -67,6 +67,7 @@ HOOK_FILES = (
     "click_incremental.py",
     "click_incremental_records.py",
     "click_reuse_readiness.py",
+    "click_status_summary.py",
     "click_host_router.py",
     "click_import_bootstrap.py",
     "click_inspection.py",
@@ -115,6 +116,7 @@ DASHBOARD_ASSETS = (
 )
 CLICK_REFERENCE_FILES = (
     "modes.md",
+    "guarded-mode.md",
     "translation-guide.md",
     "directive-format.md",
     "anti-loop-policy.md",

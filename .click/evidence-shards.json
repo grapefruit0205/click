@@ -159,6 +159,7 @@
             "tests/test_click_multilang_execution.py",
             "tests/test_click_receipt.py",
             "tests/test_click_receipt_runtime.py",
+            "tests/test_click_status_summary.py",
             "tests/test_click_verification.py",
             "tests/test_click_verification_bindings.py",
             "tests/test_click_verification_freshness.py",

@@ -180,6 +180,15 @@ Only the manifest blob committed at `HEAD` is policy authority. A changed, delet
 
 In a Git worktree, the runner compares tracked and pre-existing non-ignored untracked content before and after the batch. If the initial protected snapshot cannot be established, no check executes. A protected-content change fails stale, increments the mutation revision, and invalidates every evidence source. Every new non-ignored untracked path created during the batch also fails stale and advances the mutation revision; source or configuration classification affects only the clarity of the message, not whether the workspace changed. Expected generated artifacts should be ignored or created during the approved mutation phase. Git-ignored paths, external dependencies, and external system state are outside this protected snapshot. Non-Git worktrees are outside the content snapshot and receipt-reuse boundary.
 
+## Verification status
+
+```text
+click-gate status
+click-gate status --json
+```
+
+`click-gate status` prints at most three short lines in the dashboard language selected by `CLICK_LANGUAGE`, then `LC_ALL`, `LC_MESSAGES`, or `LANG` (Korean by default): executed and reused counts with the estimated avoided time when a reuse has timing evidence, the runtime mode with the mutation revision and verification completion, and the next action. `click-gate status --json` (alias `status detail`) returns the full read-only progress report: task, summary counts, batch timing, per-check decisions with reason codes, the readiness projection, and the actionable report with bounded failure details. Both forms read ledger facts only; they never execute a check, change evidence status, or grant reuse.
+
 ## Completion receipt export and offline integrity verification
 
 After every declared source is current for the final mutation revision and no

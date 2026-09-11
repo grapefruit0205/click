@@ -9,6 +9,18 @@ trigger remains unconfirmed. The preceding stabilization was merged in PR #103
 after its 43 checks passed; that historical run does not validate later changes.
 This candidate remains unreleased. See `docs/architecture/automatic-observation.md`.
 
+- `click-gate status` now prints at most three short lines in the dashboard
+  language (`CLICK_LANGUAGE`, then the POSIX locale; Korean by default):
+  executed and reused counts with the estimated avoided time, mode and
+  revision, and the next action. The full JSON report moved to the explicit
+  `click-gate status --json` form (alias `status detail`) and is unchanged.
+  The rewritten command no longer places the whole report in the Bash command
+  line and transcript.
+- The Click Skill is now Evidence-only: what Click records, `click-gate verify`,
+  reading status, and that Click alone decides reuse. The Guarded contract,
+  stage/pass approval, and execution rules moved to
+  `skills/click/references/guarded-mode.md`, linked only for `@Click`,
+  `$click`, and `default guarded`.
 - Preparation status now explains bounded failure reasons, recovery actions and
   recent per-check rerun/conditional-reuse decisions in all three dashboard
   languages. Mode selection and status never claim reuse authorization.

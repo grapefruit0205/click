@@ -282,7 +282,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(self.run_rewritten(first).returncode, 0)
         first_status = self.pre_tool(
             "Bash",
-            "click-gate status",
+            "click-gate status --json",
             "turn-1",
             submit_prompt=False,
             tool_use_id="status-after-first",
@@ -314,7 +314,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         )
         reused_status = self.pre_tool(
             "Bash",
-            "click-gate status",
+            "click-gate status --json",
             "turn-1",
             submit_prompt=False,
             tool_use_id="status-after-reuse",
@@ -332,6 +332,44 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(reused_report["batch"]["executed_duration_ms"], 0)
         self.assertGreater(reused_report["batch"]["request_wall_ms"], 0)
         self.assertGreater(reused_report["batch"]["estimated_avoided_ms"], 0)
+
+        # The default form prints a few localized lines, not the report.
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            reused_summary = self.pre_tool(
+                "Bash",
+                "click-gate status",
+                "turn-1",
+                submit_prompt=False,
+                tool_use_id="summary-after-reuse",
+            )
+        assert reused_summary is not None
+        summary_command = reused_summary["hookSpecificOutput"]["updatedInput"]["command"]
+        self.assertNotIn("run-json-report", summary_command)
+        self.assertNotIn("reused_check_count", summary_command)
+        self.assertLess(len(summary_command), 512)
+        reused_summary_result = self.run_rewritten(reused_summary)
+        self.assertEqual(
+            reused_summary_result.returncode, 0, reused_summary_result.stderr
+        )
+        summary_lines = reused_summary_result.stdout.splitlines()
+        self.assertLessEqual(len(summary_lines), 3)
+        self.assertRegex(summary_lines[0], r"^실행 0 · 재사용 1 · 절약 약 .+")
+        self.assertEqual(summary_lines[1], "Evidence 모드 · 변경 0 · 검증 완료")
+        self.assertEqual(summary_lines[2], "다음: 완료 조건 검토")
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            english_summary = self.pre_tool(
+                "Bash",
+                "click-gate status",
+                "turn-1",
+                submit_prompt=False,
+                tool_use_id="english-summary-after-reuse",
+            )
+        assert english_summary is not None
+        english_lines = self.run_rewritten(english_summary).stdout.splitlines()
+        self.assertRegex(english_lines[0], r"^Executed 0 · Reused 1 · Saved ~.+")
+        self.assertEqual(
+            english_lines[1], "Evidence mode · Revision 0 · Verification complete"
+        )
 
         mutation_id = "status-mutation"
         self.assertIsNone(
@@ -357,7 +395,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         )
         stale_status = self.pre_tool(
             "Bash",
-            "click-gate status",
+            "click-gate status --json",
             "turn-1",
             submit_prompt=False,
             tool_use_id="status-after-mutation",
@@ -372,6 +410,23 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(stale_report["summary"]["invalidated_check_count"], 1)
         self.assertEqual(stale_report["summary"]["remaining_check_count"], 1)
         self.assertEqual(stale_report["checks"][0]["current_state"], "invalidated")
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            stale_summary = self.pre_tool(
+                "Bash",
+                "click-gate status",
+                "turn-1",
+                submit_prompt=False,
+                tool_use_id="summary-after-mutation",
+            )
+        assert stale_summary is not None
+        self.assertEqual(
+            self.run_rewritten(stale_summary).stdout.splitlines(),
+            [
+                "실행 0 · 재사용 0",
+                "Evidence 모드 · 변경 1 · 남은 검사 1/1",
+                "다음: 남은 검사 1개 실행",
+            ],
+        )
 
         rerun = self.verify_gate([command], "turn-1")
         self.assertIn(
@@ -397,7 +452,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
 
         status = self.pre_tool(
             "Bash",
-            "click-gate status",
+            "click-gate status --json",
             "turn-1",
             submit_prompt=False,
             tool_use_id="status-after-failure",

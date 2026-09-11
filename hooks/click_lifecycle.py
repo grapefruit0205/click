@@ -417,6 +417,11 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
         return None, "", ""
     if len(tokens) == 2 and tokens[1] == "status":
         return "status", "", ""
+    if len(tokens) == 3 and tokens[1] == "status" and tokens[2] in {
+        "--json",
+        "detail",
+    }:
+        return "status", "json", ""
     if len(tokens) >= 3 and tokens[1] == "sharding":
         operation = tokens[2]
         if operation in {"status", "refresh"} and len(tokens) == 3:
@@ -499,7 +504,7 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
         f"`{CONTROL_COMMAND} observer off|shadow|authoritative|auto|runtime|status`, "
         f"`{CONTROL_COMMAND} dashboard start|stop|status`, "
         f"`{CONTROL_COMMAND} sharding init|status|refresh`, "
-        f"`{CONTROL_COMMAND} status`, "
+        f"`{CONTROL_COMMAND} status [--json]`, "
         f"`{CONTROL_COMMAND} evidence '<Evidence Completion JSON>'`, "
         f"`{CONTROL_COMMAND} verify '<Verification Batch JSON>'`, "
         f"`{CONTROL_COMMAND} receipt export`, "

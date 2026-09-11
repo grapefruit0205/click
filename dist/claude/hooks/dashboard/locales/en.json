@@ -670,5 +670,13 @@
   "검증 필요": "Verification needed",
   "이전 형식의 기록입니다. 최신 검증 요청에서 준비 상태를 확인하세요.": "This is an older record format. Check readiness after a new verification request.",
   "입력 관찰 상태를 확인하세요.": "Check input capture status.",
-  "아직 검사별 실행 계획이 없습니다.": "No per-check execution plan is recorded yet."
+  "아직 검사별 실행 계획이 없습니다.": "No per-check execution plan is recorded yet.",
+  "실행 {0} · 재사용 {1} · 절약 약 {2}": "Executed {0} · Reused {1} · Saved ~{2}",
+  "남은 검사 {0}/{1}": "{0}/{1} checks remaining",
+  "등록된 검사 없음": "No registered checks",
+  "다음: click-gate verify로 검사 실행": "Next: run checks with click-gate verify",
+  "다음: 실행 중인 검증 완료 대기": "Next: wait for the running verification",
+  "다음: 실패 수정 · {0}": "Next: fix the failure · {0}",
+  "다음: 남은 검사 {0}개 실행": "Next: run the {0} remaining check(s)",
+  "다음: 완료 조건 검토": "Next: review completion conditions"
 }

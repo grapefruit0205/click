@@ -113,10 +113,14 @@ For a large suite, ask it to inspect `click-gate sharding init`, then follow
 
 ```text
 click-gate status
+click-gate status --json
 click-gate dashboard start
 ```
 
-Open the local URL returned by the dashboard command. See executed, reused,
+`click-gate status` prints a few short lines in the dashboard language: executed
+and reused counts with the estimated avoided time, the mode and revision, and
+the next action. `--json` returns the full report. Open the local URL returned
+by the dashboard command. See executed, reused,
 failed and outstanding groups, their reuse reasons, and the next action when
 input collection is not ready. The top-right language selector offers
 **한국어 · English · 简体中文**.
@@ -272,7 +276,7 @@ A tool smoke is narrower than a Hook-to-runner reuse test. The [.NET smoke](.git
 
 **Yes.** New Evidence tasks select automatic capture for supported checks; Guarded defaults to off. Evidence recording, ordinary verification, the dashboard, and qualifying exact-receipt or safe-change reuse work with Observer off. An explicit off selection survives completed Evidence turns in the same session.
 
-Preparation failure reasons and recovery actions appear in `click-gate observer status`, `click-gate verification status`, and the dashboard. These read-only views never grant reuse permission. The [code-derived support matrix](docs/architecture/runtime-support.md) separates execution, splitting, complete observation and conditional JS reuse, with platform prerequisites. A failed preparation retries when relevant capabilities change; explicit `click-gate observer auto` also permits a retry.
+Preparation failure reasons and recovery actions appear in `click-gate observer status`, `click-gate status --json`, and the dashboard. These read-only views never grant reuse permission. The [code-derived support matrix](docs/architecture/runtime-support.md) separates execution, splitting, complete observation and conditional JS reuse, with platform prerequisites. A failed preparation retries when relevant capabilities change; explicit `click-gate observer auto` also permits a retry.
 
 ```text
 click-gate observer status
@@ -350,7 +354,7 @@ Sharing supports a copied summary, public JSON, and standalone HTML. The public 
 
 ## Verification status and failure feedback
 
-Use `click-gate status` for a compact read-only view of checks that ran, were reused, did not run, or remain unrequested, including invalidation after mutations. It reports registered evidence, not whole-task correctness.
+`click-gate status` prints a short read-only summary: executed and reused counts with the estimated avoided time, the mode and mutation revision, and the next action, in the dashboard language selected by `CLICK_LANGUAGE` or the POSIX locale (Korean by default). `click-gate status --json` returns the full report of checks that ran, were reused, did not run, or remain unrequested, including invalidation after mutations, per-check reason codes, and actionable failure details. Both report registered evidence, not whole-task correctness, and neither grants reuse.
 
 Raw output and source-order fail-fast are the defaults. Opt-in actionable reporting for supported unittest/pytest output summarizes failed tests with bounded local details. Optional bounded failure collection continues only across explicitly submitted, caller-declared independent sources within stated limits; automatic shards are not assumed independent. Setup errors, cancellation, drift, and unknown output stop collection. See [reporting and failure collection](skills/click/references/verification-efficiency.md).
 
@@ -420,7 +424,7 @@ Click is a workflow guardrail, not an operating-system sandbox. It cannot prove 
 Protocol details and implementation boundaries:
 
 - [Product Constitution](PRODUCT_CONSTITUTION.md) and [guard classification](GUARD_CLASSIFICATION.md)
-- [Operating modes](skills/click/references/modes.md) and [Guarded contract format](skills/click/references/directive-format.md)
+- [Operating modes](skills/click/references/modes.md), [Guarded workflow](skills/click/references/guarded-mode.md), and [Guarded contract format](skills/click/references/directive-format.md)
 - [Verification profiles](skills/click/references/verification-profiles.md) and [capability protocol](skills/click/references/capability-protocol.md)
 - [Automatic sharding setup](skills/click/references/automatic-sharding-setup.md) and [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), and [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)

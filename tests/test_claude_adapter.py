@@ -292,7 +292,7 @@ class ClaudeHookProcessTests(unittest.TestCase):
         self.assertIn("Click Evidence mode is enabled", payload["hookSpecificOutput"]["additionalContext"])
 
         tool_input = {
-            "command": "click-gate status",
+            "command": "click-gate status --json",
             "description": "Show Click status",
             "timeout": 120000,
         }
@@ -305,10 +305,33 @@ class ClaudeHookProcessTests(unittest.TestCase):
         self.assertEqual(specific["permissionDecision"], "allow")
         self.assertEqual(specific["updatedInput"]["description"], "Show Click status")
         self.assertEqual(specific["updatedInput"]["timeout"], 120000)
-        self.assertNotEqual(specific["updatedInput"]["command"], "click-gate status")
+        self.assertNotEqual(specific["updatedInput"]["command"], "click-gate status --json")
         tail = _runner_tail(specific["updatedInput"]["command"])
         self.assertEqual(tail[0], "-c")
         self.assertEqual(json.loads(tail[-1])["task"]["runtime_mode"], "evidence")
+
+        # The default form is a short localized summary, not the JSON report.
+        self.environment["CLICK_LANGUAGE"] = "en"
+        code, payload, stderr = self.hook(
+            "pre-tool",
+            self.event(
+                "PreToolUse",
+                tool_name="Bash",
+                tool_input={"command": "click-gate status", "description": "Show Click status"},
+                tool_use_id="toolu_1s",
+            ),
+        )
+        self.assertEqual((code, stderr), (0, ""))
+        summary = _runner_tail(payload["hookSpecificOutput"]["updatedInput"]["command"])
+        self.assertEqual(summary[0], "-c")
+        self.assertEqual(
+            summary[2:],
+            [
+                "Executed 0 · Reused 0",
+                "Evidence mode · Revision 0 · No registered checks",
+                "Next: run checks with click-gate verify",
+            ],
+        )
 
         code, payload, stderr = self.hook(
             "pre-tool",
@@ -345,7 +368,7 @@ class ClaudeHookProcessTests(unittest.TestCase):
                 self.assertEqual((code, payload, stderr), (0, {}, ""))
         code, payload, _ = self.hook(
             "pre-tool",
-            self.event("PreToolUse", tool_name="Bash", tool_input={"command": "click-gate status"}, tool_use_id="s"),
+            self.event("PreToolUse", tool_name="Bash", tool_input={"command": "click-gate status --json"}, tool_use_id="s"),
         )
         self.assertEqual(code, 0)
         status = json.loads(_runner_tail(payload["hookSpecificOutput"]["updatedInput"]["command"])[-1])
