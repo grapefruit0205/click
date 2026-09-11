@@ -30,6 +30,12 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   dashboard show the output the host did not read again as an estimate (bytes
   and an approximate token count at four bytes per token). It is a disclosed
   estimate of avoided reading, never a time or cost claim.
+- The conditional JS receipt no longer discards a projection because glibc's
+  allocator read `/proc/sys/vm/overcommit_memory` after the collector's
+  acknowledgement. The probe happens on the first large allocation, on either
+  side of the acknowledgement, so about half of otherwise complete captures
+  were rejected and the check re-ran instead of learning a receipt. Every
+  other pseudo-file read after the acknowledgement remains dynamic.
 - Verification output names each check by the caller's own evidence id, and a
   shard child by that id plus the committed shard id (`SUITE[alpha]`), instead
   of the synthetic child id; the `[Click diagnostic]` line uses the same name.

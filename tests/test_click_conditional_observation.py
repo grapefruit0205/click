@@ -79,6 +79,18 @@ class ConditionalSnapshotTests(unittest.TestCase):
                       {'conditional_capture': {'inputs':[{}],'external':[]}}):
             self.assertFalse(conditional.eligible_record(value))
 
+    @unittest.skipUnless(sys.platform == 'linux', 'the projection reads a Linux strace capture')
+    def test_the_allocator_probe_after_the_acknowledgement_still_projects(self):
+        directory = self.root / 'observer'
+        base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
+        # glibc reads the overcommit policy on the first large allocation, on
+        # either side of the acknowledgement; it is the allocator's probe.
+        probe = '100 openat(AT_FDCWD, "/proc/sys/vm/overcommit_memory", O_RDONLY) = 3</proc/sys/vm/overcommit_memory>'
+        raw = (base + probe + '\n100 exit_group(0) = ?\n100 +++ exited with 0 +++\n').encode()
+        projection = conditional.project_capture(raw, project=self.root, cwd=self.root, directory=directory)
+        self.assertIsNotNone(projection)
+        self.assertNotIn('overcommit', str(projection))
+
     def test_projection_keeps_application_proc_read_and_unknown_calls_ineligible(self):
         directory = self.root / 'observer'
         base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
