@@ -36,6 +36,14 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   side of the acknowledgement, so about half of otherwise complete captures
   were rejected and the check re-ran instead of learning a receipt. Every
   other pseudo-file read after the acknowledgement remains dynamic.
+- The Evidence context injected on every prompt is now a directive: run every
+  test or check command through `click-gate verify`, with the request shape
+  inline, a statement that `click-gate` is a hook-rewritten command rather than
+  a binary on PATH, and an instruction not to re-verify a reused check by hand.
+  Measured against Opus 5, the earlier "prefer ... when useful" wording was
+  followed in none of eight sessions, and the sessions that did use Click loaded
+  the Skill first and re-checked reused results by hand. The host's authority,
+  the absence of any approval contract and the fail-open clause are unchanged.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
