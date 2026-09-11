@@ -40,6 +40,12 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   inputs its shards share once per shard; the recheck of a six-shard suite is
   78% faster (0.26 s to 0.06 s, 145 MB hashed to 24 MB). Execution-time
   revalidation remains a separate decision with its own reading.
+- The conditional JS receipt no longer discards a projection because glibc's
+  allocator read `/proc/sys/vm/overcommit_memory` after the collector's
+  acknowledgement. The probe happens on the first large allocation, on either
+  side of the acknowledgement, so about half of otherwise complete captures
+  were rejected and the check re-ran instead of learning a receipt. Every
+  other pseudo-file read after the acknowledgement remains dynamic.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
