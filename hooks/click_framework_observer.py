@@ -104,6 +104,7 @@ class Execution:
     exit_code: int
     record: dict
     envelope: dict | None = None
+    refusal: str = ""
 
 
 def should_collect(previous, check_digest, revision=None, *, recover_missing_projection=False, workspace_digest=""):
@@ -172,6 +173,7 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
         "reason": "runtime-input-completeness-unavailable",
     }
     envelope = None
+    refusal = ""
     if (result.exit_code == 0 and before and conditional_context and collector
             and starting_digest == conditional.source_digest()):
         backend, error = kwargs["resolve_backend"]("strace", workspace=Path(kwargs["workspace"]))
@@ -180,4 +182,8 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
                                          external_before=external_before,
                                          context=conditional_context, secret=conditional_secret,
                                          node_path=collector.runtime_path, backend_path=backend)
-    return Execution(result.exit_code, value, envelope)
+            if envelope is None:
+                refusal = conditional.explain_refusal(value, before=before, external_before=external_before,
+                                                      project=project, node_path=collector.runtime_path,
+                                                      backend_path=backend)
+    return Execution(result.exit_code, value, envelope, refusal)

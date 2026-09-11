@@ -444,7 +444,8 @@ def _run_verification(
                         print("[Click framework observer] " +
                               ("runtime inputs detected: " + ", ".join(sorted(detected)) if detected else "runtime inputs: " + str(runtime.get("status", "unavailable"))) +
                               ("; conditional reuse eligible: observed inputs only, completeness unproven"
-                               if candidate.envelope else "; no conditional receipt; capture incomplete, dynamic, or learning baseline"), flush=True)
+                               if candidate.envelope else "; no conditional receipt: "
+                               + (getattr(candidate, "refusal", "") or "capture incomplete, dynamic, or learning baseline")), flush=True)
                         return candidate.exit_code
                     if can_record_authoritative and observer_compatible:
                         assert isinstance(authoritative_context, dict)
