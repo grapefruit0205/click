@@ -233,19 +233,29 @@ class Collector:
     def close(self):
         if self.child is not None:
             try:
-                try:
-                    self.child.stdin.close()
-                except OSError:
-                    pass
+                self.child.stdin.close()
+            except OSError:
+                pass
+        # The controller reads the FIFO through a blocking pool thread, and
+        # its exit joins that pool. Unlink first so a late target cannot
+        # block opening a reader-less FIFO, then release the last writer so
+        # the pending read returns EOF instead of outliving a 5s wait.
+        if self.location is not None:
+            try:
+                (Path(self.location.name) / "endpoints.pipe").unlink()
+            except OSError:
+                pass
+        if self.descriptor is not None:
+            os.close(self.descriptor)
+            self.descriptor = None
+        if self.child is not None:
+            try:
                 if self.child.poll() is None:
                     self.child.wait(timeout=5)
             except (OSError, subprocess.TimeoutExpired):
                 click_process.terminate_process_group(self.child, grace_seconds=0.2)
             self.child.stdout.close()
             self.child = None
-        if self.descriptor is not None:
-            os.close(self.descriptor)
-            self.descriptor = None
         if self.location is not None:
             self.location.cleanup()
             self.location = None

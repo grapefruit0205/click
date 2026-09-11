@@ -87,6 +87,50 @@ class ConditionalSnapshotTests(unittest.TestCase):
             raw=(base+line+'\n100 exit_group(0) = ?\n100 +++ exited with 0 +++\n').encode()
             self.assertIsNone(conditional.project_capture(raw, project=self.root, cwd=self.root, directory=directory))
 
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux strace projection')
+    def test_projection_excludes_the_allocator_policy_probe_from_any_thread_at_any_time(self):
+        # glibc reads this sysctl once, from whichever thread first trims a
+        # non-main heap; the observed input set must not depend on that timing.
+        root, directory = self.root.resolve(), self.root / 'observer'
+        probe = f'101 openat(AT_FDCWD<{root}>, "{conditional.ALLOCATOR_POLICY_PROBE}", O_RDONLY|O_CLOEXEC) = 28<{conditional.ALLOCATOR_POLICY_PROBE}>'
+        def project(before=(), after=()):
+            lines = ['100 execve("/usr/bin/node", ["node"], 0x1) = 0',
+                     '100 clone3({flags=CLONE_VM|CLONE_FILES|CLONE_THREAD, exit_signal=0}, 88) = 101',
+                     *before, f'100 access("{directory}/ready-100", F_OK) = 0', *after,
+                     f'100 openat(AT_FDCWD<{root}>, "input.txt", O_RDONLY|O_CLOEXEC) = 29<{root}/input.txt>',
+                     '101 exit(0) = ?', '100 exit_group(0) = ?', '100 +++ exited with 0 +++']
+            return conditional.project_capture(('\n'.join(lines) + '\n').encode(), project=self.root, cwd=self.root, directory=directory)
+        expected = project()
+        self.assertEqual(expected['inputs'], [{'path': 'input.txt', 'kind': 'file', 'operations': ['read']}])
+        self.assertEqual(project(before=[probe]), expected)
+        self.assertEqual(project(after=[probe]), expected)
+        self.assertEqual(project(after=[probe.replace('101 ', '100 ', 1)]), expected)
+        # Metadata or a differently shaped open of the same sysctl is an
+        # application introspection input and keeps the projection dynamic.
+        self.assertIsNone(project(after=[f'100 statx(AT_FDCWD<{root}>, "{conditional.ALLOCATOR_POLICY_PROBE}", AT_STATX_SYNC_AS_STAT, STATX_ALL, {{stx_mode=S_IFREG|0644}}) = 0']))
+        self.assertIsNone(project(after=[probe.replace('O_RDONLY|O_CLOEXEC', 'O_RDONLY')]))
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux strace projection')
+    def test_projection_does_not_vary_with_the_engine_remapping_its_own_image(self):
+        # Whether V8 maps the running Node image again depends on address-space
+        # randomization; the image is bound by execution and the runtime digest.
+        root, directory = self.root.resolve(), self.root / 'observer'
+        runtime = Path('/opt/click-fixture/node/bin/node')
+        remap = f'100 openat(AT_FDCWD<{root}>, "{runtime}", O_RDONLY) = 20<{runtime}>'
+        def project(extra=(), **kwargs):
+            lines = [f'100 execve("{runtime}", ["node"], 0x1) = 0', *extra,
+                     f'100 access("{directory}/ready-100", F_OK) = 0',
+                     f'100 openat(AT_FDCWD<{root}>, "input.txt", O_RDONLY|O_CLOEXEC) = 29<{root}/input.txt>',
+                     '100 exit_group(0) = ?', '100 +++ exited with 0 +++']
+            return conditional.project_capture(('\n'.join(lines) + '\n').encode(), project=self.root, cwd=self.root, directory=directory, **kwargs)
+        expected = project(runtime=runtime)
+        self.assertEqual(expected['external'], [{'path': str(runtime), 'kind': 'file', 'operations': ['execute']}])
+        self.assertEqual(project([remap], runtime=runtime), expected)
+        # Without the runtime identity, and for an application read of the
+        # image, the read stays an ordinary operation on that external input.
+        for value in (project([remap]), project([remap.replace('O_RDONLY', 'O_RDONLY|O_CLOEXEC')], runtime=runtime)):
+            self.assertEqual(value['external'], [{'path': str(runtime), 'kind': 'file', 'operations': ['execute', 'read']}])
+
 
 @unittest.skipUnless(sys.platform == 'linux' and shutil.which('node') and shutil.which('strace'), 'Linux Node and strace required')
 class RealConditionalTests(unittest.TestCase):

@@ -9,6 +9,17 @@ trigger remains unconfirmed. The preceding stabilization was merged in PR #103
 after its 43 checks passed; that historical run does not validate later changes.
 This candidate remains unreleased. See `docs/architecture/automatic-observation.md`.
 
+- Conditional JS learning no longer depends on two runtime-internal reads that
+  vary between identical executions: glibc's one-time
+  `/proc/sys/vm/overcommit_memory` allocator probe (any thread, any time) and
+  V8 re-opening the running Node image to relocate embedded builtins
+  (address-space dependent). Either made a projection ineligible or changed the
+  external input set between the learning and binding executions, so a child
+  intermittently lost its receipt and re-ran. Both were reproduced locally
+  under CPU contention. Application proc reads, metadata calls and image reads
+  stay dynamic. The Inspector controller now exits on its own after reporting;
+  the runner releases the endpoint FIFO instead of waiting five seconds and
+  terminating it, which also shortens every observed execution.
 - Preparation status now explains bounded failure reasons, recovery actions and
   recent per-check rerun/conditional-reuse decisions in all three dashboard
   languages. Mode selection and status never claim reuse authorization.

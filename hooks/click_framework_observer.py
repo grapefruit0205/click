@@ -135,7 +135,8 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
         tree = processes.inspect(raw, **options)
         if collector and collector.location:
             projection = conditional.project_capture(raw, project=project, cwd=kwargs["workspace"],
-                                                     directory=collector.location.name, **options)
+                                                     directory=collector.location.name,
+                                                     runtime=collector.runtime_path, **options)
     collector = node_observer.Collector(argv, dict(kwargs["environment"]), Path(kwargs["workspace"])) if runtime_inputs else None
     before = None
     external_before = None

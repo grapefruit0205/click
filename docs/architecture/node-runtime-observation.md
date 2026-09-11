@@ -67,6 +67,16 @@ JSON, under these explicit assumptions:
 - The runner's stdout/stderr transport and the normal `/dev/null` device are
   runtime facilities. Stdin, arbitrary descriptors and application proc/device
   reads are not granted the same exception.
+- Two runtime-internal reads vary between otherwise identical executions and
+  are excluded so that the learning and binding executions observe the same
+  set: the C library reads `/proc/sys/vm/overcommit_memory` once per process,
+  from whichever thread first trims a non-main malloc heap, and V8 may open
+  the running Node image read-only to relocate its embedded builtins,
+  depending on address-space randomization. The policy byte only tunes memory
+  release; the image is already bound by execution and by the receipt's
+  runtime digest. A check that opens that sysctl read-only itself is
+  indistinguishable and shares the exception; metadata calls on it, every
+  other proc read and an application read of the image stay ordinary inputs.
 - Unobserved native, asynchronous, scheduling or environment-introspection inputs
   may still affect results. Conditional confidence accepts this residual risk;
   it is not a proof of JavaScript semantics or of every possible input.
@@ -94,7 +104,10 @@ An external Node controller connects through loopback V8 Inspector endpoints.
 A bounded ESM preload publishes each Node process's endpoint through a private
 FIFO before the entry point runs. The controller acknowledges completed setup;
 without acknowledgement the preload stops waiting after five seconds and lets
-the original entry point continue. Existing `NODE_OPTIONS`, preloads and
+the original entry point continue. After the result is reported the runner
+unlinks the FIFO and releases its own writer, so the controller's pending FIFO
+read ends and the controller exits on its own instead of being terminated
+after a bounded wait. Existing `NODE_OPTIONS`, preloads and
 debuggers are preserved by declining preparation. Node can print its own
 temporary debugger endpoint and attachment messages on stderr; those are
 ordinary captured process output, not persisted runtime-record fields.

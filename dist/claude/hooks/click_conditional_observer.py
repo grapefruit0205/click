@@ -20,6 +20,7 @@ MAX_INPUTS = 4096
 MAX_BYTES = 512 * 1024 * 1024
 DIGEST = re.compile(r"^[0-9a-f]{64}$")
 OPERATIONS = {"enumerate", "execute", "metadata", "read"}
+ALLOCATOR_POLICY_PROBE = "/proc/sys/vm/overcommit_memory"
 
 
 def digest(value):
@@ -42,12 +43,14 @@ def source_digest():
             "click_observer_process_tree.py")]])
 
 
-def project_capture(raw, *, project, cwd, directory, truncated=False):
+def project_capture(raw, *, project, cwd, directory, runtime=None, truncated=False):
     """Conditional projection; retain ordinary external files as bound inputs.
 
-Only the fixed Node bootstrap's proc/cgroup probes and ancestor metadata are
-outside this confidence scope. The same probes after the acknowledgement are
-ordinary inputs. No application read is removed because it is later written.
+Only the fixed Node bootstrap's proc/cgroup probes, ancestor metadata, the C
+library's one-time allocator policy probe and the engine's re-mapping of the
+already bound runtime image are outside this confidence scope. The same
+bootstrap probes after the acknowledgement are ordinary inputs. No application
+read is removed because it is later written.
     """
     if __package__:
         from . import click_observer_linux as linux, click_observer_process_tree as processes
@@ -58,6 +61,7 @@ ordinary inputs. No application read is removed because it is later written.
         return None
     root = Path(project).resolve()
     ready = str(Path(directory) / f"ready-{next(iter(tree.process_ids))}")
+    image = str(runtime) if runtime else None
     pipe = str(Path(directory) / "endpoints.pipe")
     started, lines = False, []
     for line in tree.trace.decode("utf-8", errors="strict").splitlines():
@@ -70,6 +74,25 @@ ordinary inputs. No application read is removed because it is later written.
         path, _, _ = linux._decoded_path(arguments)
         if (path == "/dev/null" and call in linux._OPEN_CALLS and "O_RDONLY" in arguments
                 and stat.S_ISCHR(os.stat("/dev/null").st_mode) and os.stat("/dev/null").st_rdev == os.makedev(1, 3)):
+            continue
+        # glibc reads the kernel overcommit policy once per process, from
+        # whichever thread first trims a non-main malloc heap, to choose
+        # between unmapping and advising freed pages. The byte only tunes
+        # memory release, and the probe's position relative to the
+        # acknowledgement is arbitrary, so an observed input set must not
+        # depend on it. A check opening the same sysctl read-only is
+        # indistinguishable and shares this exception; metadata calls on
+        # it and every other application proc read stay dynamic.
+        if (path == ALLOCATOR_POLICY_PROBE and call in {"open", "openat"}
+                and arguments.endswith('", O_RDONLY|O_CLOEXEC')):
+            continue
+        # V8 may map the running Node image again to relocate its embedded
+        # builtins, depending on where address-space randomization placed the
+        # code range. Execution and the receipt's runtime digest already bind
+        # that image, so this plain read-only open adds no input and must
+        # not vary the observed set between two executions.
+        if (image and call in {"open", "openat"} and arguments.endswith('", O_RDONLY')
+                and image in {path, linux._fd_path(result)}):
             continue
         if path == ready and call in {"access", "stat", "newfstatat"}:
             if linux._return_integer(result) == 0:
