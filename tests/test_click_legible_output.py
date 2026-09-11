@@ -47,7 +47,7 @@ class LegibleVerificationOutputTests(ClickGateTestCase):
         self.assertNotRegex(output, r"\[Click verification \d+/\d+:S[0-9a-f]{31}:")
         # A check that was not sharded keeps exactly the id the caller gave.
         self.assertIn(":PLAIN:", output)
-        state = json.loads(next((self.plugin_data / "gate-state").glob("session-contract-*.json")).read_text())
+        state = json.loads(next((self.plugin_data / "gate-state").glob("session-contract-*.json")).read_text(encoding="utf-8"))
         labels = state["verification"]["source_labels"]
         self.assertEqual(sorted(labels.values()), ["SUITE[alpha]", "SUITE[beta]"])
         # Presentation never changes identity: every stored key is a source digest.
