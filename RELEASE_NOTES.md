@@ -40,6 +40,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   Node Worker is now detected explicitly — the isolate announces itself to the
   collector — so a Worker run is denied a receipt by its count rather than by
   where its own probe happened to land.
+- The conditional JS projection no longer records whether the executed
+  interpreter read its own binary. V8 re-opens the Node executable for its
+  builtin remap depending on where ASLR placed it, so the same check produced
+  `["execute"]` in one run and `["execute", "read"]` in the next and the
+  receipt was refused for an input difference that no application read made.
+  The binary's identity stays bound by the receipt's runtime digest and by the
+  row's content digest.
 - One verification request's reuse decision reads each observed input once
   instead of once per source. A sharded suite re-fingerprinted the runtime
   inputs its shards share once per shard; the recheck of a six-shard suite is
@@ -50,13 +57,6 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   prefix instead of raising once per non-matching root. Recording a six-shard
   suite's inputs is 91% faster and locating them 98% faster, so a reuse-heavy
   request's runner segment drops about 15% and its first use about 30%.
-- The conditional JS projection no longer records whether the executed
-  interpreter read its own binary. V8 re-opens the Node executable for its
-  builtin remap depending on where ASLR placed it, so the same check produced
-  `["execute"]` in one run and `["execute", "read"]` in the next and the
-  receipt was refused for an input difference that no application read made.
-  The binary's identity stays bound by the receipt's runtime digest and by the
-  row's content digest.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
