@@ -103,6 +103,31 @@ class ConditionalSnapshotTests(unittest.TestCase):
         self.assertIsNotNone(projection)
         self.assertNotIn('cgroup', str(projection))
 
+    def test_a_refused_receipt_names_the_rows_that_differed(self):
+        # A minimal eligible record whose projection lists one project input.
+        root = self.root
+        (root / 'input.txt').write_text('one')
+        rows = [{'path': 'input.txt', 'kind': 'file', 'operations': ['read']}]
+        before = conditional.snapshot(root, rows)
+        (root / 'input.txt').write_text('two')  # the binding run saw different content
+        record = {'conditional_capture': {'inputs': rows, 'external': []}}
+        with support.mock.patch.object(conditional, 'eligible_record', return_value=True):
+            reason = conditional.explain_refusal(record, before=before, external_before=[], project=root,
+                                                 node_path='/usr/bin/node', backend_path='/usr/bin/strace')
+        self.assertIn('inputs differed between the learning and binding runs', reason)
+        self.assertIn('input.txt digest changed', reason)
+        # A row present in only one run is named with the run it belongs to.
+        (root / 'extra.cfg').write_text('read by the binding run only')
+        binding = {'conditional_capture': {'inputs': sorted(rows + [{'path': 'extra.cfg', 'kind': 'file', 'operations': ['read']}], key=lambda row: row['path']), 'external': []}}
+        (root / 'input.txt').write_text('one')
+        with support.mock.patch.object(conditional, 'eligible_record', return_value=True):
+            reason = conditional.explain_refusal(binding, before=before, external_before=[], project=root,
+                                                 node_path='/usr/bin/node', backend_path='/usr/bin/strace')
+        self.assertIn('extra.cfg only in binding run', reason)
+        self.assertEqual(conditional.explain_refusal({}, before=before, external_before=[], project=root,
+                                                     node_path='/usr/bin/node', backend_path='/usr/bin/strace'),
+                         'record not eligible')
+
     def test_projection_keeps_application_proc_read_and_unknown_calls_ineligible(self):
         directory = self.root / 'observer'
         base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
