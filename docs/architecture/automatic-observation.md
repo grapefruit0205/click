@@ -85,7 +85,8 @@ The claimed-runner fixture separates independent checks into directories.
 pytest may inspect sibling files while collecting a flat directory; a
 changed sibling content, permission or directory membership conservatively
 invalidates the affected receipt, while timestamps and inodes are not part of
-input identity.
+input identity. A `__pycache__` directory beside the sources is derived from
+them and is not an input either.
 Ordinary pytest capture/cache options remain unchanged and can leave its input
 observation incomplete; normal execution and failure diagnostics still work.
 

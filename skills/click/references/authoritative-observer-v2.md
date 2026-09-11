@@ -105,7 +105,13 @@ type and permission bits, the content of a read or executed file, the size of
 a metadata-only file, the sorted member names and types of a directory, or the
 link text of a symlink. Inode numbers, link counts, ownership and timestamps
 are runtime assumptions rather than modeled inputs, so an equal-content
-rewrite, a checkout of identical content or a `touch` keeps the receipt.
+rewrite, a checkout of identical content or a `touch` keeps the receipt. A
+project `__pycache__` directory and its bytecode files are derived from the
+bound source content and interpreter identity: they are not observed inputs, a
+directory listing ignores a `__pycache__` member, and a cache written by an
+interpreter run outside Click keeps the receipt. A runtime bytecode cache binds
+its code object and not the source timestamp/size validation field of its
+header.
 Persisted project paths are repository-relative. Absolute runtime paths are
 reduced to role and identity records; raw trace paths are transient. Reuse
 re-fingerprints every record, so a content or permission change, directory
