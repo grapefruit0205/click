@@ -43,7 +43,11 @@ def _transcript(path: Path, responses, commands, *, duplicate: bool = False) -> 
             rows.append({"type": "user", "message": {"content": [
                 {"type": "tool_result", "content": "[Click 결과] 2개 중 1개만 실행 · 1개 재사용"}]}})
     rows.append({"type": "result", "subtype": "success", "is_error": False, "num_turns": len(responses),
-                 "duration_ms": 1000, "total_cost_usd": 0.5, "usage": {}, "modelUsage": {}})
+                 "duration_ms": 1000, "total_cost_usd": 0.5, "session_id": "session-1",
+                 "usage": {"input_tokens": 7, "cache_creation_input_tokens": 11,
+                           "cache_read_input_tokens": 13, "output_tokens": 17,
+                           "output_tokens_details": {"thinking_tokens": 3}},
+                 "modelUsage": {}})
     path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
 
 
@@ -83,6 +87,17 @@ class TokenAbFixtureTests(unittest.TestCase):
 
 
 class TokenAbTranscriptTests(unittest.TestCase):
+    def test_the_task_prompt_forbids_batching_and_requires_each_step_verified(self) -> None:
+        prompt = token_ab.task_prompt(token_ab.STEPS["first-use"])
+        self.assertIn("Never combine two steps", prompt)
+        self.assertIn("run the project's full test suite", prompt)
+        self.assertNotIn("click-gate", prompt)
+        directed = token_ab.task_prompt(token_ab.STEPS["first-use"], directed=True)
+        # The directive is one identical sentence for both arms; only the
+        # baseline session lacks the command it names.
+        self.assertIn("click-gate verify", directed)
+        self.assertEqual(directed.replace(token_ab.CHECK_DIRECTIVE + "\n", ""), prompt)
+
     def test_usage_and_tool_calls_are_counted_once_per_response(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "session.jsonl"
@@ -91,17 +106,21 @@ class TokenAbTranscriptTests(unittest.TestCase):
             _transcript(path, responses, commands, duplicate=True)
             parsed = token_ab.parse_transcript(path)
             self.assertEqual(parsed["responses"], 2)
-            self.assertEqual(len(parsed["events"]), 2)
             self.assertEqual(parsed["tool_calls"], 2)
             self.assertEqual(parsed["raw_test_runs"], 1)
             self.assertEqual(parsed["click_verify_calls"], 1)
-            self.assertEqual(parsed["totals"]["input_total"], 100 + 2000 + 50 + 9000)
-            self.assertEqual(parsed["totals"]["total"], parsed["totals"]["input_total"] + 700)
             self.assertEqual(len(parsed["click_result_lines"]), 2)
-            first = parsed["events"][0]
-            self.assertEqual(first["input_tokens"], 2100)
-            self.assertEqual(first["cached_input_tokens"], 0)
-            self.assertLessEqual(first["reasoning_output_tokens"], first["output_tokens"])
+            # The evaluation uses the host's own task total, not the streamed
+            # per-block snapshots, whose output counter is taken mid-response.
+            self.assertEqual(len(parsed["events"]), 1)
+            total = parsed["events"][0]
+            self.assertEqual(parsed["totals"]["input_total"], 7 + 11 + 13)
+            self.assertEqual(total["input_tokens"], parsed["totals"]["input_total"])
+            self.assertEqual(total["output_tokens"], 17)
+            self.assertEqual(total["cached_input_tokens"], 13)
+            self.assertLessEqual(total["reasoning_output_tokens"], total["output_tokens"])
+            # The streamed input counters are kept for analysis and do sum.
+            self.assertEqual(parsed["streamed_input_tokens"], 100 + 2000 + 50 + 9000)
 
     def test_pair_evaluation_reports_the_measured_ratio(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -130,8 +149,9 @@ class TokenAbTranscriptTests(unittest.TestCase):
                     "baseline": runs["baseline"], "improved": runs["improved"]}
             result = task_efficiency.evaluate_pair(pair)
             self.assertEqual(result["status"], "comparable")
-            # (100+2000) + (50+4000) + 700 output against (100+2000) + (50+9000) + 700
-            self.assertAlmostEqual(result["token_savings_ratio"], 1 - 6850 / 11850)
+            # Both synthetic sessions report the same host total, so the ratio
+            # is zero: the streamed snapshots never reach the evaluation.
+            self.assertEqual(result["token_savings_ratio"], 0.0)
             public = task_efficiency.public_projection(token_ab.evaluation([pair], {"scenario": token_ab.SCENARIO}))
             self.assertEqual(public["measurement_status"], "measured")
             self.assertNotIn("baseline_total_tokens", json.dumps(public))

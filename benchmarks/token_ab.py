@@ -162,13 +162,31 @@ def apply_steps(root: Path, steps: list[tuple[str, int, int]]) -> None:
         )
 
 
-def task_prompt(steps: list[tuple[str, int, int]]) -> str:
-    lines = [
-        "Work in this repository (the current directory). Complete the steps below in order. "
-        "After each step, run the full test suite and make sure it passes before starting the next step; "
-        "fix any failure you caused. Do not ask questions, do not commit, and do not stop before the last step.",
-        "",
-    ]
+# Without this the model applies every edit in one shell command and verifies
+# once, which is a workload with nothing to reuse. The rule is identical in
+# both arms, so it changes what is measured, not who wins.
+STEP_RULES = (
+    "Rules you must follow:",
+    "- Do one step at a time. Never combine two steps into one command or one message.",
+    "- After finishing a step, run the project's full test suite (README.md names the command)"
+    " and report its result line before you start the next step.",
+    "- Fix any failure you caused before moving on.",
+    "- Do not ask questions and do not commit.",
+)
+# Appended to both arms when comparing "Click used" against "no Click": the
+# baseline session has no such command and runs the suite directly.
+CHECK_DIRECTIVE = (
+    "- If a `click-gate` command is available in this session, submit the test suite through"
+    " `click-gate verify` instead of running it directly; otherwise run the test command itself."
+)
+
+
+def task_prompt(steps: list[tuple[str, int, int]], *, directed: bool = False) -> str:
+    rules = list(STEP_RULES)
+    if directed:
+        rules.append(CHECK_DIRECTIVE)
+    lines = ["Work in this repository (the current directory). Complete the steps below in order.",
+             "", *rules, ""]
     for index, (name, old, new) in enumerate(steps, 1):
         lines.append(
             f"Step {index}: In component_{name}.py change LIMIT from {old} to {new}, "
@@ -273,10 +291,18 @@ def _tool_result_text(block: dict[str, Any]) -> str:
 
 
 def parse_transcript(path: Path) -> dict[str, Any]:
-    """Host usage per model response plus the tool activity of one session."""
+    """Host usage for one session plus its tool activity.
+
+    A response is streamed as one assistant event per content block, all
+    sharing an id. Their input counters are the response's own and sum to the
+    session total, but their output counter is a snapshot taken before the
+    response finished. The session's authoritative total is the one the host
+    reports at the end, so that is what the evaluation uses; the per-response
+    input numbers are kept for analysis only.
+    """
     responses: dict[str, dict[str, int]] = {}
     order: list[str] = []
-    counted: set[str] = set()
+    seen_tools: set[str] = set()
     commands: list[str] = []
     tool_calls = 0
     click_results: list[str] = []
@@ -312,37 +338,51 @@ def parse_transcript(path: Path) -> dict[str, Any]:
                         responses[identifier] = current
                     else:  # the same response streams once per content block
                         responses[identifier] = {key: max(value, current[key]) for key, value in responses[identifier].items()}
-                if isinstance(identifier, str) and identifier in counted:
-                    continue  # the same response can stream more than once
-                if isinstance(identifier, str):
-                    counted.add(identifier)
-                for block in message.get("content") or []:
-                    if isinstance(block, dict) and block.get("type") == "tool_use":
-                        tool_calls += 1
-                        if block.get("name") == "Bash":
-                            commands.append(str((block.get("input") or {}).get("command", "")))
+                for position, block in enumerate(message.get("content") or []):
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    # Blocks repeat with their response. Each call carries its
+                    # own id; its position within the response identifies it
+                    # when a transcript omits one.
+                    call_id = str(block.get("id") or f"{identifier}#{position}")
+                    if call_id in seen_tools:
+                        continue
+                    seen_tools.add(call_id)
+                    tool_calls += 1
+                    if block.get("name") == "Bash":
+                        commands.append(str((block.get("input") or {}).get("command", "")))
             elif kind == "user":
                 for block in (event.get("message") or {}).get("content") or []:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
                         click_results += _CLICK_RESULT.findall(_tool_result_text(block))
             elif kind == "result":
                 final = event
-    events = []
-    for sequence, identifier in enumerate(order):
-        usage = responses[identifier]
-        events.append({
-            "event_id": identifier, "response_id": identifier, "sequence": sequence,
-            "input_tokens": usage["fresh"] + usage["cache_write"] + usage["cache_read"],
-            "output_tokens": usage["output"],
-            "cached_input_tokens": usage["cache_read"],
-            "reasoning_output_tokens": min(usage["reasoning"], usage["output"]),
-        })
-    totals = {key: sum(usage[key] for usage in responses.values()) for key in ("fresh", "cache_write", "cache_read", "output", "reasoning")}
+    reported = (final or {}).get("usage") if isinstance((final or {}).get("usage"), dict) else {}
+    details = reported.get("output_tokens_details")
+    totals = {
+        "fresh": int(reported.get("input_tokens") or 0),
+        "cache_write": int(reported.get("cache_creation_input_tokens") or 0),
+        "cache_read": int(reported.get("cache_read_input_tokens") or 0),
+        "output": int(reported.get("output_tokens") or 0),
+        "reasoning": int((details or {}).get("thinking_tokens") or 0) if isinstance(details, dict) else 0,
+    }
     totals["input_total"] = totals["fresh"] + totals["cache_write"] + totals["cache_read"]
     totals["total"] = totals["input_total"] + totals["output"]
+    events = []
+    if final is not None and totals["total"] > 0:
+        events.append({
+            "event_id": "task-total", "response_id": str((final or {}).get("session_id") or "task"),
+            "sequence": 0,
+            "input_tokens": totals["input_total"], "output_tokens": totals["output"],
+            "cached_input_tokens": totals["cache_read"],
+            "reasoning_output_tokens": min(totals["reasoning"], totals["output"]),
+        })
+    streamed_input = sum(usage["fresh"] + usage["cache_write"] + usage["cache_read"]
+                         for usage in responses.values())
     verify_calls = sum("click-gate verify" in command for command in commands)
     return {
         "events": events, "totals": totals, "responses": len(order), "tool_calls": tool_calls,
+        "streamed_input_tokens": streamed_input,
         "bash_commands": len(commands),
         "raw_test_runs": sum(bool(_TEST_COMMAND.search(command)) and "click-gate" not in command for command in commands),
         "click_gate_calls": sum("click-gate" in command for command in commands),
@@ -443,7 +483,9 @@ def run(args: argparse.Namespace) -> Path:
         "scenario": SCENARIO, "model": args.model, "budget_usd_per_session": args.budget, "rounds": args.rounds,
         "claude_bin": args.claude_bin, "plugin_dir": str(plugin_dir), "repetitions": args.repeat,
         "plugin_version": json.loads((plugin_dir / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")).get("version"),
-        "prompt_digests": {kind: hashlib.sha256(task_prompt(STEPS[kind]).encode()).hexdigest() for kind in RUN_KINDS},
+        "directed": bool(args.directed),
+        "prompt_digests": {kind: hashlib.sha256(task_prompt(STEPS[kind], directed=args.directed).encode()).hexdigest()
+                           for kind in RUN_KINDS},
         "disabled_plugins": sorted(settings["enabledPlugins"]),
     }
     pairs: list[dict[str, Any]] = []
@@ -457,7 +499,7 @@ def run(args: argparse.Namespace) -> Path:
         for kind in RUN_KINDS:
             if kind not in args.run_kinds:
                 continue
-            prompt = task_prompt(STEPS[kind])
+            prompt = task_prompt(STEPS[kind], directed=args.directed)
             records: dict[str, dict[str, Any]] = {}
             for arm in ARMS:
                 if arm not in args.arms:
@@ -479,7 +521,7 @@ def run(args: argparse.Namespace) -> Path:
                     # The next run kind must start from the same code in both arms.
                     apply_steps(workspaces[arm], [(name, _current_limit(workspaces[arm], name), new) for name, _old, new in STEPS[kind]])
             if all(arm in records for arm in ARMS):
-                pairs.append({"id": f"rep{repetition}-{kind}", "baseline_variant": "N", "improved_variant": "B2",
+                pairs.append({"id": f"rep{repetition}-{kind}" + ("-directed" if args.directed else ""), "baseline_variant": "N", "improved_variant": "B2",
                               "scenario": SCENARIO, "run_kind": kind, "runtime_mode": "evidence",
                               "baseline": records["baseline"], "improved": records["improved"]})
             for arm, record in records.items():
@@ -511,6 +553,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--arms", nargs="+", choices=ARMS, default=list(ARMS))
     parser.add_argument("--run-kinds", nargs="+", choices=RUN_KINDS, default=list(RUN_KINDS))
     parser.add_argument("--session-timeout", type=float, default=DEFAULT_SESSION_TIMEOUT, help="seconds per session")
+    parser.add_argument("--directed", action="store_true",
+                        help="add the same check directive to both arms, so the comparison is "
+                             "'checks through click-gate' against 'checks run directly'")
     args = parser.parse_args(argv)
     run(args)
     return 0
