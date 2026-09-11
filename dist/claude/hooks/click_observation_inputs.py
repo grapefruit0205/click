@@ -6,6 +6,7 @@ module validates snapshots, never approvals or caller claims of completeness.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -575,6 +576,28 @@ def records_valid(records) -> bool:
     return keys == sorted(set(keys))
 
 
+# One batch's reuse decision is a single point-in-time judgement. Without a
+# pass, an input shared by several sources is read once per source, which both
+# samples it at different instants and repeats the work; a sharded suite shares
+# nearly all of its runtime inputs. A pass never outlives one decision:
+# execution-time revalidation opens its own.
+_identity_pass: dict[tuple[str, tuple[str, ...]], tuple[str, str]] | None = None
+
+
+@contextlib.contextmanager
+def identity_pass():
+    """Read each (path, operations) once for the duration of one decision."""
+    global _identity_pass
+    if _identity_pass is not None:
+        yield  # an enclosing pass already owns this decision's readings
+        return
+    _identity_pass = {}
+    try:
+        yield
+    finally:
+        _identity_pass = None
+
+
 def records_current(
     project: Path,
     artifact_id: str,
@@ -595,7 +618,14 @@ def records_current(
             path = root / row["path"]
             if row["root"].endswith("-root") and "/" in row["path"]:
                 return False
-            fingerprint, kind = reader._fingerprint(path, set(row["operations"]))
+            operations = set(row["operations"])
+            key = (str(path), tuple(sorted(operations)))
+            identity = _identity_pass.get(key) if _identity_pass is not None else None
+            if identity is None:
+                identity = reader._fingerprint(path, operations)
+                if _identity_pass is not None:
+                    _identity_pass[key] = identity
+            fingerprint, kind = identity
             if fingerprint != row["digest"] or kind != row["kind"]:
                 return False
         return True

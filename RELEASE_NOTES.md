@@ -30,6 +30,11 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   dashboard show the output the host did not read again as an estimate (bytes
   and an approximate token count at four bytes per token). It is a disclosed
   estimate of avoided reading, never a time or cost claim.
+- One verification request's reuse decision reads each observed input once
+  instead of once per source. A sharded suite re-fingerprinted the runtime
+  inputs its shards share once per shard; the recheck of a six-shard suite is
+  78% faster (0.26 s to 0.06 s, 145 MB hashed to 24 MB). Execution-time
+  revalidation remains a separate decision with its own reading.
 - Observed-input identity is content-based: type and permission bits, file
   content, directory membership, metadata-only size and symlink text. Inode
   numbers, link counts, ownership and timestamps no longer invalidate a native

@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from hooks import click_dependency_cache
 
@@ -641,6 +642,66 @@ class ClickDependencyBehaviorTests(
         self.assertFalse(
             click_dependency_cache.dependency_observation_is_complete(observation)
         )
+
+    def test_one_identity_pass_reads_each_shared_input_once(self) -> None:
+        from hooks import click_observation_inputs as observation_inputs
+
+        with tempfile.TemporaryDirectory() as directory:
+            shared = Path(directory) / "shared.txt"
+            shared.write_text("first", encoding="utf-8")
+            reads = []
+            original = observation_inputs.InputSnapshot._fingerprint
+
+            def counted(self, path, operations, *, warm=False):
+                reads.append(str(path))
+                return original(self, path, operations, warm=warm)
+
+            with mock.patch.object(observation_inputs.InputSnapshot, "_fingerprint", counted):
+                snapshot = object.__new__(observation_inputs.InputSnapshot)
+                snapshot.total_bytes = 0
+                digest = snapshot._fingerprint(shared, {"read"})[0]
+                reads.clear()
+                records = [{"root": "project", "path": "shared.txt", "kind": "file",
+                            "operations": ["read"], "digest": digest}]
+                roots = {"project": Path(directory)}
+                with mock.patch.object(observation_inputs, "runtime_roots", return_value=roots):
+                    # Without a pass each source reads the file again.
+                    for _ in range(3):
+                        self.assertTrue(observation_inputs.records_current(
+                            Path(directory), "click-native-observer-" + "0" * 32, records))
+                    self.assertEqual(len(reads), 3)
+                    reads.clear()
+                    # One decision reads it once, however many sources share it.
+                    with observation_inputs.identity_pass():
+                        for _ in range(3):
+                            self.assertTrue(observation_inputs.records_current(
+                                Path(directory), "click-native-observer-" + "0" * 32, records))
+                        self.assertEqual(len(reads), 1)
+                        # The decision is one instant: a write during it does not
+                        # split the sources into disagreeing answers.
+                        shared.write_text("second", encoding="utf-8")
+                        self.assertTrue(observation_inputs.records_current(
+                            Path(directory), "click-native-observer-" + "0" * 32, records))
+                    # The next decision sees the change.
+                    self.assertFalse(observation_inputs.records_current(
+                        Path(directory), "click-native-observer-" + "0" * 32, records))
+
+    def test_an_identity_pass_never_outlives_its_decision(self) -> None:
+        from hooks import click_observation_inputs as observation_inputs
+
+        self.assertIsNone(observation_inputs._identity_pass)
+        with observation_inputs.identity_pass():
+            self.assertIsNotNone(observation_inputs._identity_pass)
+            outer = observation_inputs._identity_pass
+            with observation_inputs.identity_pass():
+                # A nested pass joins the decision already in progress.
+                self.assertIs(observation_inputs._identity_pass, outer)
+            self.assertIs(observation_inputs._identity_pass, outer)
+        self.assertIsNone(observation_inputs._identity_pass)
+        with self.assertRaises(RuntimeError):
+            with observation_inputs.identity_pass():
+                raise RuntimeError("failed decision")
+        self.assertIsNone(observation_inputs._identity_pass)
 
     def test_child_process_requires_complete_process_tree_coverage(self) -> None:
         partial = click_dependency_cache.dependency_observation(
