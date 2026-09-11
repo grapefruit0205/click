@@ -44,9 +44,13 @@ AUTHORITY_SOURCES = frozenset(
         "exact-receipt",
         "runtime-dependency-observation",
         "conditional-js-observation",
+        "conditional-python-observation",
         "repository-safe-change-policy",
         "none",
     }
+)
+CONDITIONAL_AUTHORITY_SOURCES = frozenset(
+    {"conditional-js-observation", "conditional-python-observation"}
 )
 REASON_CODES = frozenset(
     {
@@ -1129,9 +1133,9 @@ def decision_is_valid(value: Any) -> bool:
     }[selected]
     return bool(
         (authority == expected_authority or
-         authority == "conditional-js-observation" and selected in REUSE_DECISIONS)
-        and (authority != "conditional-js-observation" or value["reason_code"] == "conditional-observed-inputs-current")
-        and (value["reason_code"] != "conditional-observed-inputs-current" or authority == "conditional-js-observation")
+         authority in CONDITIONAL_AUTHORITY_SOURCES and selected in REUSE_DECISIONS)
+        and (authority not in CONDITIONAL_AUTHORITY_SOURCES or value["reason_code"] == "conditional-observed-inputs-current")
+        and (value["reason_code"] != "conditional-observed-inputs-current" or authority in CONDITIONAL_AUTHORITY_SOURCES)
         and (selected in REUSE_DECISIONS or avoided == 0)
     )
 

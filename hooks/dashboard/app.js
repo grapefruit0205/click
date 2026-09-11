@@ -92,6 +92,12 @@
     'not-run': '미실행', reused: '재사용 적용', unknown: '측정 정보 없음',
     rejected: '실행 전 거부', incomplete: '미확정', evidence: 'Evidence', staged: '승인 대기', approved: '승인됨', none: '활성 작업 없음'
   });
+  const CONDITIONAL_AUTHORITIES=new Set(['conditional-js-observation','conditional-python-observation']);
+  const decisionText = localized({
+    run:'실행', 'reuse-exact':'같은 상태 재사용', 'reuse-dependency':'관찰 기반 재사용',
+    'reuse-safe-change':'커밋 정책 재사용', 'not-evaluable':'판정 불가'
+  });
+  const decisionLabel = decision => decisionText[decision] || decision;
   const setupStatusText = localized({
     unconfigured:'미설정', 'selection-required':'명령 선택 필요',
     'approval-required':'승인 대기', 'review-required':'검토 필요',
@@ -302,7 +308,7 @@
     $('executedDuration').textContent = view.executedText;
     $('reductionRate').textContent = view.reductionText;
     $('comparisonGuidance').textContent = view.guidance;
-    const conditionalCount=(batch?.sources || []).filter(item=>item.status==='reused' && item.authority_source==='conditional-js-observation').length;
+    const conditionalCount=(batch?.sources || []).filter(item=>item.status==='reused' && CONDITIONAL_AUTHORITIES.has(item.authority_source)).length;
     $('comparisonGuidance').hidden = view.comparisonReady && !conditionalCount;
     if(conditionalCount) $('comparisonGuidance').textContent = msg`조건부 JS 재사용 ${conditionalCount}개 · 관찰 범위 기반 / 입력 완전성 미보증`;
     if (view.state === 'no-reuse') $('comparisonGuidance').textContent += ' '+[...new Set((batch?.sources || []).map(item=>reasonFor({...item,execution_status:item.status})))].slice(0,2).join(' ');
@@ -908,7 +914,7 @@
     const view=outcomePresentation(batch,summary,savings);
     const taskView=taskEfficiencyPresentation();
     const lines=[view.complete ? view.summaryText : `${view.heroValue} · ${view.summaryText}`];
-    const conditional=(batch?.sources || []).filter(item=>item.status==='reused' && item.authority_source==='conditional-js-observation').length;
+    const conditional=(batch?.sources || []).filter(item=>item.status==='reused' && CONDITIONAL_AUTHORITIES.has(item.authority_source)).length;
     if(conditional) lines.push(msg`조건부 JS 재사용 ${conditional}개 · 관찰 범위 기반 / 입력 완전성 미보증`);
     if(view.complete && summary.authoritative_reuse_count>0 && Number.isFinite(savings.omitted_test_execution_ms))
       lines.push(msg`절감 시간: ${estimatedDuration(savings.omitted_test_execution_ms)} [${savings.omitted_test_execution_status==='partial'?msg('부분 추정'):msg('추정')}]${savings.omitted_test_execution_status==='partial'?msg` · 시간 근거 ${view.coverageText}개`:''}.`);
@@ -1181,6 +1187,14 @@
     $('reuseOrigins').textContent=msg`선택한 배치의 실제 재사용: 같은 계약 ${reusedItems.length-prior}개 · 이전 계약에서 재판정 ${prior}개`;
     const a=data.accounting;
     $('reuseRate').textContent=a ? msg`보관된 검증 그룹 요청 기준: ${a.reuse_numerator} / ${a.request_denominator} · ${a.reuse_rate===null?msg('비율 미측정'):(100*a.reuse_rate).toFixed(1)+'%'} · ${a.from_timestamp?new Date(a.from_timestamp*1000).toLocaleString(localeTag()):msg('시작 기록 없음')} ~ ${a.through_timestamp?new Date(a.through_timestamp*1000).toLocaleString(localeTag()):msg('종료 기록 없음')}. 실제 재시도는 별도 요청이며 중복 수신·화면 갱신은 추가 집계하지 않습니다.` : msg('집계 정보 없음');
+    const reasons=data.reuse_reasons;
+    if(reasons&&Number.isInteger(reasons.request_count)){
+      const decided=Object.entries(reasons.decisions||{}).filter(([,count])=>count).map(([decision,count])=>msg`${decisionLabel(decision)} ${count}`).join(' · ');
+      const ranked=(reasons.run_reasons||[]).slice(0,6).map(row=>`${row.reason_code} ${row.count}`).join(' · ');
+      $('reuseReasons').textContent=reasons.request_count
+        ? msg`보관된 그룹 요청 ${reasons.request_count}개 판정: ${decided||msg('없음')} · 재실행 사유 상위: ${ranked||msg('없음')}. 이 분포는 설명용이며 어떤 결합도 완화하지 않습니다.`
+        : msg('보관된 그룹 요청 판정이 아직 없습니다.');
+    } else $('reuseReasons').textContent='';
     $('zeroReuse').textContent=reusedItems.length ? msg`재사용 중 과거 시간 표본 미측정 ${Math.max(0,(savings?.coverage?.actual_reused_source_count ?? 0)-(savings?.coverage?.timed_reused_source_count ?? 0))}개` : [...new Set(view.sources.map(source=>(source.next_action ? msg(source.next_action) : reasonFor(source))))].slice(0,3).join(' ');
     const outcome=renderOutcome(activeBatch,incremental,savings);
     $('requestWall').textContent = fmt(incremental.request_wall_ms);

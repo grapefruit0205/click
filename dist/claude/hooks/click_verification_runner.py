@@ -472,6 +472,14 @@ def _run_verification(
                                 "[Click authoritative observer] complete bound input snapshot",
                                 flush=True,
                             )
+                        elif observation.get("status") == "conditional":
+                            print(
+                                "[Click authoritative observer] conditional bound input snapshot: "
+                                + ", ".join(str(reason) for reason in reasons)
+                                + "; reuse only while every observed input is unchanged, "
+                                "completeness unproven",
+                                flush=True,
+                            )
                         else:
                             print(
                                 "[Click authoritative observer] reuse unavailable: "

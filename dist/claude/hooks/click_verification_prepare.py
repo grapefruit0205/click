@@ -1471,11 +1471,11 @@ def _prepare_verification_impl(
             f"Click reused {' and '.join(reuse_parts)} verification receipts"
         )
         conditional_count = sum(
-            click_dependency_cache.conditional_dependency_observation_is_valid(
+            click_dependency_cache.conditional_observation_is_valid(
                 sources[key].get("verified_dependency_observation")) for key in reused_keys
         )
         if conditional_count:
-            reuse_message += (f" - 조건부 JS 재사용 {conditional_count}개"
+            reuse_message += (f" - 조건부 재사용 {conditional_count}개"
                               " - 관찰 범위 기반 / 입력 완전성 미보증")
         return (
             f"echo {reuse_message}",

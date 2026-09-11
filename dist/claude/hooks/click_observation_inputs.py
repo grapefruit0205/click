@@ -38,6 +38,11 @@ class InputError(ValueError):
     pass
 
 
+# Bump when the identity payload changes so an older receipt can never match
+# a digest computed under the new rules; it simply reruns once.
+FINGERPRINT_VERSION = 2
+
+
 def digest(value) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
                                     ensure_ascii=True).encode()).hexdigest()
@@ -453,21 +458,30 @@ class InputSnapshot:
         if before is None:
             return digest(["missing"]), "missing"
         mode = before[0]
-        payload = [before]
+        # Identity is what the target can consume: type and permission bits,
+        # content for reads and executions, membership for enumerations, the
+        # link text for symlinks, and size for metadata-only lookups. Inode,
+        # link count, ownership and timestamps are deliberately excluded so an
+        # atomic save, checkout, touch or unrelated sibling change with equal
+        # content keeps the receipt. Timestamp-dependent behavior is a
+        # documented runtime assumption, not a modeled input.
+        payload: list[object] = [FINGERPRINT_VERSION, mode]
         if stat.S_ISLNK(mode):
             payload.append(os.readlink(path))
             kind = "symlink"
         elif stat.S_ISDIR(mode):
             kind = "directory"
-            if "enumerate" in operations:
-                entries = []
-                with os.scandir(path) as iterator:
-                    for entry in iterator:
-                        info = entry.stat(follow_symlinks=False)
-                        entries.append([entry.name, entry.inode(), stat.S_IFMT(info.st_mode)])
-                        if len(entries) > MAX_INDEX_FILES:
-                            raise InputError("directory-input-limit")
-                payload.append(sorted(entries))
+            # A directory lookup binds its membership whether or not an
+            # enumeration was observed: a stat-only lookup may have consumed
+            # the modification time that membership changes would move.
+            entries = []
+            with os.scandir(path) as iterator:
+                for entry in iterator:
+                    info = entry.stat(follow_symlinks=False)
+                    entries.append([entry.name, stat.S_IFMT(info.st_mode)])
+                    if len(entries) > MAX_INDEX_FILES:
+                        raise InputError("directory-input-limit")
+            payload.append(sorted(entries))
         elif stat.S_ISREG(mode):
             kind = "file"
             if "read" in operations or "execute" in operations:
@@ -480,6 +494,8 @@ class InputSnapshot:
                     raise InputError("input-byte-limit")
                 self.total_bytes += len(content)
                 payload.append(hashlib.sha256(content).hexdigest())
+            else:
+                payload.append(before[6])
         else:
             raise InputError("special-file-input")
         after = metadata(path)

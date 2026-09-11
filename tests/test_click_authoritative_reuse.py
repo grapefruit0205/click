@@ -236,22 +236,28 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
         )
 
     def test_time_child_and_event_loss_are_non_reusable_without_a_retry(self) -> None:
+        # Followed child processes and threads leave every file input
+        # snapshotted, so they downgrade to an explicitly conditional receipt.
+        # Time, random, network and capture loss remain non-reusable.
         cases = (
             (
                 "import time\nself.assertGreater(time.time(), 0)",
                 {"time-random-input"},
                 {},
+                "failed",
             ),
             (
                 "import subprocess, sys\n"
                 "subprocess.run([sys.executable, '-c', 'pass'], check=True)",
                 {"child-process-unsupported"},
                 {},
+                "conditional",
             ),
             (
                 "import socket\nchannel = socket.socket()\nchannel.close()",
                 {"external-or-native-input"},
                 {},
+                "failed",
             ),
             (
                 "import threading\n"
@@ -259,19 +265,28 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 "worker.start()\nworker.join()",
                 {"concurrent-execution-unsupported"},
                 {},
+                "conditional",
             ),
             (
                 "self.assertTrue(True)",
                 {"capture-failed", "event-loss", "unresolved-event"},
                 {"capture_limit": 1},
+                "failed",
             ),
         )
-        for body, expected_reasons, options in cases:
+        for body, expected_reasons, options, expected_status in cases:
             with self.subTest(expected_reasons=expected_reasons):
                 _, result, fallback = self.run_body(body, **options)
                 observation = result.envelope["observation"]
                 self.assertEqual(result.exit_code, 0)
-                self.assertEqual(observation["status"], "failed")
+                self.assertEqual(observation["status"], expected_status, observation["ineligibility_reasons"])
+                if expected_status == "conditional":
+                    self.assertTrue(observation["process_tree_complete"])
+                    self.assertTrue(observation["inputs"])
+                    self.assertTrue(dependency_cache.authoritative_dependency_observation_is_conditional(observation))
+                    self.assertFalse(dependency_cache.authoritative_dependency_observation_is_complete(observation))
+                    self.assertTrue(dependency_cache.bound_dependency_observation_is_reusable(observation))
+                    self.assertEqual(dependency_cache.conditional_authority_source(observation), "conditional-python-observation")
                 self.assertTrue(
                     expected_reasons.intersection(
                         observation["ineligibility_reasons"]

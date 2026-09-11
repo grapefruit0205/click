@@ -31,6 +31,35 @@ class ClickIncrementalPlanTests(unittest.TestCase):
                     result[-1]["sources"][0]["label"] = "detached"
                     self.assertNotEqual(batches[-1]["sources"][0]["label"], "detached")
 
+    def test_retained_reuse_reasons_count_decisions_and_rank_rerun_reasons(self) -> None:
+        plan = click_incremental.build_plan([
+            self.item("a", "run", "observed-input-changed", "runner"),
+            self.item("b", "run", "environment-binding-changed", "runner"),
+            self.item("c", "reuse-exact", "same-revision-receipt-current", "exact-receipt"),
+        ], current_revision=12)
+        first = click_incremental.new_batch(plan, batch_id="a" * 32, revision=12, prepared_ms=1)
+        second = json.loads(json.dumps(first))
+        second.update(batch_id="b" * 32, timestamp=first["timestamp"] + 1)
+        second["sources"][1]["reason_code"] = "observed-input-changed"
+        duplicate = json.loads(json.dumps(first))
+
+        reasons = click_incremental.retained_reuse_reasons([first, second, duplicate, {"not": "a batch"}])
+
+        self.assertTrue(click_incremental.retained_reuse_reasons_is_valid(reasons))
+        self.assertEqual(reasons["request_count"], 6)
+        self.assertEqual(reasons["decisions"]["run"], 4)
+        self.assertEqual(reasons["decisions"]["reuse-exact"], 2)
+        self.assertEqual(reasons["run_reasons"], [
+            {"reason_code": "observed-input-changed", "count": 3},
+            {"reason_code": "environment-binding-changed", "count": 1},
+        ])
+        empty = click_incremental.retained_reuse_reasons([])
+        self.assertTrue(click_incremental.retained_reuse_reasons_is_valid(empty))
+        self.assertEqual((empty["request_count"], empty["run_reasons"]), (0, []))
+        self.assertFalse(click_incremental.retained_reuse_reasons_is_valid({**reasons, "request_count": 5}))
+        self.assertFalse(click_incremental.retained_reuse_reasons_is_valid({**reasons, "run_reasons": list(reversed(reasons["run_reasons"]))}))
+        self.assertFalse(click_incremental.retained_reuse_reasons_is_valid({**reasons, "window": "current"}))
+
     def test_history_projection_uses_one_retention_window_without_sharing_state(self) -> None:
         plan = click_incremental.build_plan([
             self.item("a", "run", "no-passing-evidence", "runner"),

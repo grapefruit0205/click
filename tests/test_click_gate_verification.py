@@ -1095,7 +1095,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(self.run_rewritten(first).returncode, 0)
         self.prompt_submit("환경이 달라진 후속 작업", "turn-2")
 
-        with mock.patch.dict(os.environ, {"CLICK_SUCCESSOR_VARIANT": "changed"}):
+        with mock.patch.dict(os.environ, {"TZ": "changed"}):
             repeated = self.verify_gate([command], "turn-2")
         self.assertIn(
             "run-verification",
@@ -1995,7 +1995,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         )
 
         with mock.patch.dict(
-            os.environ, {"CLICK_DEPENDENCY_TEST_ENV": "changed"}
+            os.environ, {"TZ": "changed"}
         ):
             repeated = self.verify_gate([command])
 
@@ -2193,7 +2193,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.initialize_git(".gitignore", "verification_fixture.py")
         self.approve_contract()
         with mock.patch.dict(
-            os.environ, {"CLICK_TEST_ENVIRONMENT": "prepared-value"}
+            os.environ, {"TZ": "prepared-value"}
         ):
             first = self.verify_gate([self.verification_argv()])
         state_path = next(
@@ -2209,7 +2209,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         environment = os.environ.copy()
         environment["PLUGIN_DATA"] = str(self.plugin_data)
         environment["CLICK_CONFIG_HOME"] = str(self.plugin_data)
-        environment["CLICK_TEST_ENVIRONMENT"] = "changed-before-runner"
+        environment["TZ"] = "changed-before-runner"
         completed = subprocess.run(
             rewritten,
             shell=True,
@@ -2229,7 +2229,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertEqual(source["status"], "passed")
         self.assertNotEqual(source["verified_environment_digest"], prepared_digest)
         serialized = state_path.read_text(encoding="utf-8")
-        self.assertNotIn("CLICK_TEST_ENVIRONMENT", serialized)
+        self.assertNotIn("TZ", serialized)
         self.assertNotIn("prepared-value", serialized)
 
     def test_current_receipt_reruns_when_the_git_tree_changes_out_of_band(self) -> None:
@@ -2273,7 +2273,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
         first = self.verify_gate([command])
         self.assertEqual(self.run_rewritten(first).returncode, 0)
 
-        with mock.patch.dict(os.environ, {"CLICK_TEST_ENVIRONMENT": "changed"}):
+        with mock.patch.dict(os.environ, {"TZ": "changed"}):
             repeated = self.verify_gate([command])
         self.assertEqual(
             repeated["hookSpecificOutput"]["permissionDecision"], "allow"
@@ -2288,7 +2288,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
     def test_verification_environment_ignores_shell_bookkeeping(self) -> None:
         stable = {
             "PATH": os.environ.get("PATH", os.defpath),
-            "CLICK_TEST_ENVIRONMENT": "stable",
+            "TZ": "stable",
         }
         with mock.patch.object(CLICK_GATE.os, "environ", stable):
             expected = CLICK_VERIFICATION.environment(cwd=self.workspace)
@@ -2308,7 +2308,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
             actual = CLICK_VERIFICATION.environment(cwd=self.workspace)
 
         self.assertEqual(actual, expected)
-        self.assertEqual(actual["CLICK_TEST_ENVIRONMENT"], "stable")
+        self.assertEqual(actual["TZ"], "stable")
 
     def test_windows_environment_binding_is_case_insensitive(self) -> None:
         reservation_nonce = "runner-nonce"
@@ -2323,35 +2323,36 @@ class ClickGateVerificationTests(ClickGateTestCase):
         ]
         with mock.patch.object(CLICK_GATE.os, "name", "nt"):
             binding = CLICK_VERIFICATION.environment_binding(
-                {"Path": "C:\\Python", "Click_Test": "stable"}, reservation_nonce
+                {"Path": "C:\\Python", "Tz": "stable"}, reservation_nonce
             )
+            current = {
+                "PATH": "C:\\Python",
+                "TZ": "stable",
+                "RUNNER_ONLY": "ignored",
+            }
             projected, drifted, error = (
                 CLICK_VERIFICATION.environment_from_binding(
                     binding,
                     reservation_nonce,
-                    {
-                        "PATH": "C:\\Python",
-                        "CLICK_TEST": "stable",
-                        "RUNNER_ONLY": "ignored",
-                    },
+                    current,
                 )
             )
             first_digest = CLICK_VERIFICATION.environment_digest_from_records(
                 executables,
                 cwd=self.workspace,
-                environment={"Path": "C:\\Python", "Click_Test": "stable"},
+                environment={"Path": "C:\\Python", "Tz": "stable"},
             )
             second_digest = CLICK_VERIFICATION.environment_digest_from_records(
                 executables,
                 cwd=self.workspace,
-                environment={"PATH": "C:\\Python", "CLICK_TEST": "stable"},
+                environment={"PATH": "C:\\Python", "TZ": "stable"},
             )
 
         self.assertEqual(error, "")
         self.assertFalse(drifted)
-        self.assertEqual(
-            projected, {"PATH": "C:\\Python", "CLICK_TEST": "stable"}
-        )
+        # The child keeps its full execution environment; only fingerprinted
+        # keys are compared case-insensitively on Windows.
+        self.assertEqual(projected, current)
         self.assertEqual(first_digest, second_digest)
 
     def test_verification_environment_binding_recovers_missing_prepared_key(
@@ -2359,7 +2360,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
     ) -> None:
         runner_token = "set-at-runtime"
         binding = CLICK_VERIFICATION.environment_binding(
-            {"PATH": "/usr/bin", "HOOK_ONLY": "prepared"}, runner_token
+            {"PATH": "/usr/bin", "TZ": "prepared"}, runner_token
         )
 
         projected, drifted, error = (
@@ -2372,7 +2373,7 @@ class ClickGateVerificationTests(ClickGateTestCase):
 
         self.assertEqual(error, "")
         self.assertTrue(drifted)
-        self.assertEqual(projected, {"PATH": "/usr/bin"})
+        self.assertEqual(projected, {"PATH": "/usr/bin", "RUNNER_ONLY": "ignored"})
 
     def test_receipt_fingerprint_resolves_relative_path_from_runner_cwd(self) -> None:
         tools = self.workspace / "tools"
@@ -5018,7 +5019,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
             def match_then_change(*args, **kwargs):
                 matched = matcher(*args, **kwargs)
                 self.assertTrue(matched)
-                os.environ["CLICK_HARDENING_INPUT"] = "changed"
+                os.environ["TZ"] = "changed"
                 return matched
 
             with mock.patch.object(CLICK_VERIFICATION._prepare, "_verification_receipt_matches",
@@ -5028,7 +5029,7 @@ class ReviewHardeningGateTests(ClickGateTestCase):
             self.assertIn("run-verification", split_runner_command(
                 payload["hookSpecificOutput"]["updatedInput"]["command"],
             ))
-            result = self.run_rewritten(payload, {"CLICK_HARDENING_INPUT": "changed"})
+            result = self.run_rewritten(payload, {"TZ": "changed"})
             self.assertEqual(result.returncode, 0, result.stderr)
         source = json.loads(path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
         self.assertEqual(source["attempts"], 2)

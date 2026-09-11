@@ -691,7 +691,7 @@ def mark_successor_reuse(
 
 
 def observation_nonreuse_reason(observation: Any) -> str:
-    if click_dependency_cache.conditional_dependency_observation_is_valid(observation):
+    if click_dependency_cache.conditional_observation_is_valid(observation):
         return "observed-input-changed"
     if not click_dependency_cache.dependency_observation_is_valid(observation):
         return "observer-incomplete"
@@ -758,11 +758,13 @@ def canonical_incremental_plan(
         else:
             selected = "run"
             authority = "runner"
-        conditional = (source_key in reused_keys and
-                       click_dependency_cache.conditional_dependency_observation_is_valid(
-                           source.get("verified_dependency_observation")))
+        conditional_authority = (
+            click_dependency_cache.conditional_authority_source(
+                source.get("verified_dependency_observation"))
+            if source_key in reused_keys else "")
+        conditional = bool(conditional_authority)
         if conditional:
-            authority = "conditional-js-observation"
+            authority = conditional_authority
         timing_binding = click_incremental.timing_binding_digest(
             source_key=source_key,
             check_digest=group_digests[source_key],

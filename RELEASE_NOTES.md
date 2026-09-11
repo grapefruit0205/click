@@ -21,6 +21,30 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   stage/pass approval, and execution rules moved to
   `skills/click/references/guarded-mode.md`, linked only for `@Click`,
   `$click`, and `default guarded`.
+- Observed-input identity is content-based: type and permission bits, file
+  content, directory membership, metadata-only size and symlink text. Inode
+  numbers, link counts, ownership and timestamps no longer invalidate a native
+  or conditional JS receipt, so an equal-content save, checkout or `touch`
+  keeps it; a new or removed entry in an observed directory still reruns.
+  Existing observation receipts rerun once under the new fingerprint.
+- The verification receipt fingerprints an allowlist of environment variables
+  (path, home, temp, locale, time zone, CI, proxy and certificate settings,
+  and interpreter/toolchain families) instead of every inherited variable.
+  Host, IDE, agent and shell session variables no longer rerun checks, and
+  the Hook and runner compute the same subset so launcher-only variables
+  cannot separate prepared and executed bindings. The child still receives
+  its full environment. Owners widen the fingerprint with a working-tree
+  `.click/environment.json`; the file can only add reruns.
+- Native observations whose only gaps are a followed child process,
+  concurrent threads or dynamic runtime introspection are stored as
+  `conditional` instead of `failed`. They back explicitly conditional
+  cross-revision reuse (`conditional-python-observation`) while every
+  snapshotted input is unchanged, with unproven completeness disclosed in
+  host output, status and the dashboard. Time, random, network and capture
+  loss still execute the check.
+- The dashboard projection (v11) adds `reuse_reasons`: retained plan
+  decision counts and the ranked rerun reason codes, rendered next to the
+  reuse rate. It explains where reuse was lost and grants nothing.
 - Preparation status now explains bounded failure reasons, recovery actions and
   recent per-check rerun/conditional-reuse decisions in all three dashboard
   languages. Mode selection and status never claim reuse authorization.

@@ -24,7 +24,7 @@ if __package__:
         BATCH_EVENT, HISTORY_FIELD, HISTORY_EVENT,
         MAX_HISTORY_EVENTS, MAX_HISTORY_AGE_SECONDS, MAX_HISTORY_BYTES,
         PROGRESS_VERSION, PROGRESS_MODE, MAX_PROGRESS_CHECKS,
-        DECISIONS, REUSE_DECISIONS, AUTHORITY_SOURCES,
+        DECISIONS, REUSE_DECISIONS, AUTHORITY_SOURCES, CONDITIONAL_AUTHORITY_SOURCES,
         REASON_CODES, _DIGEST, TIMING_BASELINE_VERSION,
         TIMING_BINDING_VERSION, TIMING_UNIT, TIMING_MEASUREMENT_SCOPE,
         TIMING_EXECUTION_MODEL, TIMING_OBSERVER_MODES, _LEGACY_BASELINE_FIELDS,
@@ -57,7 +57,7 @@ else:
         BATCH_EVENT, HISTORY_FIELD, HISTORY_EVENT,
         MAX_HISTORY_EVENTS, MAX_HISTORY_AGE_SECONDS, MAX_HISTORY_BYTES,
         PROGRESS_VERSION, PROGRESS_MODE, MAX_PROGRESS_CHECKS,
-        DECISIONS, REUSE_DECISIONS, AUTHORITY_SOURCES,
+        DECISIONS, REUSE_DECISIONS, AUTHORITY_SOURCES, CONDITIONAL_AUTHORITY_SOURCES,
         REASON_CODES, _DIGEST, TIMING_BASELINE_VERSION,
         TIMING_BINDING_VERSION, TIMING_UNIT, TIMING_MEASUREMENT_SCOPE,
         TIMING_EXECUTION_MODEL, TIMING_OBSERVER_MODES, _LEGACY_BASELINE_FIELDS,
@@ -904,6 +904,75 @@ def retained_impact(batches: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+RETAINED_REASON_LIMIT = 32
+_REASON_CODE_TEXT = re.compile(r"^[a-z0-9-]{1,64}$")
+
+
+def retained_reuse_reasons(batches: list[dict[str, Any]]) -> dict[str, Any]:
+    """Read-only distribution of retained per-group plan decisions and reasons.
+
+    This explains where reuse was lost across the retained history. It reports
+    ledger facts only and grants nothing: a frequent reason is a place to look,
+    not an instruction to weaken a binding.
+    """
+    unique = {batch["batch_id"]: batch for batch in batches if batch_is_valid(batch)}
+    decisions = {decision: 0 for decision in sorted(DECISIONS)}
+    reasons: dict[str, int] = {}
+    request_count = 0
+    for batch in unique.values():
+        for source in batch["sources"]:
+            decision = source.get("decision")
+            reason = source.get("reason_code")
+            if decision not in decisions or not isinstance(reason, str) or _REASON_CODE_TEXT.fullmatch(reason) is None:
+                continue
+            request_count += 1
+            decisions[decision] += 1
+            if decision not in REUSE_DECISIONS:
+                reasons[reason] = reasons.get(reason, 0) + 1
+    ranked = sorted(reasons.items(), key=lambda item: (-item[1], item[0]))[:RETAINED_REASON_LIMIT]
+    return {
+        "unit": "verification-group-request", "window": "retained-history",
+        "request_count": request_count,
+        "decisions": decisions,
+        "run_reasons": [{"reason_code": code, "count": count} for code, count in ranked],
+        "max_age_seconds": MAX_HISTORY_AGE_SECONDS, "max_events": MAX_HISTORY_EVENTS,
+    }
+
+
+def retained_reuse_reasons_is_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != set(retained_reuse_reasons([])):
+        return False
+    if value["unit"] != "verification-group-request" or value["window"] != "retained-history":
+        return False
+    decisions = value.get("decisions")
+    if (
+        not isinstance(decisions, dict) or set(decisions) != set(DECISIONS)
+        or any(not _is_integer(count) for count in decisions.values())
+        or not _is_integer(value.get("request_count"))
+        or sum(decisions.values()) != value["request_count"]
+    ):
+        return False
+    reasons = value.get("run_reasons")
+    if (
+        not isinstance(reasons, list) or len(reasons) > RETAINED_REASON_LIMIT
+        or any(
+            not isinstance(row, dict) or set(row) != {"reason_code", "count"}
+            or not isinstance(row["reason_code"], str) or _REASON_CODE_TEXT.fullmatch(row["reason_code"]) is None
+            or not _is_integer(row["count"], minimum=1)
+            for row in reasons
+        )
+        or [row["reason_code"] for row in reasons] != [
+            row["reason_code"] for row in sorted(reasons, key=lambda row: (-row["count"], row["reason_code"]))
+        ]
+        or len({row["reason_code"] for row in reasons}) != len(reasons)
+        or sum(row["count"] for row in reasons) > sum(
+            count for decision, count in decisions.items() if decision not in REUSE_DECISIONS
+        )
+    ):
+        return False
+    return value["max_age_seconds"] == MAX_HISTORY_AGE_SECONDS and value["max_events"] == MAX_HISTORY_EVENTS
+
+
 def retained_impact_is_valid(value: Any) -> bool:
     if not isinstance(value, dict) or set(value) != set(retained_impact([])):
         return False
@@ -1152,9 +1221,9 @@ def host_summary(verification: Any) -> str:
         if ratio is None
         else f"약 {100 * ratio:.2f}".rstrip("0").rstrip(".") + "%"
     )
-    conditional_count = sum(item["status"] == "reused" and item.get("authority_source") == "conditional-js-observation"
+    conditional_count = sum(item["status"] == "reused" and item.get("authority_source") in CONDITIONAL_AUTHORITY_SOURCES
                             for item in batch["sources"])
-    limitation = (f" 조건부 JS 재사용 {conditional_count}개: 관찰 범위 기반 / 입력 완전성 미보증."
+    limitation = (f" 조건부 재사용 {conditional_count}개: 관찰 범위 기반 / 입력 완전성 미보증."
                   if conditional_count else "")
     return (
         f"[Click 결과] {headline}; "

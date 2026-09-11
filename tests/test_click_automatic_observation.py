@@ -374,14 +374,30 @@ class AutomaticEvidenceTests(ClickGateTestCase):
         self.assertEqual(parent.returncode, 0, parent.stderr)
         self.assertIn("Ran 2 tests", parent.stderr)
 
-    def test_incomplete_worker_does_not_disable_unaffected_child_reuse(self) -> None:
+    def test_followed_child_process_yields_a_conditional_receipt(self) -> None:
         commands = self.fixture(child_process=True)
         first = self.run_checks(commands, "turn-1")
         alpha, beta = [CLICK_EVIDENCE.evidence_key(name) for name in ("ALPHA", "BETA")]
-        self.assertEqual(first["evidence_state"]["sources"][beta]["verified_dependency_provider"], "")
-        self.patch_file("beta.py", "VALUE = 1", "VALUE = 2", "turn-2")
+        # strace followed the child, so beta keeps a bound input snapshot; the
+        # receipt is explicitly conditional, never complete.
+        beta_observation = first["evidence_state"]["sources"][beta]["verified_dependency_observation"]
+        self.assertEqual(beta_observation["status"], "conditional")
+        self.assertEqual(beta_observation["ineligibility_reasons"], ["child-process-unsupported"])
+        self.assertTrue(beta_observation["process_tree_complete"])
+        self.assertEqual(first["evidence_state"]["sources"][alpha]["verified_dependency_observation"]["status"], "complete")
+        # An in-place edit of a tracked file neither test reads keeps every
+        # observed input, including the root directory membership, unchanged.
+        self.patch_file(".gitignore", "local-data/\n", "local-data/\n# unrelated\n", "turn-2")
         second = self.run_checks(commands, "turn-2")
-        self.assertEqual(self.decisions(second), {alpha: "reuse-dependency", beta: "run"})
+        self.assertEqual(self.decisions(second), {alpha: "reuse-dependency", beta: "reuse-dependency"})
+        authorities = {row["source_key"]: row["authority_source"]
+                       for row in second["verification"]["incremental_plan"]["decisions"]}
+        self.assertEqual(authorities, {alpha: "runtime-dependency-observation", beta: "conditional-python-observation"})
+        self.assertEqual({row["reason_code"] for row in second["verification"]["incremental_plan"]["decisions"] if row["source_key"] == beta},
+                         {"conditional-observed-inputs-current"})
+        self.patch_file("beta.py", "VALUE = 1", "VALUE = 2", "turn-3")
+        third = self.run_checks(commands, "turn-3")
+        self.assertEqual(self.decisions(third), {alpha: "reuse-dependency", beta: "run"})
 
     def test_ignored_input_failure_is_executed_and_reported(self) -> None:
         commands = self.fixture()

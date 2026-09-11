@@ -52,7 +52,7 @@ The default `auto` mode accepts `conditional-js-observation-v1` receipts with
 `confidence: conditional` and `runtime_inputs_complete: false`. The command,
 evidence key, environment, executable, working directory, host scope, policy,
 partition and runner execution are bound. Admission rechecks content and
-metadata of observed files, missing paths and directory enumerations, including
+content, type and membership of observed files, missing paths and directories, including
 ignored files and ordinary external files. A sibling modifying these inputs
 also invalidates reuse at completion. A learning seed or a lost receipt cannot
 downgrade to Git-only reuse.

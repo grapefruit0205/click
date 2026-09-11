@@ -159,8 +159,20 @@ def _observation(
     process_tree_complete: bool = False,
 ) -> dict[str, Any]:
     records = inputs or []
+    if not reasons:
+        status = "complete"
+    elif (
+        process_tree_complete
+        and records
+        and reasons <= click_dependency_cache.AUTHORITATIVE_CONDITIONAL_REASONS
+    ):
+        # Every process was followed and every file input was snapshotted;
+        # only disclosed dynamic categories remain. Reuse stays conditional.
+        status = "conditional"
+    else:
+        status = "failed"
     return click_dependency_cache.authoritative_dependency_observation(
-        status="complete" if not reasons else "failed",
+        status=status,
         paths=_project_paths(records),
         child_processes=child_processes,
         process_tree_complete=process_tree_complete,
