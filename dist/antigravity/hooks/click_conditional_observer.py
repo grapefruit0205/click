@@ -88,6 +88,16 @@ ordinary inputs. No application read is removed because it is later written.
             # Captured stdout/stderr pipe metadata belongs to the runner's
             # fixed output transport. Stdin and arbitrary descriptors do not.
             continue
+        if path and path.startswith(str(directory) + "/") and call in linux._OPEN_CALLS and "O_WRONLY" in arguments:
+            continue  # the collector's own transport files, written by the bootstrap
+        if (path == "/proc/self/cgroup" or (path and re.fullmatch(r"/proc/[0-9]+/cgroup", path))
+                or (path and path.startswith("/sys/fs/cgroup/") and path.endswith(("/memory.high", "/memory.max")))):
+            # libuv and V8 read the process cgroup and memory limits when the
+            # engine, a thread pool or a Worker starts, on either side of the
+            # acknowledgement. Like the allocator's overcommit probe, these are
+            # the runtime's own reads; a Worker is rejected by its count, not by
+            # this probe's timing. Every other pseudo-file remains dynamic.
+            continue
         if path == "/proc/sys/vm/overcommit_memory":
             # glibc's malloc reads this once, on the first large allocation,
             # which can fall on either side of the acknowledgement. It is the

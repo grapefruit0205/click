@@ -91,6 +91,18 @@ class ConditionalSnapshotTests(unittest.TestCase):
         self.assertIsNotNone(projection)
         self.assertNotIn('overcommit', str(projection))
 
+    @unittest.skipUnless(sys.platform == 'linux', 'the projection reads a Linux strace capture')
+    def test_the_runtime_cgroup_probe_after_the_acknowledgement_still_projects(self):
+        directory = self.root / 'observer'
+        base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
+        # libuv reads the process cgroup when a thread pool or Worker starts; on
+        # a loaded host that lands after the acknowledgement.
+        probe = '100 openat(AT_FDCWD, "/proc/100/cgroup", O_RDONLY|O_CLOEXEC) = 3</proc/100/cgroup>'
+        raw = (base + probe + '\n100 exit_group(0) = ?\n100 +++ exited with 0 +++\n').encode()
+        projection = conditional.project_capture(raw, project=self.root, cwd=self.root, directory=directory)
+        self.assertIsNotNone(projection)
+        self.assertNotIn('cgroup', str(projection))
+
     def test_projection_keeps_application_proc_read_and_unknown_calls_ineligible(self):
         directory = self.root / 'observer'
         base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
@@ -259,6 +271,8 @@ class ConditionalHookTests(support.ClickGateTestCase):
         state,result=run('learn-2')
         for source in state['evidence_state']['sources'].values():
             self.assertTrue(conditional.valid(source.get('verified_dependency_observation')), result.stdout + result.stderr + '\n' + json.dumps(state['verification'].get('framework_observations')))
+        for record in state['verification']['framework_observations'].values():
+            self.assertEqual(record['runtime']['workers'], 0)
         state,result=run('reuse')
         decisions=state['verification']['incremental_plan']['decisions']
         self.assertTrue(all(row['authority_source']=='conditional-js-observation' for row in decisions),decisions)
@@ -340,6 +354,11 @@ class ConditionalHookTests(support.ClickGateTestCase):
         replace_source(plain_source, worker_source, 'add-worker')
         first, _ = run('worker-capture')
         self.assertTrue(first['evidence_state']['sources'][alpha_key]['automatic_observation_required'])
+        # The Worker is counted explicitly, and that count is what denies the
+        # projection; it no longer depends on where the isolate's probes land.
+        worker_record = first['verification']['framework_observations'][alpha_key]
+        self.assertGreaterEqual(worker_record['runtime']['workers'], 1)
+        self.assertIsNone(worker_record['conditional_capture'])
         (self.workspace / 'worker.cfg').write_text('changed')
         third, result = run('worker-input-changed')
         self.assertIn('ran-alpha changed', result.stdout)

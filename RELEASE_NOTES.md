@@ -35,7 +35,11 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   acknowledgement. The probe happens on the first large allocation, on either
   side of the acknowledgement, so about half of otherwise complete captures
   were rejected and the check re-ran instead of learning a receipt. Every
-  other pseudo-file read after the acknowledgement remains dynamic.
+  other pseudo-file read after the acknowledgement remains dynamic. The
+  runtime's cgroup and memory-limit probes are excluded the same way, and a
+  Node Worker is now detected explicitly — the isolate announces itself to the
+  collector — so a Worker run is denied a receipt by its count rather than by
+  where its own probe happened to land.
 - One verification request's reuse decision reads each observed input once
   instead of once per source. A sharded suite re-fingerprinted the runtime
   inputs its shards share once per shard; the recheck of a six-shard suite is
