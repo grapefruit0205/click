@@ -686,6 +686,35 @@ class ClickDependencyBehaviorTests(
                     self.assertFalse(observation_inputs.records_current(
                         Path(directory), "click-native-observer-" + "0" * 32, records))
 
+    def test_a_root_match_is_whole_components_at_the_host_case_rule(self) -> None:
+        from hooks import click_observation_inputs as observation_inputs
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for name in ("lib", "lib2"):
+                (root / name).mkdir()
+                (root / name / "inner.txt").write_text("", encoding="utf-8")
+            snapshot = object.__new__(observation_inputs.InputSnapshot)
+            snapshot._root_prefixes = {}
+            snapshot.roots = {"project-parent": root, "project": root / "lib"}
+            # The deepest matching root wins, and a sibling whose name merely
+            # starts with the root's name belongs to the parent, not to it.
+            self.assertEqual(snapshot.locator(root / "lib"), ("project", ""))
+            self.assertEqual(snapshot.locator(root / "lib" / "inner.txt"), ("project", "inner.txt"))
+            self.assertEqual(snapshot.locator(root / "lib2" / "inner.txt"),
+                             ("project-parent", "lib2/inner.txt"))
+            # A filesystem root already ends in the separator; its direct
+            # children still resolve against it.
+            snapshot.roots = {"host-root": Path(os.sep)}
+            snapshot._root_prefixes = {}
+            self.assertEqual(snapshot.locator(Path(os.sep) / root.parts[1]),
+                             ("host-root", root.parts[1]))
+            # Nothing outside every root is locatable.
+            snapshot.roots = {"project": root / "lib"}
+            snapshot._root_prefixes = {}
+            with self.assertRaises(observation_inputs.InputError):
+                snapshot.locator(root / "lib2" / "inner.txt")
+
     def test_an_identity_pass_never_outlives_its_decision(self) -> None:
         from hooks import click_observation_inputs as observation_inputs
 

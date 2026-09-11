@@ -30,6 +30,11 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   dashboard show the output the host did not read again as an estimate (bytes
   and an approximate token count at four bytes per token). It is a disclosed
   estimate of avoided reading, never a time or cost claim.
+- The one-use runner's observation resolves each parent directory once per
+  snapshot phase and matches an input against its runtime roots by lexical
+  prefix instead of raising once per non-matching root. Recording a six-shard
+  suite's inputs is 91% faster and locating them 98% faster, so a reuse-heavy
+  request's runner segment drops about 15% and its first use about 30%.
 - One verification request's reuse decision reads each observed input once
   instead of once per source. A sharded suite re-fingerprinted the runtime
   inputs its shards share once per shard; the recheck of a six-shard suite is
