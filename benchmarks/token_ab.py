@@ -168,6 +168,8 @@ def apply_steps(root: Path, steps: list[tuple[str, int, int]]) -> None:
 STEP_RULES = (
     "Rules you must follow:",
     "- Do one step at a time. Never combine two steps into one command or one message.",
+    "- Make every source edit with the file-editing tool, not with a shell command,"
+    " and never combine an edit and a test run in one command.",
     "- After finishing a step, run the project's full test suite (README.md names the command)"
     " and report its result line before you start the next step.",
     "- Fix any failure you caused before moving on.",
@@ -338,16 +340,15 @@ def parse_transcript(path: Path) -> dict[str, Any]:
                         responses[identifier] = current
                     else:  # the same response streams once per content block
                         responses[identifier] = {key: max(value, current[key]) for key, value in responses[identifier].items()}
-                for position, block in enumerate(message.get("content") or []):
+                for block in message.get("content") or []:
                     if not isinstance(block, dict) or block.get("type") != "tool_use":
                         continue
-                    # Blocks repeat with their response. Each call carries its
-                    # own id; its position within the response identifies it
-                    # when a transcript omits one.
-                    call_id = str(block.get("id") or f"{identifier}#{position}")
-                    if call_id in seen_tools:
+                    # Blocks repeat with their response; each call has one id.
+                    call_id = str(block.get("id") or "")
+                    if call_id and call_id in seen_tools:
                         continue
-                    seen_tools.add(call_id)
+                    if call_id:
+                        seen_tools.add(call_id)
                     tool_calls += 1
                     if block.get("name") == "Bash":
                         commands.append(str((block.get("input") or {}).get("command", "")))
