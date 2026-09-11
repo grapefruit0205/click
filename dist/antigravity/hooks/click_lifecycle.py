@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 import re
 import secrets
 import shlex
@@ -194,6 +195,118 @@ def _carry_completed_candidates(
     )
 
 
+# Receipts live in the contract state of one host session ({session_id, cwd}),
+# so a new session used to start with none and re-ran every check once. The
+# workspace archive keeps the last completed Evidence session's successor facts
+# per repository root; a new session imports them as successor candidates and
+# the existing requalification (argv, root, executable, environment, host
+# coverage, shard binding, then observed inputs) decides what is still valid.
+WORKSPACE_SUCCESSOR_DIRECTORY = "workspace-successors"
+
+
+def _workspace_root(event: dict[str, Any]) -> str | None:
+    cwd = event.get("cwd")
+    if not isinstance(cwd, str) or not cwd:
+        return None
+    try:
+        output = click_verification.git_capture(
+            Path(cwd), ["rev-parse", "--show-toplevel"]
+        )
+        if not output:
+            return None
+        return str(Path(output.decode("utf-8").strip()).resolve(strict=True))
+    except (OSError, RuntimeError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _workspace_successor_path(root: str) -> Path:
+    name = hashlib.sha256(root.encode("utf-8", "surrogateescape")).hexdigest()
+    return click_state.state_root() / WORKSPACE_SUCCESSOR_DIRECTORY / f"{name}.json"
+
+
+def _session_successor_scope(event: dict[str, Any]) -> str:
+    return click_evidence.successor_scope_digest(
+        str(click_state.contract_path(event).resolve())
+    )
+
+
+def _publish_workspace_successor(event: dict[str, Any], state: dict[str, Any]) -> bool:
+    """Store this session's successor facts for later sessions of the same root."""
+    value = state.get(click_evidence.SUCCESSOR_EVIDENCE_FIELD)
+    if (
+        not isinstance(value, dict)
+        or value.get("version") != click_evidence.SUCCESSOR_EVIDENCE_VERSION
+        or not click_evidence.successor_evidence_is_valid(
+            value,
+            expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+            scope_digest=_session_successor_scope(event),
+        )
+    ):
+        return False
+    root = _workspace_root(event)
+    if root is None:
+        return False
+    rescoped = click_evidence.rescope_successor_evidence(
+        value,
+        scope_digest=click_evidence.workspace_successor_scope(root),
+        expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+    )
+    if rescoped is None:
+        return False
+    path = _workspace_successor_path(root)
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        click_state.write_json(path, rescoped)
+    except OSError:
+        return False
+    return True
+
+
+def _import_workspace_successor(event: dict[str, Any], state: dict[str, Any]) -> bool:
+    """Seed a fresh Evidence session with the repository's archived successor facts."""
+    root = _workspace_root(event)
+    if root is None:
+        return False
+    try:
+        value = json.loads(_workspace_successor_path(root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not click_evidence.successor_evidence_is_valid(
+        value,
+        expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+        scope_digest=click_evidence.workspace_successor_scope(root),
+    ):
+        return False
+    rescoped = click_evidence.rescope_successor_evidence(
+        value,
+        scope_digest=_session_successor_scope(event),
+        expected_contract_schema_version=CONTRACT_STATE_SCHEMA_VERSION,
+    )
+    if rescoped is None:
+        return False
+    state[click_evidence.SUCCESSOR_EVIDENCE_FIELD] = rescoped
+    return True
+
+
+def publish_workspace_successor(event: dict[str, Any]) -> bool:
+    """At session end, archive the current Evidence session's passing facts.
+
+    The facts are carried exactly as a following prompt would carry them, so a
+    check that failed last is never archived while its passing siblings are.
+    """
+    state = _read_contract_state(event)
+    runtime = click_runtime_state.view(state)
+    if not (
+        runtime.evidence
+        and runtime.runtime_mode == "evidence"
+        and _evidence_state_is_usable(state)
+    ):
+        return False
+    carrier = _fresh_evidence_state(event)
+    _carry_completed_candidates(event, state, carrier)
+    return _publish_workspace_successor(event, carrier)
+
+
 def _fresh_evidence_state(
     event: dict[str, Any], *, history_complete: bool = True
 ) -> dict[str, Any]:
@@ -272,6 +385,11 @@ def _ensure_evidence_state(event: dict[str, Any]) -> tuple[dict[str, Any], bool]
                 previous.get("verification"), state["verification"]
             )
             _carry_completed_candidates(event, previous, state)
+            _publish_workspace_successor(event, state)
+        else:
+            # A new host session, or a session whose state could not be read:
+            # start from the repository's archived facts instead of from nothing.
+            _import_workspace_successor(event, state)
         _save_contract_state(event, state)
         return state, recovered
     if _append_follow_up(event, state):

@@ -100,6 +100,7 @@
               "tests.test_click_gate_execution",
               "tests.test_click_gate_inspection",
               "tests.test_click_gate_lifecycle",
+              "tests.test_click_workspace_receipts",
               "tests.test_click_gate_receipt",
               "tests.test_click_gate_service",
               "-q"
@@ -113,7 +114,8 @@
             "tests/test_click_gate_inspection.py",
             "tests/test_click_gate_lifecycle.py",
             "tests/test_click_gate_receipt.py",
-            "tests/test_click_gate_service.py"
+            "tests/test_click_gate_service.py",
+            "tests/test_click_workspace_receipts.py"
           ]
         },
         {

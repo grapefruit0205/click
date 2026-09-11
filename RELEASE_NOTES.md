@@ -47,6 +47,18 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   receipt was refused for an input difference that no application read made.
   The binary's identity stays bound by the receipt's runtime digest and by the
   row's content digest.
+- Passing receipts now outlive the host session. Receipts are stored per host
+  session, so a new Claude Code session used to start with none and re-ran every
+  check once. When an Evidence session completes, and at session end, its
+  successor facts are also archived per repository root under the plugin data
+  directory; a new session of the same root starts from that archive as
+  successor candidates, and the existing requalification decides what is still
+  valid: identical argv, root, executable, environment, host coverage and shard
+  binding, then either an unchanged tree or unchanged observed inputs behind a
+  recorded mutation boundary. An edit made outside the host's tool hooks still
+  makes the boundary ambiguous and re-runs the checks; a check that failed last
+  is never archived while its passing siblings are; another repository never
+  sees the archive.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
