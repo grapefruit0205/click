@@ -67,6 +67,29 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
 - Documentation distinguishes native authority, framework candidates and the
   remaining runtime/OS limitations. Existing sharding and owner policies remain.
 
+## v0.96.1 — 2026-09-11 — Claude Code plugin
+
+- Click now installs as a Claude Code plugin from the same repository:
+  `claude plugin marketplace add grapefruit0205/click` then
+  `claude plugin install click@click`. The generated `dist/claude` package
+  shares the Codex runtime, resident Hook worker, evidence ledger, and
+  `click-gate` command surface; only the inbound event is normalized.
+- The Claude Code adapter binds Click's turn identity to Claude Code's
+  per-prompt `prompt_id`, so first-line `@Click bypass`/`@Click cancel` and
+  later-turn Guarded approval keep their one-use, separate-turn proof. Events
+  without a prompt identity fail closed for every turn-bound action.
+- `MultiEdit` and `NotebookEdit` record `Edit` mutation boundaries; `TodoWrite`
+  and `ExitPlanMode` receive plan advisories only. Successful receipts bind a
+  distinct `claude` known-surfaces coverage digest and cannot be reused as
+  Codex or Antigravity receipts. No Claude Code Browser tool is bound.
+- A rewritten `click-gate` command is merged back over the original Claude
+  Code `tool_input`, because Claude Code replaces `updatedInput` wholesale.
+  Evidence state lives under `${CLAUDE_PLUGIN_DATA}`; Windows is not part of
+  the Claude Code package.
+- Turn-identity and bypass/cancel messages no longer name Codex; the resident
+  worker and dashboard identity accept either host manifest. Codex behavior is
+  otherwise unchanged from v0.96.0.
+
 ## v0.96.0 — 2026-09-09
 
 - Parent-relative cost selection rejects splits whose selected child plus

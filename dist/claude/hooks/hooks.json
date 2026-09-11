@@ -1,0 +1,51 @@
+{
+  "description": "Use approval-free Evidence mode by default for incremental verification and honest host-authorized receipts; rerun affected checks, retain authoritative passing evidence, offer opt-in Guarded approval boundaries, and keep Shadow observation non-authoritative and off by default.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" prompt-submit",
+            "timeout": 7
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|TodoWrite|ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" pre-tool",
+            "timeout": 7
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" post-tool",
+            "timeout": 7
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" session-end",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

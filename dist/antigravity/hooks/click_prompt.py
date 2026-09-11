@@ -52,7 +52,7 @@ def prompt_authorization(prompt: Any) -> str:
 def record_user_prompt(event: dict[str, Any]) -> str:
     turn_id = str(event.get("turn_id", ""))
     if not turn_id:
-        raise ValueError("Click requires the Codex turn_id on UserPromptSubmit")
+        raise ValueError("Click requires the host turn_id on UserPromptSubmit")
     authorization = prompt_authorization(event.get("prompt", ""))
     click_state.write_json(
         click_state.prompt_path(event),
@@ -81,17 +81,17 @@ def read_user_prompt_turn(event: dict[str, Any]) -> str:
 def consume_user_authorization(event: dict[str, Any], expected: str) -> str:
     turn_id = str(event.get("turn_id", ""))
     if not turn_id:
-        return f"Click {expected} requires a current Codex turn_id."
+        return f"Click {expected} requires a current host turn_id."
     state = read_user_prompt_state(event)
     if str(state.get("turn_id", "")) != turn_id:
         return (
             f"Click {expected} requires a recognized first-line Click directive "
-            "or trusted `plugin://click@click` autocomplete mention in this user turn."
+            f"(`@Click {expected}`) in this user turn."
         )
     if state.get("authorization") != expected:
         return (
             f"Click {expected} requires a recognized first-line Click directive "
-            "or trusted `plugin://click@click` autocomplete mention in this user turn."
+            f"(`@Click {expected}`) in this user turn."
         )
     state["authorization"] = ""
     state["updated_at"] = int(time.time())
@@ -102,7 +102,7 @@ def consume_user_authorization(event: dict[str, Any], expected: str) -> str:
 def active_prompt_turn_error(event: dict[str, Any]) -> str:
     turn_id = str(event.get("turn_id", ""))
     if not turn_id:
-        return "Click cannot prove approval because this tool call has no Codex turn_id."
+        return "Click cannot prove approval because this tool call has no host turn_id."
     if read_user_prompt_turn(event) != turn_id:
         return (
             "Click can stage or approve a contract only in a turn that began with a "

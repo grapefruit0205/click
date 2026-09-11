@@ -18,6 +18,7 @@ try:
         hook_manifest_errors,
         rendered_skill,
     )
+    import build_claude_distribution as claude_distribution
 except ModuleNotFoundError:
     from scripts.build_antigravity_distribution import (
         CLICK_REFERENCE_FILES,
@@ -27,6 +28,7 @@ except ModuleNotFoundError:
         hook_manifest_errors,
         rendered_skill,
     )
+    from scripts import build_claude_distribution as claude_distribution
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -223,6 +225,106 @@ def _validate_antigravity(root: Path, errors: list[str]) -> None:
         )
 
 
+def _validate_claude(root: Path, errors: list[str], release_version: str) -> None:
+    errors.extend(claude_distribution.hook_manifest_errors(root))
+    errors.extend(claude_distribution.reference_manifest_errors(root))
+    platform = root / "platforms" / "claude"
+    distribution = root / "dist" / "claude"
+    manifest = _json(platform / "plugin.json", errors, root)
+    if not isinstance(manifest, dict):
+        return
+    if manifest.get("name") != "click":
+        errors.append("Claude Code plugin name must be `click`")
+    if manifest.get("version") != release_version:
+        errors.append(
+            f"Claude Code plugin.json version must match the Codex release `{release_version}`"
+        )
+    if manifest.get("license") != "MIT":
+        errors.append("Claude Code plugin license must be MIT")
+    if set(manifest) & {"hooks", "skills", "commands", "agents"}:
+        errors.append(
+            "Claude Code plugin.json must rely on the default hooks/ and skills/ layout"
+        )
+    if _contains_todo(manifest):
+        errors.append("Claude Code plugin manifest contains an unfinished TODO")
+
+    hook_config = _json(platform / "hooks.json", errors, root)
+    if not isinstance(hook_config, dict):
+        return
+    hooks = hook_config.get("hooks", {})
+    required_hooks = {"UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"}
+    if not isinstance(hooks, dict) or set(hooks) != required_hooks:
+        errors.append(
+            "Claude Code hooks.json must register exactly UserPromptSubmit, "
+            "PreToolUse, PostToolUse, and SessionEnd"
+        )
+    serialized = json.dumps(hook_config, sort_keys=True)
+    for marker in (
+        "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py",
+        "MultiEdit",
+        "NotebookEdit",
+        "TodoWrite",
+        "ExitPlanMode",
+    ):
+        if marker not in serialized:
+            errors.append(f"Claude Code hooks.json is missing `{marker}`")
+    for forbidden in ("commandWindows", "additionalContextLimit", "${PLUGIN_ROOT}"):
+        if forbidden in serialized:
+            errors.append(f"Claude Code hooks.json must not use `{forbidden}`")
+
+    marketplace = _json(root / ".claude-plugin" / "marketplace.json", errors, root)
+    try:
+        entry = marketplace["plugins"][0]
+        source = entry["source"]
+    except (KeyError, IndexError, TypeError):
+        errors.append("Claude Code marketplace must contain the Click plugin source")
+    else:
+        if marketplace.get("name") != "click":
+            errors.append("Claude Code marketplace name must be `click`")
+        if entry.get("name") != "click":
+            errors.append("Claude Code marketplace plugin name must be `click`")
+        if source.get("source") != "git-subdir" or source.get("path") != "dist/claude":
+            errors.append("Claude Code marketplace must install the generated dist/claude package")
+        if source.get("url") != "https://github.com/grapefruit0205/click.git":
+            errors.append("Claude Code marketplace must use Click's canonical Git URL")
+        if source.get("ref") != f"v{release_version}":
+            errors.append(
+                f"Claude Code marketplace ref must be immutable `v{release_version}`"
+            )
+
+    try:
+        expected = claude_distribution.expected_files(root)
+    except OSError as exc:
+        errors.append(f"cannot render the Claude Code distribution: {exc}")
+        return
+    rendered_skills = {
+        Path("skills") / name / "SKILL.md": claude_distribution.rendered_skill(name)
+        for name in ("click", "fix")
+    }
+    for relative, contents in sorted(expected.items()):
+        path = distribution / relative
+        try:
+            if relative in rendered_skills:
+                # Rendered text is compared as text so a CRLF checkout of the
+                # generated file still matches the LF source rendering.
+                stale = path.read_text(encoding="utf-8") != rendered_skills[relative]
+            else:
+                stale = path.read_bytes() != contents
+        except OSError as exc:
+            errors.append(f"cannot read Claude Code distribution {relative.as_posix()}: {exc}")
+            continue
+        if stale:
+            errors.append(f"Claude Code distribution is stale: {relative.as_posix()}")
+    if distribution.is_dir():
+        present = {
+            path.relative_to(distribution)
+            for path in distribution.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts
+        }
+        for relative in sorted(present - set(expected)):
+            errors.append(f"Claude Code distribution has an unclassified file: {relative.as_posix()}")
+
+
 def validate(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
     manifest = _json(root / ".codex-plugin" / "plugin.json", errors, root)
@@ -270,6 +372,7 @@ def validate(root: Path = ROOT) -> list[str]:
         _validate_skill(root, skill_name, errors)
 
     _validate_antigravity(root, errors)
+    _validate_claude(root, errors, release_version)
 
     hook_config = _json(root / "hooks" / "hooks.json", errors, root)
     hooks = hook_config.get("hooks", {}) if isinstance(hook_config, dict) else {}
@@ -314,8 +417,8 @@ def main() -> int:
             print(f"- {error}")
         return 1
     print(
-        "Click distribution validation passed: Codex and Antigravity plugins, "
-        "marketplace, Click/Fix skills, metadata, and Python sources"
+        "Click distribution validation passed: Codex, Antigravity, and Claude Code "
+        "plugins, marketplaces, Click/Fix skills, metadata, and Python sources"
     )
     return 0
 

@@ -173,6 +173,7 @@
               "-m",
               "unittest",
               "tests.test_antigravity_adapter",
+              "tests.test_claude_adapter",
               "tests.test_click_authoritative_observer",
               "tests.test_click_authoritative_reuse",
               "tests.test_click_automatic_observation",
@@ -198,6 +199,7 @@
           ],
           "covers": [
             "tests/test_antigravity_adapter.py",
+            "tests/test_claude_adapter.py",
             "tests/test_click_authoritative_observer.py",
             "tests/test_click_authoritative_reuse.py",
             "tests/test_click_automatic_observation.py",

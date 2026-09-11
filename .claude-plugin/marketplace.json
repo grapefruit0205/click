@@ -1,0 +1,22 @@
+{
+  "name": "click",
+  "owner": {
+    "name": "Junseok Pak",
+    "url": "https://github.com/grapefruit0205"
+  },
+  "description": "Incremental verification for coding agents: rerun affected checks and reuse authoritative passing evidence.",
+  "plugins": [
+    {
+      "name": "click",
+      "displayName": "Click",
+      "description": "Rerun affected checks; safely reuse the rest.",
+      "category": "productivity",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/grapefruit0205/click.git",
+        "path": "dist/claude",
+        "ref": "v0.96.1"
+      }
+    }
+  ]
+}
