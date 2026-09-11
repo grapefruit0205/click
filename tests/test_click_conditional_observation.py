@@ -210,7 +210,9 @@ class RealConditionalTests(unittest.TestCase):
                 self.assertTrue(conditional.eligible_record(result.record), (self.projection_diagnostics, result.record))
                 previous = result.record
             observed = conditional.verify(result.envelope, secret=secret, expected_binding=context)
-            self.assertIsNotNone(observed)
+            # A missing envelope after an eligible binding run is a refused
+            # receipt; the observer's own reason names the rows that differed.
+            self.assertIsNotNone(observed, {"refusal": result.refusal, "diagnostics": self.projection_diagnostics})
             rows = {row["path"]: row for row in observed["inputs"]}
             (root / "unrelated.txt").write_text("unrelated change")
             self.assertTrue(conditional.current(root, observed["inputs"]))
@@ -245,6 +247,7 @@ class RealConditionalTests(unittest.TestCase):
                 # issue() declined for another reason; show both sides, so a
                 # host-only refusal can be read from the failure alone.
                 self.assertEqual(execution.envelope is None,learning,{
+                    'refusal': execution.refusal,
                     'diagnostics': self.projection_diagnostics,
                     'learning_capture': previous.get('conditional_capture') if isinstance(previous, dict) else None,
                     'binding_capture': execution.record.get('conditional_capture'),
