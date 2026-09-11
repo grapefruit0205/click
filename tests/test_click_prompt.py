@@ -107,14 +107,14 @@ class ClickPromptTests(unittest.TestCase):
         )
         self.assertEqual(
             click_prompt.consume_user_authorization(event, "bypass"),
-            "Click bypass requires a recognized first-line Click directive or trusted "
-            "`plugin://click@click` autocomplete mention in this user turn.",
+            "Click bypass requires a recognized first-line Click directive "
+            "(`@Click bypass`) in this user turn.",
         )
 
     def test_active_turn_errors_and_follow_up_lineage_remain_exact(self) -> None:
         self.assertEqual(
             click_prompt.active_prompt_turn_error({}),
-            "Click cannot prove approval because this tool call has no Codex turn_id.",
+            "Click cannot prove approval because this tool call has no host turn_id.",
         )
         self.assertEqual(
             click_prompt.active_prompt_turn_error(self.event),

@@ -82,6 +82,24 @@ ANTIGRAVITY_MUTATION_TOOL_NAMES = frozenset(
 )
 ANTIGRAVITY_PLAN_TOOL_NAMES = frozenset({"update_plan", "create_plan"})
 
+# Claude Code dispatches Hook events under its native tool names. Bash, Edit
+# and Write already match Click's canonical names; the remaining editors map
+# onto Edit because Click only records their mutation boundary, never their
+# tool-specific arguments. Plan tools stay advisory-only.
+CLAUDE_MUTATION_TOOL_NAMES = frozenset(
+    {"Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"}
+)
+CLAUDE_PLAN_TOOL_NAMES = frozenset({"TodoWrite", "ExitPlanMode"})
+CLAUDE_TOOL_MAP = {
+    "Bash": "Bash",
+    "Edit": "Edit",
+    "Write": "Write",
+    "MultiEdit": "Edit",
+    "NotebookEdit": "Edit",
+    "TodoWrite": "update_plan",
+    "ExitPlanMode": "update_plan",
+}
+
 
 _HOST_SPECS: dict[str, dict[str, object]] = {
     "codex": {
@@ -111,6 +129,21 @@ _HOST_SPECS: dict[str, dict[str, object]] = {
         },
         "post_tool": {
             "mutation": tuple(sorted(ANTIGRAVITY_MUTATION_TOOL_NAMES)),
+            "browser": (),
+        },
+    },
+    "claude": {
+        "assurance": KNOWN_SURFACES_ASSURANCE,
+        "limitations": (HOST_EVENT_OMISSION_LIMITATION,),
+        "lifecycle": ("UserPromptSubmit", "SessionEnd"),
+        "canonical_tool_map": tuple(sorted(CLAUDE_TOOL_MAP.items())),
+        "pre_tool": {
+            "mutation": tuple(sorted(CLAUDE_MUTATION_TOOL_NAMES)),
+            "browser": (),
+            "plan": tuple(sorted(CLAUDE_PLAN_TOOL_NAMES)),
+        },
+        "post_tool": {
+            "mutation": tuple(sorted(CLAUDE_MUTATION_TOOL_NAMES)),
             "browser": (),
         },
     },

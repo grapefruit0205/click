@@ -1,13 +1,34 @@
 # Release notes
 
-## Unreleased v0.97 candidate — automatic Evidence observation
+## v0.97.0 — 2026-09-11 — Claude Code plugin and automatic Evidence observation
 
-Draft stabilization: companion loss reproduces the earlier opposite-child
-decision when capture-loss safeguards are disabled in an isolated control.
-Current safeguards report the affected child's failure; the exact historical
-trigger remains unconfirmed. The preceding stabilization was merged in PR #103
-after its 43 checks passed; that historical run does not validate later changes.
-This candidate remains unreleased. See `docs/architecture/automatic-observation.md`.
+- Click now installs as a Claude Code plugin from the same repository:
+  `claude plugin marketplace add grapefruit0205/click` then
+  `claude plugin install click@click`. The generated `dist/claude` package
+  shares the Codex runtime, resident Hook worker, evidence ledger, and
+  `click-gate` command surface; only the inbound event is normalized.
+- The Claude Code adapter binds Click's turn identity to Claude Code's
+  per-prompt `prompt_id`, so first-line `@Click bypass`/`@Click cancel` and
+  later-turn Guarded approval keep their one-use, separate-turn proof. Events
+  without a prompt identity fail closed for every turn-bound action.
+- `MultiEdit` and `NotebookEdit` record `Edit` mutation boundaries; `TodoWrite`
+  and `ExitPlanMode` receive plan advisories only. Successful receipts bind a
+  distinct `claude` known-surfaces coverage digest and cannot be reused as
+  Codex or Antigravity receipts. No Claude Code Browser tool is bound.
+- A rewritten `click-gate` command is merged back over the original Claude
+  Code `tool_input`, because Claude Code replaces `updatedInput` wholesale.
+  Evidence state lives under `${CLAUDE_PLUGIN_DATA}`; Windows is not part of
+  the Claude Code package.
+- Turn-identity and bypass/cancel messages no longer name Codex; the resident
+  worker and dashboard identity accept either host manifest.
+
+Automatic observation stabilization: companion loss reproduces the earlier
+opposite-child decision when capture-loss safeguards are disabled in an
+isolated control. Current safeguards report the affected child's failure; the
+exact historical trigger remains unconfirmed. The preceding stabilization was
+merged in PR #103 after its 43 checks passed; this release's own CI run is the
+validation for the combined change set. See
+`docs/architecture/automatic-observation.md`.
 
 - Preparation status now explains bounded failure reasons, recovery actions and
   recent per-check rerun/conditional-reuse decisions in all three dashboard

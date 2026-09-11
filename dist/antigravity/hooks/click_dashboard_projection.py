@@ -207,12 +207,14 @@ def engine_identity() -> dict[str, Any]:
     """File provenance only, never a signed or independently trusted identity."""
     result = {"version": None, "hook_files_digest": None, "assurance": "unsigned-files-at-snapshot"}
     root = Path(__file__).resolve().parents[1]
-    try:
-        version = json.loads((root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")).get("version")
+    for manifest in (".codex-plugin/plugin.json", ".claude-plugin/plugin.json"):
+        try:
+            version = json.loads((root / manifest).read_text(encoding="utf-8")).get("version")
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
         if isinstance(version, str) and re.fullmatch(r"\d+\.\d+\.\d+(?:\+codex\.\d{14})?", version):
             result["version"] = version
-    except (OSError, ValueError, TypeError):
-        pass
+            break
     try:
         digest = hashlib.sha256()
         hook_root = root / "hooks"

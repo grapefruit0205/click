@@ -101,6 +101,7 @@ HOOK_FILES = (
 )
 ANTIGRAVITY_HOOK_EXCLUDES = frozenset(
     {
+        "claude_hook.py",
         "click_hook.py",
         "click_hook_transport.py",
         "click_hook_worker.py",

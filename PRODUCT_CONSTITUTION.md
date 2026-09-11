@@ -86,7 +86,7 @@ Click Core owns these common integrity guarantees:
 - exporting a deterministic completion receipt that binds the authority mode,
   observable capability claims, final workspace revision, and evidence lineage;
   and
-- adapting Codex, Antigravity, and other hosts onto the same Core protocol.
+- adapting Codex, Claude Code, Antigravity, and other hosts onto the same Core protocol.
 
 In **Evidence authority**, Core additionally guarantees:
 
