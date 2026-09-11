@@ -47,6 +47,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   receipt was refused for an input difference that no application read made.
   The binary's identity stays bound by the receipt's runtime digest and by the
   row's content digest.
+- A project `__pycache__` directory and its bytecode files are derived from
+  the bound source content and interpreter identity, so they are no longer
+  observed inputs and a directory listing ignores a `__pycache__` member. An
+  equal-content re-save followed by any Python run outside Click keeps the
+  receipt; a source whose content changed still reruns. Runtime bytecode
+  caches bind their code object rather than the source-timestamp validation
+  field of their header.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
@@ -55,13 +62,6 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   at the next request, so on Claude Code every check reran with
   `environment-binding-changed` and no reuse was ever possible. Execution still
   receives the host's real search path; only the receipt subset is normalized.
-- A project `__pycache__` directory and its bytecode files are derived from
-  the bound source content and interpreter identity, so they are no longer
-  observed inputs and a directory listing ignores a `__pycache__` member. An
-  equal-content re-save followed by any Python run outside Click keeps the
-  receipt; a source whose content changed still reruns. Runtime bytecode
-  caches bind their code object rather than the source-timestamp validation
-  field of their header.
 - Observed-input identity is content-based: type and permission bits, file
   content, directory membership, metadata-only size and symlink text. Inode
   numbers, link counts, ownership and timestamps no longer invalidate a native
