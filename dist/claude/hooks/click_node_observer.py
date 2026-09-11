@@ -207,6 +207,11 @@ class Collector:
             if any(type(pid) is not int or pid <= 0 for pid in self.process_ids):
                 raise ValueError("invalid process identity")
             reasons = set(value["reasons"])
+            # Worker isolates announce themselves with a marker file; the
+            # Inspector session never attaches to them, so they are counted here.
+            if self.location is not None:
+                markers = [entry for entry in os.listdir(self.location.name) if entry.startswith("worker-")]
+                value["workers"] = max(int(value.get("workers", 0) or 0), len(markers))
             if tree is None or not tree.complete:
                 reasons.add("process-tree-incomplete")
             elif self.process_ids != set(tree.process_ids):

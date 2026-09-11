@@ -91,6 +91,43 @@ class ConditionalSnapshotTests(unittest.TestCase):
         self.assertIsNotNone(projection)
         self.assertNotIn('overcommit', str(projection))
 
+    @unittest.skipUnless(sys.platform == 'linux', 'the projection reads a Linux strace capture')
+    def test_the_runtime_cgroup_probe_after_the_acknowledgement_still_projects(self):
+        directory = self.root / 'observer'
+        base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
+        # libuv reads the process cgroup when a thread pool or Worker starts; on
+        # a loaded host that lands after the acknowledgement.
+        probe = '100 openat(AT_FDCWD, "/proc/100/cgroup", O_RDONLY|O_CLOEXEC) = 3</proc/100/cgroup>'
+        raw = (base + probe + '\n100 exit_group(0) = ?\n100 +++ exited with 0 +++\n').encode()
+        projection = conditional.project_capture(raw, project=self.root, cwd=self.root, directory=directory)
+        self.assertIsNotNone(projection)
+        self.assertNotIn('cgroup', str(projection))
+
+    def test_a_refused_receipt_names_the_rows_that_differed(self):
+        # A minimal eligible record whose projection lists one project input.
+        root = self.root
+        (root / 'input.txt').write_text('one')
+        rows = [{'path': 'input.txt', 'kind': 'file', 'operations': ['read']}]
+        before = conditional.snapshot(root, rows)
+        (root / 'input.txt').write_text('two')  # the binding run saw different content
+        record = {'conditional_capture': {'inputs': rows, 'external': []}}
+        with support.mock.patch.object(conditional, 'eligible_record', return_value=True):
+            reason = conditional.explain_refusal(record, before=before, external_before=[], project=root,
+                                                 node_path='/usr/bin/node', backend_path='/usr/bin/strace')
+        self.assertIn('inputs differed between the learning and binding runs', reason)
+        self.assertIn('input.txt digest changed', reason)
+        # A row present in only one run is named with the run it belongs to.
+        (root / 'extra.cfg').write_text('read by the binding run only')
+        binding = {'conditional_capture': {'inputs': sorted(rows + [{'path': 'extra.cfg', 'kind': 'file', 'operations': ['read']}], key=lambda row: row['path']), 'external': []}}
+        (root / 'input.txt').write_text('one')
+        with support.mock.patch.object(conditional, 'eligible_record', return_value=True):
+            reason = conditional.explain_refusal(binding, before=before, external_before=[], project=root,
+                                                 node_path='/usr/bin/node', backend_path='/usr/bin/strace')
+        self.assertIn('extra.cfg only in binding run', reason)
+        self.assertEqual(conditional.explain_refusal({}, before=before, external_before=[], project=root,
+                                                     node_path='/usr/bin/node', backend_path='/usr/bin/strace'),
+                         'record not eligible')
+
     def test_projection_keeps_application_proc_read_and_unknown_calls_ineligible(self):
         directory = self.root / 'observer'
         base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
@@ -173,7 +210,9 @@ class RealConditionalTests(unittest.TestCase):
                 self.assertTrue(conditional.eligible_record(result.record), (self.projection_diagnostics, result.record))
                 previous = result.record
             observed = conditional.verify(result.envelope, secret=secret, expected_binding=context)
-            self.assertIsNotNone(observed)
+            # A missing envelope after an eligible binding run is a refused
+            # receipt; the observer's own reason names the rows that differed.
+            self.assertIsNotNone(observed, {"refusal": result.refusal, "diagnostics": self.projection_diagnostics})
             rows = {row["path"]: row for row in observed["inputs"]}
             (root / "unrelated.txt").write_text("unrelated change")
             self.assertTrue(conditional.current(root, observed["inputs"]))
@@ -208,6 +247,7 @@ class RealConditionalTests(unittest.TestCase):
                 # issue() declined for another reason; show both sides, so a
                 # host-only refusal can be read from the failure alone.
                 self.assertEqual(execution.envelope is None,learning,{
+                    'refusal': execution.refusal,
                     'diagnostics': self.projection_diagnostics,
                     'learning_capture': previous.get('conditional_capture') if isinstance(previous, dict) else None,
                     'binding_capture': execution.record.get('conditional_capture'),
@@ -266,6 +306,8 @@ class ConditionalHookTests(support.ClickGateTestCase):
         state,result=run('learn-2')
         for source in state['evidence_state']['sources'].values():
             self.assertTrue(conditional.valid(source.get('verified_dependency_observation')), result.stdout + result.stderr + '\n' + json.dumps(state['verification'].get('framework_observations')))
+        for record in state['verification']['framework_observations'].values():
+            self.assertEqual(record['runtime']['workers'], 0)
         state,result=run('reuse')
         decisions=state['verification']['incremental_plan']['decisions']
         self.assertTrue(all(row['authority_source']=='conditional-js-observation' for row in decisions),decisions)
@@ -347,6 +389,11 @@ class ConditionalHookTests(support.ClickGateTestCase):
         replace_source(plain_source, worker_source, 'add-worker')
         first, _ = run('worker-capture')
         self.assertTrue(first['evidence_state']['sources'][alpha_key]['automatic_observation_required'])
+        # The Worker is counted explicitly, and that count is what denies the
+        # projection; it no longer depends on where the isolate's probes land.
+        worker_record = first['verification']['framework_observations'][alpha_key]
+        self.assertGreaterEqual(worker_record['runtime']['workers'], 1)
+        self.assertIsNone(worker_record['conditional_capture'])
         (self.workspace / 'worker.cfg').write_text('changed')
         third, result = run('worker-input-changed')
         self.assertIn('ran-alpha changed', result.stdout)
