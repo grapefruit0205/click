@@ -113,8 +113,13 @@ claude plugin update click@click
 
 ```text
 click-gate status
+click-gate status --json
 click-gate dashboard start
 ```
+
+`click-gate status`는 대시보드 언어로 몇 줄만 출력합니다. 실행·재사용 수와
+추정 절약 시간, 모드와 변경 번호, 다음 행동입니다. `--json`은 전체 보고서를
+반환합니다.
 
 명령이 알려주는 로컬 URL에서 실행·재사용·실패·남은 검사를 확인합니다.
 재사용 근거와 입력 수집이 준비되지 않았을 때의 다음 행동도 표시합니다.
@@ -263,7 +268,7 @@ click-gate sharding refresh
 
 **네.** 새 Evidence 작업은 지원되는 검사에 자동 관찰을 선택하며 Guarded의 기본값은 Off입니다. Observer를 꺼도 Evidence 기록, 일반 검증, 대시보드, 조건을 충족한 정확한 영수증·안전 변경 정책 재사용이 동작합니다. 명시적으로 끈 설정은 같은 세션의 완료된 Evidence 작업 다음에도 유지됩니다.
 
-`click-gate observer status`, `click-gate verification status`와 대시보드에서 준비 실패 이유·다음 행동·최근 검사별 판정을 확인할 수 있습니다. 이 읽기 전용 표시는 재사용을 승인하지 않습니다. [코드에서 생성한 지원 표](docs/architecture/runtime-support.md)는 일반 실행·자동 분할·완전한 관찰·조건부 JS 재사용과 플랫폼별 준비 조건을 구분합니다. 준비 실패 후 관련 환경이나 도구가 바뀌면 다시 시도하며, `click-gate observer auto`로 명시적으로 재시도할 수도 있습니다.
+`click-gate observer status`, `click-gate status --json`과 대시보드에서 준비 실패 이유·다음 행동·최근 검사별 판정을 확인할 수 있습니다. 이 읽기 전용 표시는 재사용을 승인하지 않습니다. [코드에서 생성한 지원 표](docs/architecture/runtime-support.md)는 일반 실행·자동 분할·완전한 관찰·조건부 JS 재사용과 플랫폼별 준비 조건을 구분합니다. 준비 실패 후 관련 환경이나 도구가 바뀌면 다시 시도하며, `click-gate observer auto`로 명시적으로 재시도할 수도 있습니다.
 
 ```text
 click-gate observer status
@@ -342,7 +347,7 @@ python3 benchmarks/task_efficiency.py INTERNAL.json --public-output PUBLIC.json
 
 ## 검증 상태와 실패 피드백
 
-`click-gate status`는 실제 실행·재사용·미실행·미요청 검사와 코드 변경으로 무효화된 검사를 간결하게 보여주는 읽기 전용 명령입니다. 등록된 검증 근거의 상태를 보여주며 전체 작업의 정확성을 보장하지 않습니다.
+`click-gate status`는 읽기 전용 요약을 짧게 출력합니다. 실행·재사용 수와 추정 절약 시간, 모드와 변경 번호, 다음 행동을 `CLICK_LANGUAGE` 또는 POSIX 로케일이 정한 대시보드 언어(기본 한국어)로 보여줍니다. `click-gate status --json`은 실제 실행·재사용·미실행·미요청 검사와 코드 변경으로 무효화된 검사, 검사별 이유 코드, 실패 진단을 담은 전체 보고서를 반환합니다. 두 형식 모두 등록된 검증 근거의 상태를 보여줄 뿐 전체 작업의 정확성을 보장하거나 재사용을 승인하지 않습니다.
 
 기본값은 원시 출력과 제출 순서대로 첫 실패에서 중단하는 방식입니다. 지원되는 unittest/pytest 출력에는 actionable 보고를 선택해 실패 테스트와 제한된 로컬 상세 정보를 요약할 수 있습니다. 선택적인 bounded failure collection은 호출자가 독립적이라고 명시해 제출한 검증 소스 사이에서만 정해진 한도 내로 계속합니다. 자동 샤드를 독립적이라고 가정하지 않습니다. 설정 오류, 취소, 실행 조건 변경, 알 수 없는 출력에서는 수집을 중단합니다. [보고와 실패 수집 안내](skills/click/references/verification-efficiency.md)를 참고하세요.
 
@@ -412,7 +417,7 @@ Click은 작업 흐름의 가드레일이며 운영체제 샌드박스가 아닙
 프로토콜과 구현 범위는 다음 문서에서 설명합니다.
 
 - [제품 원칙](PRODUCT_CONSTITUTION.md), [가드 분류](GUARD_CLASSIFICATION.md)
-- [동작 모드](skills/click/references/modes.md), [Guarded 계약 형식](skills/click/references/directive-format.md)
+- [동작 모드](skills/click/references/modes.md), [Guarded 워크플로](skills/click/references/guarded-mode.md), [Guarded 계약 형식](skills/click/references/directive-format.md)
 - [검증 프로필](skills/click/references/verification-profiles.md), [실행 기능 프로토콜](skills/click/references/capability-protocol.md)
 - [자동 샤딩 설정](skills/click/references/automatic-sharding-setup.md), [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md), [Shadow Observer v1](skills/click/references/observer-v1.md), [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from hooks import click_diagnostics, click_process
 from click_gate_test_support import ClickGateTestCase
@@ -355,7 +356,7 @@ class ClickDiagnosticRunnerIntegrationTests(ClickGateTestCase):
 
         status = self.pre_tool(
             "Bash",
-            "click-gate status",
+            "click-gate status --json",
             "turn-2",
             submit_prompt=False,
             tool_use_id="diagnostic-status",
@@ -372,6 +373,26 @@ class ClickDiagnosticRunnerIntegrationTests(ClickGateTestCase):
         self.assertEqual(
             report["next_action"]["local_log_ref"], records[0]["log_ref"]
         )
+        # The default summary names the failure as the next action in the
+        # selected dashboard language and never repeats the local log detail.
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            summary = self.pre_tool(
+                "Bash",
+                "click-gate status",
+                "turn-2",
+                submit_prompt=False,
+                tool_use_id="diagnostic-summary",
+            )
+        assert summary is not None
+        summary_result = self.run_rewritten(summary)
+        self.assertEqual(summary_result.returncode, 0, summary_result.stderr)
+        lines = summary_result.stdout.splitlines()
+        self.assertEqual(lines[0], "Executed 1 · Reused 0")
+        self.assertEqual(lines[1], "Guarded mode · Revision 0 · 1/1 checks remaining")
+        self.assertEqual(
+            lines[2], f"Next: fix the failure · {report['failures'][0]['test_id']}"
+        )
+        self.assertNotIn(records[0]["log_ref"], summary_result.stdout)
 
     def test_default_raw_mode_retains_cli_output_compatibility(self) -> None:
         (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")

@@ -105,8 +105,12 @@ claude plugin update click@click
 
 ```text
 click-gate status
+click-gate status --json
 click-gate dashboard start
 ```
+
+`click-gate status` 只用仪表板语言打印几行：运行与复用数量及估算节省时间、
+模式与修订号、下一步操作。`--json` 返回完整报告。
 
 打开命令返回的本地 URL，查看已执行、已复用、失败和剩余检查，以及复用依据、
 输入采集尚未就绪时的下一步操作。右上角可选择 **한국어 · English · 简体中文**。
@@ -250,7 +254,7 @@ click-gate sharding refresh
 
 **可以。** 新的 Evidence 任务为受支持的检查选择自动观测，Guarded 默认关闭。Observer 关闭时，Evidence 记录、普通验证、仪表板，以及满足条件的精确凭据或安全变更复用仍可使用。明确关闭的选择会保留到同一会话中后续的 Evidence 任务。
 
-`click-gate observer status`、`click-gate verification status` 及仪表板会显示准备失败原因、恢复操作和最近逐项检查的决策。这些只读视图不授予复用权限。[从代码生成的支持表](docs/architecture/runtime-support.md)区分普通执行、自动拆分、完整观测和条件 JS 复用，并列出平台前置条件。相关环境或工具变化后会重试准备，也可使用 `click-gate observer auto` 显式重试。
+`click-gate observer status`、`click-gate status --json` 及仪表板会显示准备失败原因、恢复操作和最近逐项检查的决策。这些只读视图不授予复用权限。[从代码生成的支持表](docs/architecture/runtime-support.md)区分普通执行、自动拆分、完整观测和条件 JS 复用，并列出平台前置条件。相关环境或工具变化后会重试准备，也可使用 `click-gate observer auto` 显式重试。
 
 ```text
 click-gate observer status
@@ -325,7 +329,7 @@ python3 benchmarks/task_efficiency.py INTERNAL.json --public-output PUBLIC.json
 
 ## 验证状态与失败反馈
 
-通过 `click-gate status` 获取紧凑的只读视图，查看已执行、已复用、未执行或尚未请求的检查，以及变更后失效的状态。它报告已登记的验证依据，不代表整个任务的正确性。
+`click-gate status` 打印简短的只读摘要：运行与复用数量及估算节省时间、模式与修订号、下一步操作，语言由 `CLICK_LANGUAGE` 或 POSIX 区域设置决定（默认韩语）。`click-gate status --json` 返回完整报告，包括已执行、已复用、未执行或尚未请求的检查、变更后失效的状态、逐项原因代码和失败诊断。两种形式都只报告已登记的验证依据，不代表整个任务的正确性，也不授予复用。
 
 默认保留原始输出，并按来源顺序在首次失败时停止。可选择为受支持的 unittest/pytest 输出启用便于处理的失败摘要，并通过限定大小的本地详情查看原因。可选的有界失败收集只会在指定限制内继续执行明确提交、由调用者声明相互独立的来源；不会推定自动分片相互独立。设置错误、取消、状态漂移和无法识别的输出会停止收集。详见[报告与失败收集](skills/click/references/verification-efficiency.md)。
 
@@ -393,7 +397,7 @@ Click 是工作流护栏，不是操作系统沙箱。它不能证明隐藏推�
 协议详情与实现边界：
 
 - [产品原则](PRODUCT_CONSTITUTION.md)与[约束分类](GUARD_CLASSIFICATION.md)
-- [运行模式](skills/click/references/modes.md)与 [Guarded 合约格式](skills/click/references/directive-format.md)
+- [运行模式](skills/click/references/modes.md)、[Guarded 工作流](skills/click/references/guarded-mode.md)与 [Guarded 合约格式](skills/click/references/directive-format.md)
 - [验证配置](skills/click/references/verification-profiles.md)与[能力协议](skills/click/references/capability-protocol.md)
 - [自动分片设置](skills/click/references/automatic-sharding-setup.md)与 [Evidence Shards v1](skills/click/references/evidence-shards-v1.md)
 - [Authoritative Observer v2](skills/click/references/authoritative-observer-v2.md)、[Shadow Observer v1](skills/click/references/observer-v1.md)与 [Shadow Intelligence v1](skills/click/references/shadow-intelligence-v1.md)

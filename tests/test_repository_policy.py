@@ -164,7 +164,11 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         for document in documents:
             self.assertIn("primary_evidence", document)
             self.assertIn("evidence", document)
-        for skill in (click_skill, fix_skill):
+        # The Evidence-only Click Skill links the Guarded workflow reference,
+        # which in turn owns the contract-format and profile links.
+        self.assertIn("references/guarded-mode.md", click_skill)
+        self.assertIn("capability-protocol.md", click_skill)
+        for skill in (_reference("guarded-mode.md"), fix_skill):
             for reference in (
                 "verification-profiles.md",
                 "directive-format.md",
@@ -192,7 +196,7 @@ class RepositoryPolicyTests(core.RepositoryPolicyTests):
         self.assertIn("STRING_FIELDS = click_contract.STRING_FIELDS", hook)
 
         documents = (
-            ROOT / "skills" / "click" / "SKILL.md",
+            ROOT / "skills" / "click" / "references" / "guarded-mode.md",
             ROOT / "skills" / "fix" / "SKILL.md",
             ROOT / "skills" / "click" / "references" / "translation-guide.md",
             ROOT / "skills" / "click" / "references" / "directive-format.md",

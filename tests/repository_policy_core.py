@@ -137,7 +137,19 @@ class RepositoryPolicyTests(unittest.TestCase):
                 self.assertIn("primary_evidence", document)
                 self.assertIn("evidence", document)
 
-        for skill in (click_skill, fix_skill):
+        guarded = (
+            ROOT / "skills" / "click" / "references" / "guarded-mode.md"
+        ).read_text(encoding="utf-8")
+        # The main Click Skill stays Evidence-only; the Guarded contract flow
+        # and its references live in guarded-mode.md, which the Skill links.
+        self.assertIn("references/guarded-mode.md", click_skill)
+        self.assertIn("capability-protocol.md", click_skill)
+        self.assertIn("anti-loop-policy.md", click_skill)
+        self.assertIn("click-gate verify", click_skill)
+        self.assertIn("click-gate status", click_skill)
+        self.assertNotIn("click-gate stage", click_skill)
+        self.assertNotIn("click-gate pass", click_skill)
+        for skill in (guarded, fix_skill):
             with self.subTest(skill=skill[:40]):
                 self.assertIn("verification-profiles.md", skill)
                 self.assertIn("directive-format.md", skill)
@@ -145,6 +157,8 @@ class RepositoryPolicyTests(unittest.TestCase):
                 self.assertIn("capability-protocol.md", skill)
                 self.assertIn("CLICK_CONTRACT_ID", skill)
                 self.assertIn("contract_id", skill)
+        for skill in (click_skill, guarded, fix_skill):
+            with self.subTest(skill=skill[:40]):
                 self.assertNotIn("Python `-c`", skill)
                 self.assertNotIn("three serial calls", skill)
 
@@ -173,7 +187,9 @@ class RepositoryPolicyTests(unittest.TestCase):
             encoding="utf-8"
         )
         documents = (
-            (ROOT / "skills" / "click" / "SKILL.md").read_text(encoding="utf-8"),
+            (
+                ROOT / "skills" / "click" / "references" / "guarded-mode.md"
+            ).read_text(encoding="utf-8"),
             (ROOT / "skills" / "fix" / "SKILL.md").read_text(encoding="utf-8"),
             (
                 ROOT

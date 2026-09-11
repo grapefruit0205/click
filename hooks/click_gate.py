@@ -548,15 +548,39 @@ def _prune_json_reports(root: Path, report_path: Path) -> None:
         pass
 
 
-def _json_report_command(report: dict[str, Any]) -> str:
-    inline = click_runner_transport.render_runner_shell_command(
-        [
+# Each summary line is one argv item, so the transcript shows a few short
+# localized lines instead of the full JSON report. UTF-8 output keeps the
+# dashboard languages intact on hosts whose console code page cannot encode them.
+_STATUS_SUMMARY_SCRIPT = (
+    'import sys; sys.stdout.reconfigure(encoding="utf-8", errors="replace"); '
+    'sys.stdout.write("\\n".join(sys.argv[1:]) + "\\n")'
+)
+JSON_REPORT_SUMMARY_FLAG = "summary"
+
+
+def _status_summary_lines(report: dict[str, Any]) -> list[str]:
+    (click_status_summary,) = click_import_bootstrap.load_siblings(
+        __package__, "click_status_summary"
+    )
+    return click_status_summary.render_lines(report)
+
+
+def _inline_report_command(report: dict[str, Any], summary: bool) -> str:
+    if summary:
+        arguments = [sys.executable, "-c", _STATUS_SUMMARY_SCRIPT, *_status_summary_lines(report)]
+    else:
+        arguments = [
             sys.executable,
             "-c",
             "import sys; sys.stdout.write(sys.argv[1] + '\\n')",
             json.dumps(report, sort_keys=True, ensure_ascii=True),
         ]
-    )
+    return click_runner_transport.render_runner_shell_command(arguments)
+
+
+def _json_report_command(report: dict[str, Any], *, summary: bool = False) -> str:
+    """Rewrite to a command that prints the report, or its short summary."""
+    inline = _inline_report_command(report, summary)
     if inline != "exit 2":
         return inline
 
@@ -571,6 +595,7 @@ def _json_report_command(report: dict[str, Any]) -> str:
         [
             *_stateful_runner_prefix("run-json-report"),
             str(report_path.resolve()),
+            *([JSON_REPORT_SUMMARY_FLAG] if summary else []),
         ]
     )
     if bounded == "exit 2":
@@ -866,8 +891,9 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 _allow_rewritten(f"echo Click mode set to {value}")
                 return
             if action == "status":
+                report = _verification_progress_report(event)
                 _allow_rewritten(
-                    _json_report_command(_verification_progress_report(event))
+                    _json_report_command(report, summary=value != "json")
                 )
                 return
             if action == "sharding":
@@ -1663,7 +1689,8 @@ def _run_receipt_verify(arguments: list[str]) -> int:
 
 
 def _run_json_report(arguments: list[str]) -> int:
-    if len(arguments) != 1:
+    summary = arguments[1:] == [JSON_REPORT_SUMMARY_FLAG]
+    if not arguments or (len(arguments) != 1 and not summary):
         sys.stderr.write("Click JSON report runner arguments were invalid.\n")
         return 2
     path = Path(arguments[0])
@@ -1702,6 +1729,12 @@ def _run_json_report(arguments: list[str]) -> int:
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         sys.stderr.write("Click JSON report was unavailable.\n")
         return 2
+    if summary:
+        reconfigure = getattr(sys.stdout, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.write("\n".join(_status_summary_lines(report)) + "\n")
+        return 0
     sys.stdout.write(json.dumps(report, sort_keys=True, ensure_ascii=True) + "\n")
     return 0
 
