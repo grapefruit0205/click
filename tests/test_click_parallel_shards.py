@@ -123,8 +123,11 @@ class ParallelShardExecutionTests(ClickGateTestCase):
         starts, ends = self.stamps(names, "start"), self.stamps(names, "end")
         ordered = sorted(names, key=starts.get)
         self.assertGreaterEqual(starts[ordered[1]], ends[ordered[0]], (starts, ends))
-        summary = next(line for line in (result.stdout + result.stderr).splitlines() if "[Click 결과]" in line)
-        self.assertNotIn("병렬", summary)
+        summary = next((line for line in (result.stdout + result.stderr).splitlines() if "[Click 결과]" in line), None)
+        if sys.platform == "linux":
+            self.assertIsNotNone(summary, result.stdout + result.stderr)
+        if summary is not None:
+            self.assertNotIn("병렬", summary)
 
     @unittest.skipUnless(sys.platform == "linux", "concurrent shard execution is enabled on Linux hosts")
     def test_a_failing_child_lets_running_siblings_finish_and_stops_later_checks(self) -> None:

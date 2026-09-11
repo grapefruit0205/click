@@ -122,6 +122,10 @@ class Fixture:
         self.environment = {key: value for key, value in os.environ.items()
                             if key not in {"PLUGIN_DATA", "CLICK_CONFIG_HOME", "PLUGIN_ROOT"}
                             and not key.startswith("GIT_")}
+        # The benchmark reports sequential incremental accounting (executed,
+        # reused, not-run counts and the time each saved); concurrent shard
+        # execution is measured by its own tests, so the runner uses one worker.
+        self.environment["CLICK_VERIFICATION_WORKERS"] = "1"
         self.environment.update(PLUGIN_DATA=str(self.data), CLICK_CONFIG_HOME=str(self.data),
                                 PYTHONDONTWRITEBYTECODE="1", GIT_CONFIG_GLOBAL=os.devnull,
                                 GIT_CONFIG_NOSYSTEM="1")
