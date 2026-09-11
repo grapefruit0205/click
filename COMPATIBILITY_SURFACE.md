@@ -3,7 +3,7 @@
 Status: transitional architecture boundary, baselined from v0.36.0.
 
 `hooks/click_gate.py` is the executable facade for Codex and the shared host
-runtime used by the bundled Antigravity adapter. Domain behavior belongs in the
+runtime used by the bundled Antigravity and Claude Code adapters. Domain behavior belongs in the
 `click_*` modules below that facade. The facade still exposes historical names
 that predate those extractions; those names are migration debt, not a template
 for new code.
@@ -19,6 +19,7 @@ an underscore are not a general public extension API.
 The current host adapters still call a small, explicit set of gate symbols:
 
 - `hooks/click_hook.py`: `main`
+- `hooks/claude_hook.py`: `main`
 - `hooks/antigravity_gate.py`: public `host_router`
 
 `hooks/click_windows.py` and the Antigravity launcher-path check use the formal

@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import unittest
 
-from hooks import antigravity_gate, click_gate, click_hook, click_host_coverage
+from hooks import antigravity_gate, claude_hook, click_gate, click_hook, click_host_coverage
 
 
 ROOT = Path(__file__).parents[1]
@@ -46,11 +46,15 @@ class ClickHostCoverageTests(unittest.TestCase):
     def test_receipts_are_deterministic_host_specific_and_tamper_evident(self) -> None:
         codex = click_host_coverage.receipt("codex")
         antigravity = click_host_coverage.receipt("antigravity")
+        claude = click_host_coverage.receipt("claude")
 
         self.assertEqual(codex, click_host_coverage.receipt("codex"))
         self.assertNotEqual(codex, antigravity)
+        self.assertNotEqual(codex, claude)
+        self.assertNotEqual(antigravity, claude)
         self.assertTrue(click_host_coverage.receipt_is_current(codex))
         self.assertTrue(click_host_coverage.receipt_is_current(antigravity))
+        self.assertTrue(click_host_coverage.receipt_is_current(claude))
         assert codex is not None
         tampered = copy.deepcopy(codex)
         tampered["digest"] = "0" * 64
@@ -66,6 +70,10 @@ class ClickHostCoverageTests(unittest.TestCase):
         self.assertEqual(
             click_host_coverage.host_id_from_event({"platform": "Antigravity"}),
             "antigravity",
+        )
+        self.assertEqual(
+            click_host_coverage.host_id_from_event({"platform": "claude"}),
+            "claude",
         )
         self.assertEqual(
             click_host_coverage.host_id_from_event({"platform": 1}), ""
@@ -153,6 +161,49 @@ class ClickHostCoverageTests(unittest.TestCase):
                 self.assertTrue(any(m.fullmatch(tool_name) for m in pre))
                 self.assertFalse(any(m.fullmatch(tool_name) for m in post))
 
+    def test_claude_known_mutation_surfaces_have_pre_post_symmetry(self) -> None:
+        config = json.loads(
+            (ROOT / "platforms" / "claude" / "hooks.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        pre = _matchers(config, "PreToolUse")
+        post = _matchers(config, "PostToolUse")
+        spec = click_host_coverage.spec("claude")
+        assert spec is not None
+
+        self.assertEqual(
+            set(spec["lifecycle"]), {"UserPromptSubmit", "SessionEnd"}
+        )
+        self.assertEqual(
+            set(config["hooks"]),
+            set(spec["lifecycle"]) | {"PreToolUse", "PostToolUse"},
+        )
+        self.assertEqual(spec["pre_tool"]["browser"], [])
+        self.assertEqual(spec["post_tool"]["browser"], [])
+        self.assertEqual(
+            set(spec["pre_tool"]["mutation"]),
+            set(spec["post_tool"]["mutation"]),
+        )
+        expected_pre = set(spec["pre_tool"]["mutation"]) | set(
+            spec["pre_tool"]["plan"]
+        )
+        self.assertEqual(_configured_names(pre), expected_pre)
+        self.assertEqual(
+            _configured_names(post), set(spec["post_tool"]["mutation"])
+        )
+        self.assertEqual(
+            set(dict(spec["canonical_tool_map"])), expected_pre
+        )
+        for tool_name in spec["pre_tool"]["mutation"]:
+            with self.subTest(tool_name=tool_name):
+                self.assertTrue(any(m.fullmatch(tool_name) for m in pre))
+                self.assertTrue(any(m.fullmatch(tool_name) for m in post))
+        for tool_name in spec["pre_tool"]["plan"]:
+            with self.subTest(plan_tool=tool_name):
+                self.assertTrue(any(m.fullmatch(tool_name) for m in pre))
+                self.assertFalse(any(m.fullmatch(tool_name) for m in post))
+
     def test_adapters_derive_their_tool_identity_from_the_registry(self) -> None:
         self.assertIs(
             click_gate.BROWSER_TOOL_NAMES,
@@ -179,6 +230,13 @@ class ClickHostCoverageTests(unittest.TestCase):
         self.assertIs(
             antigravity_gate.ANTIGRAVITY_MUTATION_TOOLS,
             click_host_coverage.ANTIGRAVITY_MUTATION_TOOL_NAMES,
+        )
+        self.assertIs(
+            claude_hook.CLAUDE_TOOL_MAP, click_host_coverage.CLAUDE_TOOL_MAP
+        )
+        self.assertIs(
+            claude_hook.CLAUDE_MUTATION_TOOLS,
+            click_host_coverage.CLAUDE_MUTATION_TOOL_NAMES,
         )
 
 

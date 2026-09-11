@@ -26,7 +26,10 @@ Click does not prove that the code is correct or that the selected tests are suf
 
 ## Install and update
 
-Install from the Codex CLI:
+Click ships as a plugin for **Codex CLI** and **Claude Code**. Both hosts run
+the same runtime, evidence rules, and `click-gate` commands.
+
+### Codex CLI
 
 ```sh
 codex plugin marketplace add grapefruit0205/click
@@ -35,25 +38,45 @@ codex plugin add click@click
 
 Restart Codex and start a new task so the installed Hooks and skill reload. Review pending Click Hooks in the CLI's `/hooks` view before relying on them; see [Hook troubleshooting](#hook-troubleshooting).
 
-Current release: **v0.96.0**. To update:
+To update:
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-Restart and use a fresh task after updating. v0.96.0 rejects uneconomic splits, avoids duplicate Evidence bootstrap child runs, supports stable large Vitest/Jest groups, and adds owner-declared file-input policy v2 for child-specific cross-revision reuse. Affected or uncertain children run, and an incomplete split falls back to the parent. Automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and [verification economics](docs/architecture/verification-economics.md).
+### Claude Code
+
+```sh
+claude plugin marketplace add grapefruit0205/click
+claude plugin install click@click
+```
+
+Start a new Claude Code session so the installed Hooks and skill load. Every
+`click-gate` command is an ordinary Bash command that the installed `PreToolUse`
+Hook rewrites onto Click's runner; Evidence state lives under
+`~/.claude/plugins/data/click-click/`. Linux and macOS are supported; see
+[Click for Claude Code](platforms/claude/README.md) for the host limits.
+
+To update:
+
+```sh
+claude plugin marketplace update click
+claude plugin update click@click
+```
+
+Current release: **v0.96.1**, which adds the Claude Code plugin on top of v0.96.0. Restart and use a fresh task after updating. v0.96.0 rejects uneconomic splits, avoids duplicate Evidence bootstrap child runs, supports stable large Vitest/Jest groups, and adds owner-declared file-input policy v2 for child-specific cross-revision reuse. Affected or uncertain children run, and an incomplete split falls back to the parent. Automatic sharding `init/status/refresh` and authorized shard reuse remain required regressions. See [release notes](RELEASE_NOTES.md) and [verification economics](docs/architecture/verification-economics.md).
 
 ## Start with everyday work
 
-Ask Codex normally, for example:
+Ask Codex or Claude Code normally, for example:
 
 ```text
 Refactor the authentication parser and preserve its public behavior.
 Run the repository's relevant tests with Click Evidence and show click-gate status.
 ```
 
-The `click-gate` lines in this guide are Click controls for the agent to issue inside the Codex task. Installation commands above run in your terminal.
+The `click-gate` lines in this guide are Click controls for the agent to issue inside the Codex or Claude Code task. Installation commands above run in your terminal.
 
 | Mode | Behavior |
 | --- | --- |
@@ -232,6 +255,8 @@ python3 --version
 Restart Codex after an installation or update. In the CLI, use `/hooks` to review and trust pending Click definitions. Trust follows the current Hook hash. `[features].hooks = false` disables Hooks; administrator policy `allow_managed_hooks_only = true` skips plugin Hooks. See the official [Codex Hooks guide](https://learn.chatgpt.com/docs/hooks).
 
 Then start a new task, perform a small real verification, and inspect `click-gate status`. An enabled plugin alone does not demonstrate that its Hooks ran. Windows CI coverage and native Observer validation are described in the [release notes](RELEASE_NOTES.md); they do not replace checking the user's installed host and configuration.
+
+On Claude Code, `claude plugin list` shows the installed plugin and `/hooks` lists the `[plugin:click]` Hook definitions; `claude plugin validate ./dist/claude --strict` checks a source build. The Hook command runs `python3`, so confirm `python3 --version` works in the shell Claude Code uses. Hook output and errors appear in the transcript as `click hook error` lines.
 
 ## Antigravity
 

@@ -72,7 +72,10 @@ Click은 테스트를 임의로 줄이지 않습니다. 다시 실행할 필요�
 
 ## 설치와 업데이트
 
-Codex CLI에서 설치합니다.
+Click은 **Codex CLI**와 **Claude Code** 플러그인으로 제공됩니다. 두 호스트는
+같은 런타임, 같은 증거 규칙, 같은 `click-gate` 명령을 사용합니다.
+
+### Codex CLI
 
 ```sh
 codex plugin marketplace add grapefruit0205/click
@@ -81,14 +84,34 @@ codex plugin add click@click
 
 Codex를 재시작하고 새 작업을 시작해 설치된 Hook과 스킬을 다시 불러옵니다. CLI의 `/hooks`에서 검토 대기 중인 Click Hook을 확인한 뒤 사용하세요. 자세한 내용은 [Hook 문제 확인](#hook-문제-확인)을 참고하세요.
 
-현재 릴리스는 **v0.96.0**입니다. 업데이트 명령은 다음과 같습니다.
+업데이트 명령은 다음과 같습니다.
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.96.0은 손해가 되는 분할을 제외하고, Evidence bootstrap의 자식 중복 실행을 줄이며, 대규모 Vitest/Jest 묶음과 소유자가 선언하는 파일 입력 정책 v2를 지원합니다. 영향받거나 불확실한 자식은 실행하고 분할이 불완전하면 parent로 돌아갑니다. 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준입니다. 자세한 내용은 [릴리스 노트](RELEASE_NOTES.md)와 [검증 비용 및 입력 정책](docs/architecture/verification-economics.md)에 있습니다.
+### Claude Code
+
+```sh
+claude plugin marketplace add grapefruit0205/click
+claude plugin install click@click
+```
+
+새 Claude Code 세션을 시작하면 설치된 Hook과 스킬이 로드됩니다. 모든
+`click-gate` 명령은 평범한 Bash 명령이며, 설치된 `PreToolUse` Hook이 Click
+러너로 다시 씁니다. Evidence 상태는 `~/.claude/plugins/data/click-click/`에
+저장됩니다. Linux와 macOS를 지원하며, 호스트별 제한은
+[Click for Claude Code](platforms/claude/README.md)를 참고하세요.
+
+업데이트 명령은 다음과 같습니다.
+
+```sh
+claude plugin marketplace update click
+claude plugin update click@click
+```
+
+현재 릴리스는 **v0.96.1**이며, v0.96.0에 Claude Code 플러그인을 더한 버전입니다. 업데이트 후에도 재시작하고 새 작업을 사용합니다. v0.96.0은 손해가 되는 분할을 제외하고, Evidence bootstrap의 자식 중복 실행을 줄이며, 대규모 Vitest/Jest 묶음과 소유자가 선언하는 파일 입력 정책 v2를 지원합니다. 영향받거나 불확실한 자식은 실행하고 분할이 불완전하면 parent로 돌아갑니다. 자동 샤딩 `init/status/refresh`와 권한 있는 샤드 재사용은 필수 회귀 기준입니다. 자세한 내용은 [릴리스 노트](RELEASE_NOTES.md)와 [검증 비용 및 입력 정책](docs/architecture/verification-economics.md)에 있습니다.
 
 설치와 재사용 준비 상태는 서로 다릅니다.
 
@@ -294,6 +317,8 @@ python3 --version
 설치·업데이트 후 Codex를 재시작합니다. CLI의 `/hooks`에서 대기 중인 Click 정의를 검토하고 신뢰합니다. 신뢰는 현재 Hook 해시에 연결됩니다. `[features].hooks = false`는 Hook을 끄며, 관리자 정책 `allow_managed_hooks_only = true`는 플러그인 Hook을 제외합니다. [Codex 공식 Hook 안내](https://learn.chatgpt.com/docs/hooks)를 참고하세요.
 
 이후 새 작업에서 작은 실제 검증을 실행하고 `click-gate status`를 확인합니다. 플러그인 활성화 표시만으로 Hook 실행까지 확인된 것은 아닙니다. Windows CI와 OS별 Observer 검증 범위는 [릴리스 노트](RELEASE_NOTES.md)에 있으며, 사용자에게 설치된 호스트와 설정도 별도로 확인해야 합니다.
+
+Claude Code에서는 `claude plugin list`로 설치된 플러그인을, `/hooks`에서 `[plugin:click]` Hook 정의를 확인합니다. 소스 빌드는 `claude plugin validate ./dist/claude --strict`로 검사할 수 있습니다. Hook 명령은 `python3`를 실행하므로 Claude Code가 사용하는 셸에서 `python3 --version`이 동작해야 합니다. Hook 출력과 오류는 대화 기록에 `click hook error` 줄로 표시됩니다.
 
 ## Antigravity
 

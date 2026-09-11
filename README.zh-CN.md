@@ -25,7 +25,10 @@ Click 不证明代码正确，也不证明所选测试足够充分。
 
 ## 安装与更新
 
-通过 Codex CLI 安装：
+Click 以 **Codex CLI** 和 **Claude Code** 插件的形式提供。两种宿主共用同一
+运行时、同一证据规则和同一组 `click-gate` 命令。
+
+### Codex CLI
 
 ```sh
 codex plugin marketplace add grapefruit0205/click
@@ -34,18 +37,37 @@ codex plugin add click@click
 
 重启 Codex 并新建任务，让已安装的 Hook 和技能重新加载。在依赖 Hook 之前，先通过 CLI 的 `/hooks` 页面审阅待确认的 Click Hook；详见 [Hook 故障排查](#hook-故障排查)。
 
-当前版本：**v0.96.0**。更新命令：
+更新命令：
 
 ```sh
 codex plugin marketplace upgrade click
 codex plugin add click@click
 ```
 
-更新后请重启，并使用新任务。v0.96.0 会拒绝得不偿失的分片，减少 Evidence bootstrap 中重复执行子验证，并支持稳定的大型 Vitest/Jest 分组和由仓库所有者声明的文件输入策略 v2。受影响或不确定的子验证仍会执行，分片不完整时回退到 parent。自动分片 `init/status/refresh` 和经授权的分片复用仍是必须满足的回归标准。详情见[版本说明](RELEASE_NOTES.md)和[验证成本与输入策略](docs/architecture/verification-economics.md)。
+### Claude Code
+
+```sh
+claude plugin marketplace add grapefruit0205/click
+claude plugin install click@click
+```
+
+新建 Claude Code 会话后，已安装的 Hook 和技能即会加载。所有 `click-gate`
+命令都是普通的 Bash 命令，由已安装的 `PreToolUse` Hook 改写到 Click 运行器；
+Evidence 状态保存在 `~/.claude/plugins/data/click-click/`。支持 Linux 与
+macOS；宿主限制详见 [Click for Claude Code](platforms/claude/README.md)。
+
+更新命令：
+
+```sh
+claude plugin marketplace update click
+claude plugin update click@click
+```
+
+当前版本：**v0.96.1**，在 v0.96.0 之上新增 Claude Code 插件。更新后请重启，并使用新任务。v0.96.0 会拒绝得不偿失的分片，减少 Evidence bootstrap 中重复执行子验证，并支持稳定的大型 Vitest/Jest 分组和由仓库所有者声明的文件输入策略 v2。受影响或不确定的子验证仍会执行，分片不完整时回退到 parent。自动分片 `init/status/refresh` 和经授权的分片复用仍是必须满足的回归标准。详情见[版本说明](RELEASE_NOTES.md)和[验证成本与输入策略](docs/architecture/verification-economics.md)。
 
 ## 从日常工作开始
 
-照常向 Codex 提出请求，例如：
+照常向 Codex 或 Claude Code 提出请求，例如：
 
 ```text
 重构认证解析器，并保持现有对外行为。
@@ -231,6 +253,8 @@ python3 --version
 安装或更新后重启 Codex。在 CLI 中使用 `/hooks` 审阅并信任待确认的 Click 定义。信任绑定当前 Hook 哈希。`[features].hooks = false` 会关闭 Hook；管理员策略 `allow_managed_hooks_only = true` 会跳过插件 Hook。详见官方 [Codex Hooks 指南](https://learn.chatgpt.com/docs/hooks)。
 
 然后新建任务，执行一个小型真实验证，并检查 `click-gate status`。仅看到插件已启用，并不能说明其 Hook 实际运行过。Windows CI 覆盖情况和原生 Observer 验证记录见[版本说明](RELEASE_NOTES.md)；它们不能替代对用户实际安装的宿主及配置的检查。
+
+在 Claude Code 中，用 `claude plugin list` 查看已安装插件，用 `/hooks` 查看 `[plugin:click]` 的 Hook 定义；源码构建可用 `claude plugin validate ./dist/claude --strict` 检查。Hook 命令运行 `python3`，请确认 Claude Code 使用的 shell 中 `python3 --version` 可用。Hook 的输出和错误会以 `click hook error` 行出现在对话记录中。
 
 ## Antigravity
 
