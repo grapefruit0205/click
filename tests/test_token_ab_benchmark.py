@@ -167,11 +167,11 @@ class TokenAbTranscriptTests(unittest.TestCase):
         self.assertEqual(argv[:3], ["claude", "-p", "task"])
         for flag in ("--no-session-persistence", "--dangerously-skip-permissions", "--max-budget-usd"):
             self.assertIn(flag, argv)
-        self.assertEqual(argv[argv.index("--plugin-dir") + 1], "/plugin")
+        self.assertEqual(argv[argv.index("--plugin-dir") + 1], str(Path("/plugin")))
         self.assertNotIn("--plugin-dir", token_ab.session_command(
             "claude", "task", model="m", budget=1.5, plugin_dir=None, settings=settings))
         environment = token_ab.session_environment(Path("/data"))
-        self.assertEqual(environment["PLUGIN_DATA"], "/data/plugin-data")
+        self.assertEqual(environment["PLUGIN_DATA"], str(Path("/data") / "plugin-data"))
         self.assertNotIn("CLAUDECODE", environment)
 
     def test_module_runs_as_a_script_without_arguments_failing_closed(self) -> None:
