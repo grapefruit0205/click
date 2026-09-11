@@ -274,12 +274,20 @@ class AuthoritativeObserverRuntimeTests(unittest.TestCase):
                 "failed",
             ),
         )
+        # A followed child or thread downgrades to a conditional receipt only
+        # when the backend followed the whole process tree and lost nothing.
+        # A host whose backend cannot promise that (Windows ETW does not
+        # always follow a child) must fail closed instead, and say why.
+        capture_loss = {"capture-failed", "event-loss", "unresolved-event", "process-tree-incomplete"}
         for body, expected_reasons, options, expected_status in cases:
             with self.subTest(expected_reasons=expected_reasons):
                 _, result, fallback = self.run_body(body, **options)
                 observation = result.envelope["observation"]
                 self.assertEqual(result.exit_code, 0)
-                self.assertEqual(observation["status"], expected_status, observation["ineligibility_reasons"])
+                reasons = set(observation["ineligibility_reasons"])
+                if expected_status == "conditional" and reasons & capture_loss:
+                    expected_status = "failed"
+                self.assertEqual(observation["status"], expected_status, sorted(reasons))
                 if expected_status == "conditional":
                     self.assertTrue(observation["process_tree_complete"])
                     self.assertTrue(observation["inputs"])
