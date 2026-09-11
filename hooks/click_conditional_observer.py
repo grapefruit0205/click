@@ -88,6 +88,16 @@ ordinary inputs. No application read is removed because it is later written.
             # Captured stdout/stderr pipe metadata belongs to the runner's
             # fixed output transport. Stdin and arbitrary descriptors do not.
             continue
+        if path and path.startswith(str(directory) + "/") and call in linux._OPEN_CALLS and "O_WRONLY" in arguments:
+            continue  # the collector's own transport files, written by the bootstrap
+        if (path == "/proc/self/cgroup" or (path and re.fullmatch(r"/proc/[0-9]+/cgroup", path))
+                or (path and path.startswith("/sys/fs/cgroup/") and path.endswith(("/memory.high", "/memory.max")))):
+            # libuv and V8 read the process cgroup and memory limits when the
+            # engine, a thread pool or a Worker starts, on either side of the
+            # acknowledgement. Like the allocator's overcommit probe, these are
+            # the runtime's own reads; a Worker is rejected by its count, not by
+            # this probe's timing. Every other pseudo-file remains dynamic.
+            continue
         if path == "/proc/sys/vm/overcommit_memory":
             # glibc's malloc reads this once, on the first large allocation,
             # which can fall on either side of the acknowledgement. It is the
@@ -343,6 +353,47 @@ def issue(record, *, before, external_before, project, context, secret, node_pat
     except (OSError, ValueError, RuntimeError, KeyError, TypeError):
         return None
 
+
+
+def explain_refusal(record, *, before, external_before, project, node_path, backend_path, limit=6):
+    """Say why `issue` declined, naming the rows that differed between the runs.
+
+    Presentation for the runner's output only: the rows named are already in
+    the record, and nothing here decides or grants anything.
+    """
+    if not eligible_record(record):
+        return "record not eligible"
+    if not before:
+        return "no learning baseline"
+    if not node_path or not backend_path:
+        return "runtime or backend path unresolved"
+    try:
+        projection = record["conditional_capture"]
+        after = snapshot(project, projection["inputs"])
+        external_after = external_snapshot(projection["external"])
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+        return f"snapshot failed: {type(error).__name__}"
+    def differences(learning, binding):
+        by_path = {}
+        for side, rows in (("learning", learning), ("binding", binding)):
+            for row in rows:
+                by_path.setdefault(row["path"], {})[side] = row
+        out = []
+        for path, sides in sorted(by_path.items()):
+            a, b = sides.get("learning"), sides.get("binding")
+            if a is None or b is None:
+                out.append(f"{path} only in {'learning' if b is None else 'binding'} run")
+            elif a != b:
+                changed = [key for key in ("kind", "operations", "digest") if a.get(key) != b.get(key)]
+                out.append(f"{path} {'/'.join(changed)} changed")
+        return out
+    parts = differences(before, after) + differences(external_before, external_after)
+    if not parts:
+        return "receipt value invalid"
+    shown = parts[:limit]
+    if len(parts) > limit:
+        shown.append(f"+{len(parts) - limit} more")
+    return "inputs differed between the learning and binding runs: " + "; ".join(shown)
 
 def verify(envelope, *, secret, expected_binding):
     if __package__:

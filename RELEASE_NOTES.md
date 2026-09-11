@@ -35,7 +35,11 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   acknowledgement. The probe happens on the first large allocation, on either
   side of the acknowledgement, so about half of otherwise complete captures
   were rejected and the check re-ran instead of learning a receipt. Every
-  other pseudo-file read after the acknowledgement remains dynamic.
+  other pseudo-file read after the acknowledgement remains dynamic. The
+  runtime's cgroup and memory-limit probes are excluded the same way, and a
+  Node Worker is now detected explicitly — the isolate announces itself to the
+  collector — so a Worker run is denied a receipt by its count rather than by
+  where its own probe happened to land.
 - The Evidence context injected on every prompt is now a directive: run every
   test or check command through `click-gate verify`, with the request shape
   inline, a statement that `click-gate` is a hook-rewritten command rather than
