@@ -124,7 +124,12 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v10 = copy.deepcopy(value)
         v10["version"] = 10
         v10.pop("reuse_reasons")
+        v10.pop("avoided_output")
         self.assertTrue(click_dashboard_projection.projection_is_valid(v10))
+        self.assertEqual(value["avoided_output"]["status"], "unmeasured")
+        broken_output = copy.deepcopy(value)
+        broken_output["avoided_output"]["bytes"] = 12
+        self.assertFalse(click_dashboard_projection.projection_is_valid(broken_output))
         v9 = copy.deepcopy(v10)
         v9["version"] = 9
         v9.pop("readiness")
@@ -165,6 +170,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v8["version"] = 8
         v8.pop("readiness")
         v8.pop("reuse_reasons")
+        v8.pop("avoided_output")
         for field in readiness_fields:
             v8["setup"].pop(field)
         self.assertTrue(click_dashboard_projection.projection_is_valid(v8))
@@ -172,6 +178,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v7["version"] = 7
         v7.pop("readiness")
         v7.pop("reuse_reasons")
+        v7.pop("avoided_output")
         v7.pop("task_efficiency")
         for field in readiness_fields:
             v7["setup"].pop(field)
@@ -180,6 +187,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         previous["version"] = 6
         previous.pop("readiness")
         previous.pop("reuse_reasons")
+        previous.pop("avoided_output")
         previous.pop("retained_impact")
         previous.pop("task_efficiency")
         for field in readiness_fields:
@@ -714,6 +722,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         legacy["version"] = 4
         legacy.pop("readiness")
         legacy.pop("reuse_reasons")
+        legacy.pop("avoided_output")
         legacy.pop("batch_summaries")
         legacy.pop("setup")
         legacy.pop("retained_impact")
@@ -726,6 +735,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v5["version"] = 5
         v5.pop("readiness")
         v5.pop("reuse_reasons")
+        v5.pop("avoided_output")
         v5.pop("setup")
         v5.pop("retained_impact")
         v5.pop("task_efficiency")

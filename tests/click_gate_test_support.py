@@ -492,7 +492,11 @@ class ClickGateTestCase(unittest.TestCase):
         commands: list[str | list[str]],
         turn_id: str = "turn-2",
         evidence_ids: list[str] | None = None,
+        raw_output: bool = True,
     ) -> dict:
+        """Submit checks. Fixtures observe child output markers, so the request
+        asks for raw reporting explicitly; Evidence's actionable default is
+        covered by tests that build their own request without `reporting`."""
         checks = []
         for index, value in enumerate(commands):
             if isinstance(value, list):
@@ -508,7 +512,9 @@ class ClickGateTestCase(unittest.TestCase):
                     "class": self.verification_class(rendered),
                 }
             )
-        batch = {"version": 2, "checks": checks}
+        batch: dict[str, object] = {"version": 2, "checks": checks}
+        if raw_output:
+            batch["reporting"] = CLICK_GATE.click_diagnostics.default_reporting()
         command = f"click-gate verify {shlex.quote(json.dumps(batch))}"
         self.verification_request_sequence = getattr(self, "verification_request_sequence", 0) + 1
         payload = self.pre_tool("Bash", command, turn_id, tool_use_id=f"verification-{self.verification_request_sequence}")

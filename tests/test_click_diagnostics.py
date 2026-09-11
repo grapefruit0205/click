@@ -12,7 +12,7 @@ import unittest
 from unittest import mock
 
 from hooks import click_diagnostics, click_process
-from click_gate_test_support import ClickGateTestCase
+from click_gate_test_support import CLICK_EVIDENCE, ClickGateTestCase
 
 
 def stream(
@@ -393,6 +393,71 @@ class ClickDiagnosticRunnerIntegrationTests(ClickGateTestCase):
             lines[2], f"Next: fix the failure · {report['failures'][0]['test_id']}"
         )
         self.assertNotIn(records[0]["log_ref"], summary_result.stdout)
+
+    def test_evidence_defaults_supported_python_checks_to_actionable_reporting(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.prompt_submit("Evidence 검증", "turn-1")
+        request = {"version": 2, "checks": [{"evidence_id": "E1", "argv": self.verification_argv(1), "class": "targeted"}]}
+        payload = self.pre_tool(
+            "Bash", f"click-gate verify {shlex.quote(json.dumps(request))}", "turn-1",
+            submit_prompt=False, tool_use_id="evidence-default-format",
+        )
+        assert payload is not None
+        completed = self.run_rewritten(payload)
+        self.assertEqual(completed.returncode, 1)
+        combined = completed.stdout + completed.stderr
+        # The host sees the bounded diagnosis, not the raw unittest stream.
+        self.assertIn("[Click diagnostic] E1 failed", combined)
+        self.assertNotIn("FAIL: test_fail", combined)
+        state = json.loads(next((self.plugin_data / "gate-state").glob("session-contract-*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(state["verification"][click_diagnostics.STATE_FIELD]["reporting"]["format"], "actionable")
+
+        # An explicit raw request in Evidence, and a non-Python check, keep raw.
+        explicit = {**request, "reporting": click_diagnostics.default_reporting()}
+        payload = self.pre_tool(
+            "Bash", f"click-gate verify {shlex.quote(json.dumps(explicit))}", "turn-1",
+            submit_prompt=False, tool_use_id="evidence-explicit-raw",
+        )
+        assert payload is not None
+        completed = self.run_rewritten(payload)
+        self.assertIn("FAIL: test_fail", completed.stdout + completed.stderr)
+        self.assertTrue(click_diagnostics.supports_actionable(self.verification_argv()))
+        self.assertFalse(click_diagnostics.supports_actionable(["git", "diff", "--check"]))
+        self.assertTrue(click_diagnostics.reporting_was_omitted(json.dumps(request)))
+        self.assertFalse(click_diagnostics.reporting_was_omitted(json.dumps(explicit)))
+
+    def test_reuse_reports_output_the_host_did_not_read_again(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.prompt_submit("Evidence 검증", "turn-1")
+        argv = self.verification_argv()
+        first = self.pre_tool(
+            "Bash", f"click-gate verify {shlex.quote(json.dumps({'version': 2, 'checks': [{'evidence_id': 'E1', 'argv': argv, 'class': 'targeted'}]}))}",
+            "turn-1", submit_prompt=False, tool_use_id="output-first",
+        )
+        assert first is not None
+        self.assertEqual(self.run_rewritten(first).returncode, 0)
+        state_path = next((self.plugin_data / "gate-state").glob("session-contract-*.json"))
+        source = json.loads(state_path.read_text(encoding="utf-8"))["evidence_state"]["sources"][CLICK_EVIDENCE.evidence_key("E1")]
+        record = source["last_success_output"]
+        self.assertEqual(record["format"], "actionable")
+        self.assertGreater(record["bytes"], 0)
+        self.assertEqual(record["check_digest"], source["verified_check_digest"])
+
+        second = self.pre_tool(
+            "Bash", f"click-gate verify {shlex.quote(json.dumps({'version': 2, 'checks': [{'evidence_id': 'E1', 'argv': argv, 'class': 'targeted'}]}))}",
+            "turn-1", submit_prompt=False, tool_use_id="output-reuse",
+        )
+        assert second is not None
+        advisory = second["hookSpecificOutput"].get("additionalContext", "")
+        self.assertIn("재사용으로 다시 읽지 않은 출력:", advisory)
+        status = self.pre_tool("Bash", "click-gate status --json", "turn-1", submit_prompt=False, tool_use_id="output-status")
+        assert status is not None
+        report = json.loads(self.run_rewritten(status).stdout)
+        avoided = report["batch"]["avoided_output"]
+        self.assertEqual((avoided["status"], avoided["bytes"], avoided["reused_source_count"]), ("estimated", record["bytes"], 1))
+        self.assertEqual(avoided["estimated_tokens"], record["bytes"] // 4)
 
     def test_default_raw_mode_retains_cli_output_compatibility(self) -> None:
         (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
