@@ -50,7 +50,37 @@ ARTIFACT_NAMES = {profile: {"linux": "monitor.so", "darwin": "_click_observer_co
 BOOTSTRAP_PROFILES = frozenset(profile for profile, platform in profiles.PLATFORMS.items() if platform != "linux")
 
 
+# Identity work repeats inside one process: a runner validates the runtime
+# twice per shard plus at claim and record time, and every validation hashes
+# the artifact, the compiler, the interpreter and ~200 CPython headers and
+# probes the tracer twice. The answers cannot change while the files keep
+# their identity, so they are memoized per process, keyed by each file's
+# (path, size, mtime_ns, inode, device). A replaced file has a new key and is
+# hashed or probed again; the memo is bounded and never persisted.
+_IDENTITY_MEMO: dict[tuple[Any, ...], Any] = {}
+_IDENTITY_MEMO_LIMIT = 4096
+
+
+def _file_signature(path: Path) -> tuple[str, int, int, int, int] | None:
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    return (str(path), info.st_size, info.st_mtime_ns, info.st_ino, info.st_dev)
+
+
+def _remember(key: tuple[Any, ...], value: Any) -> Any:
+    if len(_IDENTITY_MEMO) >= _IDENTITY_MEMO_LIMIT:
+        _IDENTITY_MEMO.clear()
+    _IDENTITY_MEMO[key] = value
+    return value
+
+
 def _digest_file(path: Path) -> str:
+    signature = _file_signature(path)
+    key = ("digest", *signature) if signature is not None else None
+    if key is not None and key in _IDENTITY_MEMO:
+        return _IDENTITY_MEMO[key]
     hasher = hashlib.sha256()
     with path.open("rb") as stream:
         while True:
@@ -58,11 +88,16 @@ def _digest_file(path: Path) -> str:
             if not chunk:
                 break
             hasher.update(chunk)
-    return hasher.hexdigest()
+    digest = hasher.hexdigest()
+    return _remember(key, digest) if key is not None else digest
 
 
 def _strace_identity(project: Path) -> tuple[Path, dict]:
     executable = inventory.trusted_executable("strace", project)
+    signature = _file_signature(executable)
+    key = ("strace", *signature) if signature is not None else None
+    if key is not None and key in _IDENTITY_MEMO:
+        return executable, dict(_IDENTITY_MEMO[key])
     environment = {
         key: value for key, value in os.environ.items()
         if not key.startswith("LD_") and key not in (
@@ -88,9 +123,12 @@ def _strace_identity(project: Path) -> tuple[Path, dict]:
     )
     if capability.returncode:
         raise inventory.AnalysisError("strace-capability-unavailable")
-    return executable, {
+    identity = {
         "name": "strace", "version": version, "digest": _digest_file(executable)
     }
+    if key is not None:
+        _remember(key, dict(identity))
+    return executable, identity
 
 
 def _darwin_identity(project: Path) -> tuple[Path, dict]:
@@ -283,12 +321,21 @@ def artifact_path(value: dict) -> Path:
     )
 
 
+def _project_root(project: Path) -> Path:
+    """inventory.project_root, once per process per project path (one git call)."""
+    key = ("project-root", str(project))
+    cached = _IDENTITY_MEMO.get(key)
+    if isinstance(cached, Path):
+        return cached
+    return _remember(key, inventory.project_root(project))
+
+
 def validate(project: Path, value: object) -> Path | None:
     if not state_is_valid(value):
         return None
     assert isinstance(value, dict)
     try:
-        root = inventory.project_root(project)
+        root = _project_root(project)
         if (
             not profiles.supported(value["profile"])
         ):

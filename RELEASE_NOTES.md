@@ -47,6 +47,17 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   receipt was refused for an input difference that no application read made.
   The binary's identity stays bound by the receipt's runtime digest and by the
   row's content digest.
+- Runtime identity checks are memoized per process. A runner validates the
+  native observer twice per shard plus at claim and record time, and every
+  validation hashed the artifact, the compiler, the interpreter and about two
+  hundred CPython headers and probed the tracer twice; the answers cannot change
+  while those files keep their identity, so they are now computed once per
+  process and keyed by each file's path, size, mtime, inode and device. Git
+  executable resolution and its sanitized environment are likewise computed once
+  per workspace for the duration of one hook preparation or one runner; git
+  itself still runs for every capture. Measured on a six-shard fixture: hook
+  preparation 0.44 s → 0.32 s, all-reused preparation 0.95 s → 0.82 s, runner
+  9.35 s → 9.08 s.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the

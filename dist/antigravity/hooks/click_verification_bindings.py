@@ -6,6 +6,7 @@ chooses a fresh authority boundary before collecting its binding records.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import contextmanager
 import hashlib
 import hmac
 import json
@@ -665,8 +666,45 @@ def collect_group_bindings(
     return environments, executables
 
 
-def git_capture(cwd: Path, arguments: list[str]) -> bytes | None:
+# A verification hook or runner issues dozens of git commands against one
+# workspace; resolving the trusted git executable and building its sanitized
+# environment re-resolves every PATH entry each time. Inside a binding pass the
+# resolution is computed once per workspace. Git's answers are never cached:
+# every call still runs git, so before/after snapshots stay honest.
+_binding_pass: dict[str, tuple[str | None, str, dict[str, str]]] | None = None
+
+
+@contextmanager
+def binding_pass():
+    """Memoize git executable resolution per workspace for one hook or runner run."""
+    global _binding_pass
+    previous = _binding_pass
+    _binding_pass = {} if previous is None else previous
+    try:
+        yield
+    finally:
+        _binding_pass = previous
+
+
+def _git_resolution(cwd: Path) -> tuple[str | None, str, dict[str, str]]:
+    memo = _binding_pass
+    key = str(cwd) + "\x00" + os.environ.get("PATH", "")
+    if memo is not None and key in memo:
+        executable, error, environment = memo[key]
+        return executable, error, dict(environment)
     executable, error = click_inspection.resolve_read_only_executable("git", workspace=cwd)
+    environment = (
+        click_inspection.sanitized_git_environment(workspace=cwd)
+        if executable is not None and not error
+        else {}
+    )
+    if memo is not None:
+        memo[key] = (executable, error, dict(environment))
+    return executable, error, environment
+
+
+def git_capture(cwd: Path, arguments: list[str]) -> bytes | None:
+    executable, error, environment = _git_resolution(cwd)
     if error or executable is None:
         return None
     try:
@@ -680,7 +718,7 @@ def git_capture(cwd: Path, arguments: list[str]) -> bytes | None:
                 *arguments,
             ],
             cwd=cwd,
-            env=click_inspection.sanitized_git_environment(workspace=cwd),
+            env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )

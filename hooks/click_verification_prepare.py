@@ -394,11 +394,12 @@ def _prepare_verification(
     started = time.perf_counter_ns()
     request_started = time.monotonic_ns()
     trace: dict[str, Any] = {}
-    result = _prepare_verification_impl(
-        event, raw, runner_script=runner_script, render_command=render_command,
-        git_workspace_snapshot=git_workspace_snapshot, git_capture=git_capture,
-        measurement=trace,
-    )
+    with click_verification_bindings.binding_pass():
+        result = _prepare_verification_impl(
+            event, raw, runner_script=runner_script, render_command=render_command,
+            git_workspace_snapshot=git_workspace_snapshot, git_capture=git_capture,
+            measurement=trace,
+        )
     elapsed = (time.perf_counter_ns() - started) / 1_000_000
     try:
         state = _read_contract_state(event)
