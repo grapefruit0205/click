@@ -9,6 +9,10 @@ from click_gate_test_support import ClickGateTestCase
 
 class LegibleVerificationOutputTests(ClickGateTestCase):
     def test_shard_children_are_named_by_the_callers_id_and_shard(self) -> None:
+        # Bytecode caches are not repository content. Outside the native
+        # observer profile the interpreter writes them, and Click correctly
+        # refuses a verification that changed protected content.
+        (self.workspace / ".gitignore").write_text("__pycache__/\n*.pyc\n")
         (self.workspace / "tests").mkdir()
         (self.workspace / "tests" / "__init__.py").write_text("")
         for name in ("alpha", "beta"):
@@ -29,8 +33,8 @@ class LegibleVerificationOutputTests(ClickGateTestCase):
                             "covers": [f"tests/test_{name}.py"]} for name in ("alpha", "beta")],
             }],
         }))
-        self.initialize_git(".click/evidence-shards.json", "tests/__init__.py", "tests/test_alpha.py",
-                            "tests/test_beta.py", "plain_test.py")
+        self.initialize_git(".gitignore", ".click/evidence-shards.json", "tests/__init__.py",
+                            "tests/test_alpha.py", "tests/test_beta.py", "plain_test.py")
         plain = [sys.executable, "-m", "unittest", "plain_test"]
         payload = self.verify_gate([parent, plain], "turn-1", evidence_ids=["SUITE", "PLAIN"])
         result = self.run_rewritten(payload)

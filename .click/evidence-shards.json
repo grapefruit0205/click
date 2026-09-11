@@ -284,12 +284,13 @@
           "covers": [
             "tests/test_click_compatibility_surface.py",
             "tests/test_click_import_bootstrap.py",
+            "tests/test_click_legible_output.py",
             "tests/test_click_runner_transport.py",
             "tests/test_click_sharding_boundaries.py",
             "tests/test_distribution_validation.py",
             "tests/test_incremental_benchmark.py",
-            "tests/test_repository_shard_inventory.py",
             "tests/test_repository_policy.py",
+            "tests/test_repository_shard_inventory.py",
             "tests/test_semantic_grader.py",
             "tests/test_task_efficiency.py",
             "tests/test_windows_hook_commands.py"
