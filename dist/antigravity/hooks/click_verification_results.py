@@ -521,6 +521,15 @@ def _record_verification_result(
                 source["locked_check_digest"] = str(
                     source.get("last_check_digest", "")
                 )
+                # The bounded output this pass produced. A later reuse of the
+                # same check reports it as output the host did not read again;
+                # it is an estimate and never affects the reuse decision.
+                source["last_success_output"] = click_incremental.build_output_record(
+                    diagnostic_records,
+                    source_key=source_key,
+                    check_digest=str(source.get("last_check_digest", "")),
+                    reporting=reporting,
+                )
                 # Keep the legacy ledger's integer field compatible. Consumers
                 # of precise/unknown timing use the separate, validated baseline.
                 source["last_success_duration_ms"] = int(measured_durations.get(source_key) or 0)

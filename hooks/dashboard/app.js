@@ -1187,6 +1187,18 @@
     $('reuseOrigins').textContent=msg`선택한 배치의 실제 재사용: 같은 계약 ${reusedItems.length-prior}개 · 이전 계약에서 재판정 ${prior}개`;
     const a=data.accounting;
     $('reuseRate').textContent=a ? msg`보관된 검증 그룹 요청 기준: ${a.reuse_numerator} / ${a.request_denominator} · ${a.reuse_rate===null?msg('비율 미측정'):(100*a.reuse_rate).toFixed(1)+'%'} · ${a.from_timestamp?new Date(a.from_timestamp*1000).toLocaleString(localeTag()):msg('시작 기록 없음')} ~ ${a.through_timestamp?new Date(a.through_timestamp*1000).toLocaleString(localeTag()):msg('종료 기록 없음')}. 실제 재시도는 별도 요청이며 중복 수신·화면 갱신은 추가 집계하지 않습니다.` : msg('집계 정보 없음');
+    const avoidedOutput=data.avoided_output;
+    if(avoidedOutput&&Number.isInteger(avoidedOutput.bytes)){
+      const kb=avoidedOutput.bytes>=1024?`${decimal(avoidedOutput.bytes/1024)} KB`:`${avoidedOutput.bytes} B`;
+      const tokens=Number.isInteger(avoidedOutput.estimated_tokens)?avoidedOutput.estimated_tokens.toLocaleString(localeTag()):msg('알 수 없음');
+      $('avoidedOutput').textContent=msg`${avoidedOutput.lower_bound?msg('이상'):''}${kb} · 약 ${tokens} 토큰`.trim();
+      $('avoidedOutput').title=msg`재사용된 ${avoidedOutput.reused_source_count}개 묶음 중 ${avoidedOutput.measured_source_count}개의 마지막 성공 출력 합계입니다. 호스트가 다시 읽지 않은 실행 출력이며, 시간·비용 절감을 증명하지 않습니다.`;
+      $('avoidedOutputBadge').hidden=false;
+    } else {
+      $('avoidedOutput').textContent=msg('미측정');
+      $('avoidedOutput').title=msg('재사용된 묶음의 출력 기록이 아직 없습니다.');
+      $('avoidedOutputBadge').hidden=true;
+    }
     const reasons=data.reuse_reasons;
     if(reasons&&Number.isInteger(reasons.request_count)){
       const decided=Object.entries(reasons.decisions||{}).filter(([,count])=>count).map(([decision,count])=>msg`${decisionLabel(decision)} ${count}`).join(' · ');

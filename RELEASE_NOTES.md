@@ -21,6 +21,23 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   stage/pass approval, and execution rules moved to
   `skills/click/references/guarded-mode.md`, linked only for `@Click`,
   `$click`, and `default guarded`.
+- Evidence mode now defaults supported unittest/pytest checks to `actionable`
+  reporting when a request omits `reporting`: the host receives a bounded
+  failure summary with a local log reference instead of raw output. Guarded,
+  other runners, and any explicit `reporting.format` are unchanged.
+- Each passing source records the bounded output it produced. When a later
+  request reuses that check, the status report, the `[Click 결과]` line and the
+  dashboard show the output the host did not read again as an estimate (bytes
+  and an approximate token count at four bytes per token). It is a disclosed
+  estimate of avoided reading, never a time or cost claim.
+- A receipt's environment fingerprint normalizes the search path: repeated
+  entries and Click's own command directory are dropped. A host that offers
+  Click's commands by adding the plugin's directory to the search path of the
+  tool call that runs a verification, but not to the Hook process that decides
+  reuse, made every receipt's environment digest differ from the one recomputed
+  at the next request, so on Claude Code every check reran with
+  `environment-binding-changed` and no reuse was ever possible. Execution still
+  receives the host's real search path; only the receipt subset is normalized.
 - Observed-input identity is content-based: type and permission bits, file
   content, directory membership, metadata-only size and symlink text. Inode
   numbers, link counts, ownership and timestamps no longer invalidate a native

@@ -6,21 +6,25 @@
 
 English | [한국어](README.ko.md) | [简体中文](README.zh-CN.md)
 
-> **Verify what changed. Reuse what still holds.**
+> **The same test never runs twice. Its output is never read twice. And nothing is skipped by guess.**
 
-You change one part of a project. Your coding agent runs the whole test suite again.
-Then you make another small edit—and wait for the same checks once more.
+You change one part of a project. Your coding agent runs the whole test suite again,
+then reads the whole output again. Another small edit, and the same wait and the
+same context spend repeat.
 
 **Click is a workflow guardrail for verification and reuse that leaves your
-model selection and reasoning settings unchanged.** The model analyzes the
-problem and chooses how to implement it. Click connects actual execution results
-to workspace changes, reducing valid repeated checks and checking that an old
-success still applies before reusing it.
+model selection and reasoning settings unchanged.** The model still decides how
+to implement. Click records each check's exact receipt, decides at execution time
+which checks must run again, and replaces a skipped run with one line instead of
+its full output. A check is skipped only when an exact same-state receipt, a
+signed input observation, or a committed owner policy proves it still holds;
+anything ambiguous runs.
 
 This is **incremental verification**, backed by **revision-aware evidence**:
-a record of what passed and whether it remains valid now. Savings target repeated
-workflow execution; Click does not switch you to a weaker model or lower its
-reasoning settings.
+a record of what passed and whether it remains valid now. Every decision carries
+a reason code, and the dashboard shows where reuse was lost. Savings target
+repeated execution and repeated reading; Click does not switch you to a weaker
+model or lower its reasoning settings.
 
 ## What changes in your workflow?
 
@@ -37,9 +41,11 @@ per-group input or policy evidence. A shared change may run all groups; an
 unverifiable split runs the original full suite.
 
 - **Less waiting between edits:** avoid eligible unchanged checks while rerunning affected ones.
-- **A reason for each decision:** see what ran, what was reused, and why.
+- **Less context spent:** a reused check returns one receipt line; supported Python runners report a bounded failure summary instead of raw output by default in Evidence mode.
+- **Never a wrong skip:** reuse needs an exact receipt, a signed input observation, or a committed owner policy; ambiguity always runs.
+- **A reason for each decision:** see what ran, what was reused, and why, including the rerun-reason distribution over retained history.
 - **Continuity across tasks:** carry successful results forward as candidates and recheck them.
-- **A visible outcome:** inspect verification and available measurements in a local dashboard.
+- **A visible outcome:** inspect verification, estimated avoided execution time, and output the host did not read again in a local dashboard.
 
 Click fits projects with **slow checks, repeated edit/test cycles, and separable
 test groups**. If your entire suite takes two seconds, setup and bookkeeping may
@@ -181,7 +187,7 @@ separates execution, splitting and reuse; a language name alone does not guarant
 | Mode | Behavior |
 | --- | --- |
 | **Evidence — default** | Records work and verification under host permissions, without an additional Click approval step. |
-| **Guarded — opt in** | Stages a readable contract and waits for explicit approval in a later user turn before work inside that contract. |
+| **Guarded — opt in** | Plan mode with enforcement: stages a readable contract, waits for explicit approval in a later user turn, then blocks mutations outside the approved boundary, binds the promised checks to receipts, and prevents self-approval through turn separation and digests. You notice it only on the day something would have gone wrong. |
 | **Off** | Leaves execution to the host without Click's workflow enforcement. |
 
 To change the default, choose one:

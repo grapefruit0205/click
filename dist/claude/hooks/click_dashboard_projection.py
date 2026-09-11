@@ -67,7 +67,7 @@ _V7_FIELDS = _V6_FIELDS | {"retained_impact"}
 _V8_FIELDS = _V7_FIELDS | {"task_efficiency"}
 _V9_FIELDS = _V8_FIELDS
 _V10_FIELDS = _V9_FIELDS | {"readiness"}
-_FIELDS = _V10_FIELDS | {"reuse_reasons"}
+_FIELDS = _V10_FIELDS | {"reuse_reasons", "avoided_output"}
 _TASK_EFFICIENCY_FIELDS = frozenset(
     {"kind", "version", "generated_at", "measurement_status", "measurement_reason", "presentations"}
 )
@@ -569,6 +569,7 @@ def dashboard_projection(
         "accounting": history_view["accounting"],
         "retained_impact": click_incremental.retained_impact(history),
         "reuse_reasons": click_incremental.retained_reuse_reasons(history),
+        "avoided_output": click_incremental.avoided_output(batch, evidence_sources),
         "controls": click_incremental.control_events(raw_state),
         "engine": engine_identity(),
         "summary": {
@@ -641,6 +642,8 @@ def projection_is_valid(value: Any) -> bool:
     ):
         return False
     if version in {10, PROJECTION_VERSION} and not click_reuse_readiness.is_valid(value.get("readiness")):
+        return False
+    if version == PROJECTION_VERSION and not click_incremental.avoided_output_is_valid(value.get("avoided_output")):
         return False
     if version == PROJECTION_VERSION and not click_incremental.retained_reuse_reasons_is_valid(value.get("reuse_reasons")):
         return False

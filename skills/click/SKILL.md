@@ -27,6 +27,7 @@ click-gate verify '{"version":2,"workdir":"/absolute/path/to/repository","checks
 - After a change, resubmit the same id and argv. For a sharded broad suite, always submit the parent id and argv, never an internal shard id.
 - Use `click-gate inspect` for tracked read-only argv and `click-gate mutate` for structured mutations; ordinary file edits go through the host's editors directly. Exact forms, limits, observer, dashboard, and receipt-export controls are in the [capability protocol](references/capability-protocol.md).
 - Stop when every registered check is current for the final revision and no managed service remains active.
+- A request that omits `reporting` uses the `actionable` format for unittest/pytest checks: a failure arrives as a bounded summary with a local log reference, not the raw stream. Pass `reporting.format: "raw"` when you need the full output.
 
 ## Read status
 

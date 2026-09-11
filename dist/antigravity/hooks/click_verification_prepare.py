@@ -25,6 +25,7 @@ VERIFICATION_PROTOCOL_VERSION = _common.VERIFICATION_PROTOCOL_VERSION
 VERIFY_RUNNING_TTL_SECONDS = _common.VERIFY_RUNNING_TTL_SECONDS
 _authoritative_current_bindings = _common._authoritative_current_bindings
 _canonical_incremental_plan = _common._canonical_incremental_plan
+click_diagnostics = _common.click_diagnostics
 _default_failure_collection = _common._default_failure_collection
 _default_incremental_reason = _common._default_incremental_reason
 _dependency_declarations = _common._dependency_declarations
@@ -446,7 +447,7 @@ def _prepare_verification(
                 click_incremental.record_control_event(state, event, "verification-guidance")
             _save_contract_state(event, state)
             if trace.get("all_reused"):
-                result = (result[0], result[1], "\n".join(filter(None, (result[2], click_incremental.host_summary(verification)))))
+                result = (result[0], result[1], "\n".join(filter(None, (result[2], click_incremental.host_summary(verification, _evidence_sources(state))))))
     except Exception:
         # Measurements cannot admit/reject a command or grant reuse authority.
         pass
@@ -619,6 +620,19 @@ def _prepare_verification_impl(
     )
     if error:
         return "", error, ""
+    if (
+        runtime.evidence
+        and batch is not None
+        and click_diagnostics.reporting_was_omitted(raw)
+        and all(
+            click_diagnostics.supports_actionable(check.get("argv"))
+            for check in batch.get("checks", [])
+        )
+    ):
+        # Evidence keeps the host's context small: supported Python runners
+        # report a bounded failure summary by default. Raw output remains one
+        # explicit `reporting.format` away, and Guarded keeps the raw default.
+        batch["reporting"] = click_diagnostics.actionable_reporting(batch["reporting"])
     assert batch is not None
     status = str(verification.get("status", "ready"))
     if status == "running":
