@@ -272,6 +272,7 @@
               "tests.test_click_sharding_boundaries",
               "tests.test_distribution_validation",
               "tests.test_incremental_benchmark",
+              "tests.test_click_legible_output",
               "tests.test_repository_shard_inventory",
               "tests.test_repository_policy",
               "tests.test_semantic_grader",

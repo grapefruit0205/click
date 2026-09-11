@@ -30,6 +30,14 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   dashboard show the output the host did not read again as an estimate (bytes
   and an approximate token count at four bytes per token). It is a disclosed
   estimate of avoided reading, never a time or cost claim.
+- Verification output names each check by the caller's own evidence id, and a
+  shard child by that id plus the committed shard id (`SUITE[alpha]`), instead
+  of the synthetic child id; the `[Click diagnostic]` line uses the same name.
+  The `[Click 결과]` line now states what reused checks are — current, because
+  their inputs are unchanged since they last passed — rather than how many were
+  not run. Identity, receipts and check digests are unchanged; the labels are
+  derived at preparation, stored beside the plan and carried to the runner
+  outside the caller-visible request schema.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
