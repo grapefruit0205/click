@@ -297,14 +297,23 @@ def _validate_claude(root: Path, errors: list[str], release_version: str) -> Non
     except OSError as exc:
         errors.append(f"cannot render the Claude Code distribution: {exc}")
         return
+    rendered_skills = {
+        Path("skills") / name / "SKILL.md": claude_distribution.rendered_skill(name)
+        for name in ("click", "fix")
+    }
     for relative, contents in sorted(expected.items()):
         path = distribution / relative
         try:
-            actual = path.read_bytes()
+            if relative in rendered_skills:
+                # Rendered text is compared as text so a CRLF checkout of the
+                # generated file still matches the LF source rendering.
+                stale = path.read_text(encoding="utf-8") != rendered_skills[relative]
+            else:
+                stale = path.read_bytes() != contents
         except OSError as exc:
             errors.append(f"cannot read Claude Code distribution {relative.as_posix()}: {exc}")
             continue
-        if actual != contents:
+        if stale:
             errors.append(f"Claude Code distribution is stale: {relative.as_posix()}")
     if distribution.is_dir():
         present = {
