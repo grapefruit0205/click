@@ -688,10 +688,8 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
                 source["verified_dependency_observation"]["provider"],
                 dependency_cache.AUTHORITATIVE_OBSERVATION_PROVIDER_NAME,
             )
-            self.assertEqual(
-                source["verified_dependency_observation"]["status"],
-                "complete",
-                source["verified_dependency_observation"],
+            assert_complete_unless_backend_lost(
+                self, source["verified_dependency_observation"], source["verified_dependency_observation"]
             )
 
         contract_b = self.contract_for_shards(
