@@ -3,7 +3,7 @@
 import inspector from 'node:inspector';
 import fs from 'node:fs';
 import path from 'node:path';
-import { isMainThread } from 'node:worker_threads';
+import { isMainThread, threadId } from 'node:worker_threads';
 
 const directory = process.env.CLICK_NODE_OBSERVER_DIRECTORY;
 const ownedOptions = process.env.NODE_OPTIONS === '--import=' + import.meta.url;
@@ -37,4 +37,12 @@ if (directory && ownedOptions && isMainThread && !testRunner && !priorPreload) {
   } catch {
     if (owned) { try { inspector.close(); } catch {} }
   }
+} else if (directory && ownedOptions && !isMainThread) {
+  // A Worker isolate runs outside the Inspector session above, so its clock,
+  // random and other runtime facilities are unobserved. Announce it, so the
+  // collector counts Workers explicitly instead of relying on the timing of
+  // the isolate's own cgroup probe to reject the projection.
+  try {
+    fs.writeFileSync(path.join(directory, `worker-${process.pid}-${threadId}`), '');
+  } catch {}
 }
