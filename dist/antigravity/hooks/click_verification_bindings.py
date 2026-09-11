@@ -215,6 +215,51 @@ def verification_environment(*, cwd: Path) -> dict[str, str]:
     return environment
 
 
+SEARCH_PATH_KEYS = frozenset({"PATH"})
+
+
+def _own_command_directories() -> set[str]:
+    """Directories a host adds to the search path to offer Click's commands."""
+    directories: set[str] = set()
+    # Plain path text, so a host whose separator rules are emulated in a test
+    # cannot make locating Click's own directory raise.
+    candidates = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+    configured = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+    if configured:
+        candidates.append(configured)
+    for root in candidates:
+        try:
+            directories.add(os.path.normcase(os.path.join(root, "bin")))
+        except (OSError, RuntimeError, ValueError, TypeError):
+            continue
+    return directories
+
+
+def normalized_search_path(value: str) -> str:
+    """Drop repeated entries and Click's own command directory.
+
+    A host can offer Click's commands by adding the plugin's own directory to
+    the search path of the tool call that runs a verification, while the Hook
+    process that decides reuse never sees it, and either side can repeat an
+    entry. Neither difference changes which executable a check resolves to --
+    a repeat can never win over its first occurrence, and Click's own
+    directory holds only Click's commands -- and the executables a check
+    actually resolves are fingerprinted separately by content. Normalizing
+    here keeps one environment identity for one environment, instead of one
+    per process that computes it.
+    """
+    own = _own_command_directories()
+    entries: list[str] = []
+    seen: set[str] = set()
+    for entry in str(value).split(os.pathsep):
+        key = os.path.normcase(entry)
+        if key in own or key in seen:
+            continue
+        seen.add(key)
+        entries.append(entry)
+    return os.pathsep.join(entries)
+
+
 def environment_fingerprint(environment: dict[str, str], *, cwd: Path | None = None) -> dict[str, str]:
     """Return the subset of an execution environment that binds a receipt."""
     exact: set[str] = set()
@@ -227,7 +272,11 @@ def environment_fingerprint(environment: dict[str, str], *, cwd: Path | None = N
     except (OSError, RuntimeError, ValueError, NotImplementedError):
         exact, prefixes = set(), set()
     return {
-        str(key): str(value)
+        str(key): (
+            normalized_search_path(str(value))
+            if verification_environment_key(str(key)) in SEARCH_PATH_KEYS
+            else str(value)
+        )
         for key, value in environment.items()
         if environment_key_is_fingerprinted(str(key), exact=exact, prefixes=prefixes)
     }

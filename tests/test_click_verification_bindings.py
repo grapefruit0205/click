@@ -127,6 +127,37 @@ class VerificationBindingStageTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(digest.call_count, 2 * per_stage)
 
+    def test_the_search_path_binds_the_same_identity_in_hook_and_runner(self):
+        own = sorted(bindings._own_command_directories())[0]
+        plugin_bin = str(Path(own))
+        entries = ["/usr/local/bin", "/usr/bin", "/home/user/.local/bin"]
+        # The Hook process sees a repeated entry; the tool call that runs the
+        # verification sees Click's own command directory appended instead.
+        hook = os.pathsep.join([*entries, "/usr/bin"])
+        runner = os.pathsep.join([*entries, plugin_bin])
+        self.assertNotEqual(hook, runner)
+        self.assertEqual(
+            bindings.normalized_search_path(hook), bindings.normalized_search_path(runner)
+        )
+        self.assertEqual(bindings.normalized_search_path(hook), os.pathsep.join(entries))
+        # Order and every distinct directory are preserved: a repeat can never
+        # win over its first occurrence, so dropping it changes no resolution.
+        self.assertEqual(
+            bindings.normalized_search_path(os.pathsep.join(["/b", "/a", "/b"])),
+            os.pathsep.join(["/b", "/a"]),
+        )
+        # Only the search path is normalized; other values stay verbatim.
+        fingerprint = bindings.environment_fingerprint(
+            {"PATH": hook, "TZ": "UTC" + os.pathsep + "UTC"}
+        )
+        self.assertEqual(fingerprint["PATH"], os.pathsep.join(entries))
+        self.assertEqual(fingerprint["TZ"], "UTC" + os.pathsep + "UTC")
+        # A real directory difference still changes the identity.
+        self.assertNotEqual(
+            bindings.normalized_search_path(hook),
+            bindings.normalized_search_path(os.pathsep.join([*entries, "/opt/tools/bin"])),
+        )
+
     def test_environment_fingerprint_is_an_allowlist_with_owner_extension(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

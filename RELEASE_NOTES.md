@@ -40,6 +40,14 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   inputs its shards share once per shard; the recheck of a six-shard suite is
   78% faster (0.26 s to 0.06 s, 145 MB hashed to 24 MB). Execution-time
   revalidation remains a separate decision with its own reading.
+- A receipt's environment fingerprint normalizes the search path: repeated
+  entries and Click's own command directory are dropped. A host that offers
+  Click's commands by adding the plugin's directory to the search path of the
+  tool call that runs a verification, but not to the Hook process that decides
+  reuse, made every receipt's environment digest differ from the one recomputed
+  at the next request, so on Claude Code every check reran with
+  `environment-binding-changed` and no reuse was ever possible. Execution still
+  receives the host's real search path; only the receipt subset is normalized.
 - Observed-input identity is content-based: type and permission bits, file
   content, directory membership, metadata-only size and symlink text. Inode
   numbers, link counts, ownership and timestamps no longer invalidate a native
