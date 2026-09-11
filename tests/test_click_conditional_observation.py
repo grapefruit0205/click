@@ -217,6 +217,41 @@ class RealConditionalTests(unittest.TestCase):
             self.assertFalse(conditional.eligible_record(dynamic))
 
 
+class RuntimeProbeTimingTests(unittest.TestCase):
+    def _trace(self, root, directory, pid, *middle):
+        node = "/usr/bin/node"
+        ready = f"{directory}/ready-{pid}"
+        lines = [
+            f'{pid} execve("{node}", ["node", "entry.cjs"], 0x1 /* 1 vars */) = 0',
+            f'{pid} newfstatat(AT_FDCWD<{root}>, "{ready}", {{st_mode=S_IFREG|0644, st_size=0, ...}}, 0) = 0',
+            f'{pid} openat(AT_FDCWD<{root}>, "entry.cjs", O_RDONLY|O_CLOEXEC) = 17<{root}/entry.cjs>',
+            *middle,
+            f'{pid} exit_group(0) = ?',
+            f'{pid} +++ exited with 0 +++',
+        ]
+        return ("\n".join(lines) + "\n").encode()
+
+    def test_a_runtime_cgroup_probe_after_the_acknowledgement_still_projects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "entry.cjs").write_text("")
+            pid = "4242"
+            # libuv reads the process cgroup when a Worker starts; the Worker
+            # can start on either side of the acknowledgement.
+            probe = f'{pid} openat(AT_FDCWD<{root}>, "/proc/{pid}/cgroup", O_RDONLY|O_CLOEXEC) = 18</proc/{pid}/cgroup>'
+            projection = conditional.project_capture(
+                self._trace(root, "/tmp/click-node-inputs-x", pid, probe),
+                project=root, cwd=root, directory="/tmp/click-node-inputs-x")
+            self.assertIsNotNone(projection)
+            self.assertEqual([row["path"] for row in projection["inputs"]], ["entry.cjs"])
+            self.assertNotIn("/proc", str(projection["external"]))
+            # Any other pseudo-file read by application code is still dynamic.
+            dynamic = f'{pid} openat(AT_FDCWD<{root}>, "/proc/{pid}/status", O_RDONLY|O_CLOEXEC) = 18</proc/{pid}/status>'
+            self.assertIsNone(conditional.project_capture(
+                self._trace(root, "/tmp/click-node-inputs-x", pid, dynamic),
+                project=root, cwd=root, directory="/tmp/click-node-inputs-x"))
+
+
 @unittest.skipUnless(sys.platform == 'linux' and shutil.which('node') and shutil.which('strace'), 'Linux Node and strace required')
 class ConditionalHookTests(support.ClickGateTestCase):
     def test_default_hook_learns_then_reuses_and_reruns_changed_child(self):

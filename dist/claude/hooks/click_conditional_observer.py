@@ -46,9 +46,10 @@ def source_digest():
 def project_capture(raw, *, project, cwd, directory, truncated=False):
     """Conditional projection; retain ordinary external files as bound inputs.
 
-Only the fixed Node bootstrap's proc/cgroup probes and ancestor metadata are
-outside this confidence scope. The same probes after the acknowledgement are
-ordinary inputs. No application read is removed because it is later written.
+The runtime's own proc/cgroup/memory probes and pre-acknowledgement ancestor
+metadata are outside this confidence scope, in whichever phase the runtime
+issues them. Every other pseudo-file read after the acknowledgement is dynamic.
+No application read is removed because it is later written.
     """
     if __package__:
         from . import click_observer_linux as linux, click_observer_process_tree as processes
@@ -88,14 +89,23 @@ ordinary inputs. No application read is removed because it is later written.
             # Captured stdout/stderr pipe metadata belongs to the runner's
             # fixed output transport. Stdin and arbitrary descriptors do not.
             continue
-        if not started and path and Path(path).is_absolute():
-            bootstrap_probe = (path in {"/dev/null", "/proc/self/exe", "/proc/self/maps", "/proc/self/cgroup",
-                                        "/proc/meminfo", "/proc/version_signature"}
-                               or re.fullmatch(r"/proc/[0-9]+/(?:maps|cgroup)", path)
-                               or path.startswith("/sys/fs/cgroup/") and path.endswith(("/memory.high", "/memory.max")))
-            bootstrap_directory = (call in linux._METADATA_CALLS and "S_IFDIR" in arguments
-                                   and not Path(path).is_relative_to(root))
-            if bootstrap_probe or bootstrap_directory:
+        if path and Path(path).is_absolute():
+            # The runtime's own resource probes: V8 and libuv read the process
+            # cgroup, memory limits and mappings when the engine, a Worker or a
+            # thread pool starts. They are a facility of the runtime, not an
+            # application input, and a Worker can start on either side of the
+            # acknowledgement, so they are excluded in both phases. Every other
+            # pseudo-file consumed after the acknowledgement stays dynamic.
+            runtime_probe = (path in {"/dev/null", "/proc/self/exe", "/proc/self/maps", "/proc/self/cgroup",
+                                      "/proc/meminfo", "/proc/version_signature"}
+                             or re.fullmatch(r"/proc/[0-9]+/(?:maps|cgroup)", path)
+                             or path.startswith("/sys/fs/cgroup/") and path.endswith(("/memory.high", "/memory.max")))
+            if runtime_probe:
+                continue
+            # Path traversal of directories outside the workspace before the
+            # acknowledgement is bootstrap, not an application read.
+            if (not started and call in linux._METADATA_CALLS and "S_IFDIR" in arguments
+                    and not Path(path).is_relative_to(root)):
                 continue
         lines.append(line)
     if not started:
