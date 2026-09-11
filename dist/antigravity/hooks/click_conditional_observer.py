@@ -88,6 +88,13 @@ ordinary inputs. No application read is removed because it is later written.
             # Captured stdout/stderr pipe metadata belongs to the runner's
             # fixed output transport. Stdin and arbitrary descriptors do not.
             continue
+        if path == "/proc/sys/vm/overcommit_memory":
+            # glibc's malloc reads this once, on the first large allocation,
+            # which can fall on either side of the acknowledgement. It is the
+            # allocator's own probe, never an application input, so it is not
+            # a dynamic read in either phase. Every other pseudo-file read
+            # after the acknowledgement remains dynamic.
+            continue
         if not started and path and Path(path).is_absolute():
             bootstrap_probe = (path in {"/dev/null", "/proc/self/exe", "/proc/self/maps", "/proc/self/cgroup",
                                         "/proc/meminfo", "/proc/version_signature"}
