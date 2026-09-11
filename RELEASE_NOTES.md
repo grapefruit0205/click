@@ -47,6 +47,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   receipt was refused for an input difference that no application read made.
   The binary's identity stays bound by the receipt's runtime digest and by the
   row's content digest.
+- The host-runtime part of the observer's input index is built once per
+  process. Every shard's pre-execution snapshot walked the same ~16,000 stdlib,
+  site-packages, loader and locale paths; now the runtime roots are indexed once
+  per runner and each snapshot copies that index and re-indexes only the
+  repository. A runtime file that changes after the shared index was taken is
+  still refused, because binding compares the pre-execution metadata with the
+  current one. Measured on the six-shard fixture: runner 9.08 s → 6.16 s.
 - Runtime identity checks are memoized per process. A runner validates the
   native observer twice per shard plus at claim and record time, and every
   validation hashed the artifact, the compiler, the interpreter and about two

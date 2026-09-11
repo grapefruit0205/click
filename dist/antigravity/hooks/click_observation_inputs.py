@@ -340,7 +340,12 @@ class InputSnapshot:
     """
 
     def __init__(
-        self, project: Path, artifact_id: str, *, profile: str = PROFILE
+        self,
+        project: Path,
+        artifact_id: str,
+        *,
+        profile: str = PROFILE,
+        shared: "InputSnapshot | None" = None,
     ):
         self.roots = runtime_roots(project, artifact_id, profile=profile)
         self.artifact_id = artifact_id
@@ -349,11 +354,24 @@ class InputSnapshot:
         self.enumerated: set[str] = set()
         self.project_content: dict[str, str] = {}
         self.total_bytes = 0
-        self._index()
+        if (
+            shared is not None
+            and shared.roots == self.roots
+            and shared.profile == profile
+        ):
+            # The host runtime was indexed once for this process; only the
+            # repository, which each check may have changed, is indexed again.
+            self.before = dict(shared.before)
+            self.enumerated = set(shared.enumerated)
+            self._index(roles=frozenset({"project"}))
+        else:
+            self._index()
 
-    def _index(self) -> None:
+    def _index(self, roles: frozenset[str] | None = None) -> None:
         seen = set()
         for role, root in self.roots.items():
+            if roles is not None and role not in roles:
+                continue
             # Parent locations are needed for path lookup and symlink identity,
             # not as permission to walk the entire host filesystem.
             shallow = role.endswith("-root") or role in (
@@ -556,6 +574,51 @@ class InputSnapshot:
             output.append({"root": role, "path": relative, "kind": kind,
                            "operations": sorted(operations), "digest": fingerprint})
         return sorted(output, key=lambda item: (item["root"], item["path"]))
+
+
+# One runner executes every shard of a suite against the same host runtime.
+# Indexing the runtime roots (stdlib, site-packages, loader libraries, locale
+# data: ~16,000 paths) took about half a second per shard and was identical
+# every time. The runtime index is therefore built once per process and each
+# snapshot copies it, re-indexing only the repository. A runtime file that
+# changes after the shared index was taken is still caught: records() compares
+# the pre-execution metadata with the current one and refuses the input.
+_SHARED_RUNTIME_INDEX: dict[tuple[str, str, str], InputSnapshot] = {}
+
+
+def shared_runtime_index(
+    project: Path, artifact_id: str, *, profile: str = PROFILE
+) -> InputSnapshot | None:
+    """The host-runtime part of an input index, built once per process.
+
+    Returns None when the runtime cannot be indexed here; the snapshot built
+    without it then raises the real reason itself.
+    """
+    key = (str(project), artifact_id, profile)
+    base = _SHARED_RUNTIME_INDEX.get(key)
+    if base is None:
+        base = object.__new__(InputSnapshot)
+        try:
+            base.roots = runtime_roots(project, artifact_id, profile=profile)
+        except InputError:
+            return None
+        base.artifact_id = artifact_id
+        base.profile = profile
+        base.before = {}
+        base.enumerated = set()
+        base.project_content = {}
+        base.total_bytes = 0
+        try:
+            base._index(roles=frozenset(base.roots) - {"project"})
+        except InputError:
+            return None
+        _SHARED_RUNTIME_INDEX.clear()
+        _SHARED_RUNTIME_INDEX[key] = base
+    return base
+
+
+def clear_shared_runtime_index() -> None:
+    _SHARED_RUNTIME_INDEX.clear()
 
 
 def records_valid(records) -> bool:
