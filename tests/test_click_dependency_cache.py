@@ -703,12 +703,13 @@ class ClickDependencyBehaviorTests(
             self.assertEqual(snapshot.locator(root / "lib" / "inner.txt"), ("project", "inner.txt"))
             self.assertEqual(snapshot.locator(root / "lib2" / "inner.txt"),
                              ("project-parent", "lib2/inner.txt"))
-            # A filesystem root already ends in the separator; its direct
-            # children still resolve against it.
-            snapshot.roots = {"host-root": Path(os.sep)}
+            # A filesystem root already ends in the separator (a drive root on
+            # Windows); its direct children still resolve against it.
+            anchor = Path(root.anchor)
+            first = root.relative_to(anchor).parts[0]
+            snapshot.roots = {"host-root": anchor}
             snapshot._root_prefixes = {}
-            self.assertEqual(snapshot.locator(Path(os.sep) / root.parts[1]),
-                             ("host-root", root.parts[1]))
+            self.assertEqual(snapshot.locator(anchor / first), ("host-root", first))
             # Nothing outside every root is locatable.
             snapshot.roots = {"project": root / "lib"}
             snapshot._root_prefixes = {}
