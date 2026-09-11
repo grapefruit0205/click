@@ -40,6 +40,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   Node Worker is now detected explicitly — the isolate announces itself to the
   collector — so a Worker run is denied a receipt by its count rather than by
   where its own probe happened to land.
+- The conditional JS projection no longer records whether the executed
+  interpreter read its own binary. V8 re-opens the Node executable for its
+  builtin remap depending on where ASLR placed it, so the same check produced
+  `["execute"]` in one run and `["execute", "read"]` in the next and the
+  receipt was refused for an input difference that no application read made.
+  The binary's identity stays bound by the receipt's runtime digest and by the
+  row's content digest.
 - The Evidence context injected on every prompt is now a directive: run every
   test or check command through `click-gate verify`, with the request shape
   inline, a statement that `click-gate` is a hook-rewritten command rather than
