@@ -79,6 +79,7 @@ class ConditionalSnapshotTests(unittest.TestCase):
                       {'conditional_capture': {'inputs':[{}],'external':[]}}):
             self.assertFalse(conditional.eligible_record(value))
 
+    @unittest.skipUnless(sys.platform == 'linux', 'the projection reads a Linux strace capture')
     def test_the_allocator_probe_after_the_acknowledgement_still_projects(self):
         directory = self.root / 'observer'
         base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
