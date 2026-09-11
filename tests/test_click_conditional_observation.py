@@ -204,7 +204,14 @@ class RealConditionalTests(unittest.TestCase):
                 self.assertEqual(output['process'].stdout.data.count(b'RAN-ONCE'),1)
                 self.assertTrue(framework.record_valid(execution.record),execution.record)
                 self.assertTrue(conditional.eligible_record(execution.record),(self.projection_diagnostics, execution.record))
-                self.assertEqual(execution.envelope is None,learning,execution.record)
+                # A refused receipt means the two runs' projections differed or
+                # issue() declined for another reason; show both sides, so a
+                # host-only refusal can be read from the failure alone.
+                self.assertEqual(execution.envelope is None,learning,{
+                    'diagnostics': self.projection_diagnostics,
+                    'learning_capture': previous.get('conditional_capture') if isinstance(previous, dict) else None,
+                    'binding_capture': execution.record.get('conditional_capture'),
+                    'record': {key: execution.record.get(key) for key in ('capture','runtime','workers')}})
                 previous=execution.record
             envelope=execution.envelope
             observation=conditional.verify(envelope,secret=runner_token,expected_binding=context)
