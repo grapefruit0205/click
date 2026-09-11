@@ -133,6 +133,14 @@ ordinary inputs. No application read is removed because it is later written.
         # Pseudo-files and devices consumed by application code are dynamic.
         if path.parts[1:2] in [("proc",), ("sys",), ("dev",)]:
             return None
+        if "execute" in row["operations"] and "read" in row["operations"]:
+            # V8 re-opens its own binary for the builtin remap depending on
+            # where ASLR placed it, so the executed interpreter is read in one
+            # run and not the next. The binary's identity is already bound by
+            # the receipt's runtime digest and by this row's content digest;
+            # whether the engine happened to read its own image is not an
+            # input the check consumed.
+            row = {**row, "operations": sorted(op for op in row["operations"] if op != "read")}
         external.append(row)
     return {"inputs": list(parsed.inputs), "external": external}
 

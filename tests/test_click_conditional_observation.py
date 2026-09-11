@@ -128,6 +128,22 @@ class ConditionalSnapshotTests(unittest.TestCase):
                                                      node_path='/usr/bin/node', backend_path='/usr/bin/strace'),
                          'record not eligible')
 
+    @unittest.skipUnless(sys.platform == 'linux', 'the projection reads a Linux strace capture')
+    def test_the_interpreters_optional_self_read_does_not_change_its_external_row(self):
+        directory = self.root / 'observer'
+        node = shutil.which('node') or '/usr/bin/node'
+        base = f'100 execve("{node}", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
+        tail = '\n100 exit_group(0) = ?\n100 +++ exited with 0 +++\n'
+        # V8 sometimes re-opens the executed binary for its builtin remap; the
+        # two runs must project the same row for it.
+        without = conditional.project_capture((base + tail.lstrip('\n')).encode(), project=self.root, cwd=self.root, directory=directory)
+        with_read = conditional.project_capture((base + f'100 openat(AT_FDCWD, "{node}", O_RDONLY|O_CLOEXEC) = 3<{node}>' + tail).encode(),
+                                                project=self.root, cwd=self.root, directory=directory)
+        self.assertIsNotNone(without); self.assertIsNotNone(with_read)
+        rows = lambda projection: [r for r in projection['external'] if r['path'] == node]
+        self.assertEqual(rows(without), rows(with_read))
+        self.assertEqual(rows(with_read)[0]['operations'], ['execute'])
+
     def test_projection_keeps_application_proc_read_and_unknown_calls_ineligible(self):
         directory = self.root / 'observer'
         base = f'100 execve("/usr/bin/node", ["node"], 0x1) = 0\n100 access("{directory}/ready-100", F_OK) = 0\n'
