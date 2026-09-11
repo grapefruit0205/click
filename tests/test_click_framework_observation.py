@@ -174,10 +174,17 @@ class FrameworkObservationTests(unittest.TestCase):
         target_pid = None
         try:
             deadline = time.monotonic() + 20
-            while not pid_file.exists() and harness.poll() is None and time.monotonic() < deadline:
+            # write_text() creates the file before it writes the pid, so wait
+            # for the content, not for the path: reading between the two
+            # steps saw an empty file.
+            announced = ""
+            while harness.poll() is None and time.monotonic() < deadline:
+                announced = pid_file.read_text().strip() if pid_file.exists() else ""
+                if announced.isdigit():
+                    break
                 time.sleep(0.025)
-            self.assertTrue(pid_file.exists(), "target never became ready")
-            target_pid = int(pid_file.read_text())
+            self.assertTrue(announced.isdigit(), "target never became ready")
+            target_pid = int(announced)
             harness.terminate()
             stdout, stderr = harness.communicate(timeout=10)
             self.assertEqual(harness.returncode, 0, stderr)
