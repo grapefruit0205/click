@@ -270,7 +270,7 @@ class Fixture:
         if scenario in {"first-run", "unchanged"}:
             return
         if scenario == "environment":
-            self.environment["CLICK_BENCHMARK_VARIANT"] = "changed"
+            self.environment["TZ"] = "Etc/GMT+7"  # fingerprinted runtime variable
             return
         paths = {"unrelated-code": ("component_beta.py", 2), "related-code": ("component_alpha.py", 2),
                  "failure": ("component_alpha.py", -1), "retry": ("component_alpha.py", 3)}
@@ -341,7 +341,7 @@ class Fixture:
         if scenario in {"first-run", "unchanged"}:
             return
         if scenario == "environment":
-            self.environment["CLICK_BENCHMARK_VARIANT"] = "changed"
+            self.environment["TZ"] = "Etc/GMT+7"  # fingerprinted runtime variable
             return
         if scenario == "partial-reuse" and self.state().get("runtime_mode") == "evidence":
             # Exercise the real completed-Evidence -> next-Evidence lifecycle.
