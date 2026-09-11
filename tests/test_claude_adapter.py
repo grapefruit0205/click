@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import re
+import shlex
 import subprocess
 import sys
 import tempfile
 import unittest
 
-from hooks import claude_hook, click_host_coverage
+from hooks import claude_hook, click_host_coverage, click_runner_transport
 
 
 ROOT = Path(__file__).parents[1]
@@ -17,6 +17,28 @@ SCRIPT = ROOT / "hooks" / "claude_hook.py"
 PLATFORM = ROOT / "platforms" / "claude"
 PROMPT_ID = "550e8400-e29b-41d4-a716-446655440000"
 LATER_PROMPT_ID = "550e8400-e29b-41d4-a716-446655440001"
+
+
+def _runner_tail(command: str) -> list[str]:
+    """Return the runner arguments after the interpreter on either host OS.
+
+    POSIX renders ``<python> -c <script> <payload>``; Windows renders the bare
+    ``py -3`` launcher with an encoded transport for everything after it.
+    """
+    if os.name == "nt":
+        from hooks import antigravity_gate
+
+        argv = antigravity_gate._command_argv(command)
+        if argv[:2] != ["py", "-3"] or argv[3] != "--encoded-runner":
+            raise AssertionError(command)
+        decoded, error = click_runner_transport.decode_runner_transport(argv[4])
+        if error or decoded is None:
+            raise AssertionError(error or command)
+        return [argv[2], *decoded]
+    argv = shlex.split(command)
+    if argv[0] != sys.executable:
+        raise AssertionError(command)
+    return argv[1:]
 
 
 def _matcher_names(config: dict, event_name: str) -> set[str]:
@@ -284,7 +306,9 @@ class ClaudeHookProcessTests(unittest.TestCase):
         self.assertEqual(specific["updatedInput"]["description"], "Show Click status")
         self.assertEqual(specific["updatedInput"]["timeout"], 120000)
         self.assertNotEqual(specific["updatedInput"]["command"], "click-gate status")
-        self.assertIn(sys.executable, specific["updatedInput"]["command"])
+        tail = _runner_tail(specific["updatedInput"]["command"])
+        self.assertEqual(tail[0], "-c")
+        self.assertEqual(json.loads(tail[-1])["task"]["runtime_mode"], "evidence")
 
         code, payload, stderr = self.hook(
             "pre-tool",
@@ -324,9 +348,7 @@ class ClaudeHookProcessTests(unittest.TestCase):
             self.event("PreToolUse", tool_name="Bash", tool_input={"command": "click-gate status"}, tool_use_id="s"),
         )
         self.assertEqual(code, 0)
-        report = re.search(r"'(\{.*\})'\s*$", payload["hookSpecificOutput"]["updatedInput"]["command"])
-        assert report is not None
-        status = json.loads(report.group(1).replace("'\"'\"'", "'"))
+        status = json.loads(_runner_tail(payload["hookSpecificOutput"]["updatedInput"]["command"])[-1])
         self.assertEqual(status["task"]["mutation_revision"], 3)
         self.assertEqual(status["task"]["runtime_mode"], "evidence")
 
