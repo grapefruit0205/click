@@ -121,13 +121,38 @@ class ClickDashboardProjectionTests(unittest.TestCase):
     def test_projection_v6_through_v9_remain_readable_and_new_fields_are_validated(self) -> None:
         value = click_dashboard_projection.dashboard_projection({})
         self.assertTrue(click_dashboard_projection.projection_is_valid(value))
-        v9 = copy.deepcopy(value)
+        v10 = copy.deepcopy(value)
+        v10["version"] = 10
+        v10.pop("reuse_reasons")
+        self.assertTrue(click_dashboard_projection.projection_is_valid(v10))
+        v9 = copy.deepcopy(v10)
         v9["version"] = 9
         v9.pop("readiness")
         self.assertTrue(click_dashboard_projection.projection_is_valid(v9))
         invalid = copy.deepcopy(value)
         invalid["readiness"]["reuse_authorized"] = True
         self.assertFalse(click_dashboard_projection.projection_is_valid(invalid))
+        reasons = value["reuse_reasons"]
+        self.assertEqual(reasons["request_count"], 0)
+        self.assertEqual(reasons["run_reasons"], [])
+        self.assertEqual(set(reasons["decisions"]), set(click_incremental.DECISIONS))
+        unbalanced = copy.deepcopy(value)
+        unbalanced["reuse_reasons"]["request_count"] = 3
+        self.assertFalse(click_dashboard_projection.projection_is_valid(unbalanced))
+        unsorted_reasons = copy.deepcopy(value)
+        unsorted_reasons["reuse_reasons"]["decisions"]["run"] = 2
+        unsorted_reasons["reuse_reasons"]["request_count"] = 2
+        unsorted_reasons["reuse_reasons"]["run_reasons"] = [
+            {"reason_code": "a-reason", "count": 1},
+            {"reason_code": "b-reason", "count": 2},
+        ]
+        self.assertFalse(click_dashboard_projection.projection_is_valid(unsorted_reasons))
+        unsorted_reasons["reuse_reasons"]["run_reasons"].reverse()
+        self.assertFalse(click_dashboard_projection.projection_is_valid(unsorted_reasons))
+        # Reason counts may never exceed the retained non-reuse decisions.
+        unsorted_reasons["reuse_reasons"]["decisions"]["run"] = 3
+        unsorted_reasons["reuse_reasons"]["request_count"] = 3
+        self.assertTrue(click_dashboard_projection.projection_is_valid(unsorted_reasons))
         readiness_fields = {
             "command_status",
             "inventory_status",
@@ -139,12 +164,14 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v8 = copy.deepcopy(value)
         v8["version"] = 8
         v8.pop("readiness")
+        v8.pop("reuse_reasons")
         for field in readiness_fields:
             v8["setup"].pop(field)
         self.assertTrue(click_dashboard_projection.projection_is_valid(v8))
         v7 = copy.deepcopy(value)
         v7["version"] = 7
         v7.pop("readiness")
+        v7.pop("reuse_reasons")
         v7.pop("task_efficiency")
         for field in readiness_fields:
             v7["setup"].pop(field)
@@ -152,6 +179,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         previous = copy.deepcopy(value)
         previous["version"] = 6
         previous.pop("readiness")
+        previous.pop("reuse_reasons")
         previous.pop("retained_impact")
         previous.pop("task_efficiency")
         for field in readiness_fields:
@@ -468,7 +496,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         )
 
         self.assertTrue(click_dashboard_projection.projection_is_valid(projection))
-        self.assertEqual(projection["version"], 10)
+        self.assertEqual(projection["version"], 11)
         self.assertEqual(
             projection["task_efficiency"]["measurement_status"], "unmeasured"
         )
@@ -685,6 +713,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         legacy = copy.deepcopy(projection)
         legacy["version"] = 4
         legacy.pop("readiness")
+        legacy.pop("reuse_reasons")
         legacy.pop("batch_summaries")
         legacy.pop("setup")
         legacy.pop("retained_impact")
@@ -696,6 +725,7 @@ class ClickDashboardProjectionTests(unittest.TestCase):
         v5 = copy.deepcopy(projection)
         v5["version"] = 5
         v5.pop("readiness")
+        v5.pop("reuse_reasons")
         v5.pop("setup")
         v5.pop("retained_impact")
         v5.pop("task_efficiency")

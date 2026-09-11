@@ -82,8 +82,10 @@ descriptor operations use bound function-code identities; project clock/random
 consumption, foreign reporting hooks and profiler replacement are ineligible.
 The validated reusable fixture explicitly requests `-s -p no:cacheprovider`.
 The claimed-runner fixture separates independent checks into directories.
-pytest may inspect sibling file metadata while collecting a flat directory;
-those observed metadata changes conservatively invalidate the affected receipt.
+pytest may inspect sibling files while collecting a flat directory; a
+changed sibling content, permission or directory membership conservatively
+invalidates the affected receipt, while timestamps and inodes are not part of
+input identity.
 Ordinary pytest capture/cache options remain unchanged and can leave its input
 observation incomplete; normal execution and failure diagnostics still work.
 
@@ -108,8 +110,10 @@ observed inputs before/after a requested execution. Known dynamic inputs and
 unsupported coverage still execute the child. See the [conditional runtime
 assumptions and user-visible limitations](node-runtime-observation.md).
 Independent owner policies can also permit automatic reuse. Python
-threads/subprocesses likewise remain ineligible for authoritative reuse; the new
-worker lifecycle foundation does not remove that guard.
+threads and followed subprocesses remain ineligible for *complete* authoritative
+reuse; when the process tree and every file input were captured they yield a
+`conditional` native receipt with the same disclosed-limitation semantics as
+the JS receipt. Time, random, network and capture loss still execute the check.
 
 Unsupported framework candidates have bounded diagnostic attempts. Eligible
 seeds continue learning on requested executions so the next stable observed

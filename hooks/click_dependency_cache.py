@@ -87,6 +87,16 @@ AUTHORITATIVE_INELIGIBILITY_REASONS = frozenset({
     "time-random-input", "unresolved-event", "unsupported-command",
     "unsupported-runtime",
 })
+# Dynamic behavior the native profile observed but cannot prove equivalent
+# across runs. File inputs of the whole followed process tree were still
+# snapshotted, so the observation can back an explicitly conditional receipt:
+# reuse only while every observed input is unchanged, disclosed as unproven.
+AUTHORITATIVE_CONDITIONAL_REASONS = frozenset({
+    "child-process-unsupported",
+    "concurrent-execution-unsupported",
+    "dynamic-runtime-introspection",
+})
+AUTHORITATIVE_OBSERVATION_STATUSES = frozenset({"complete", "conditional", "failed", "unavailable"})
 MAX_CONFIG_BYTES = 256 * 1024
 
 SHADOW_OBSERVER_SCHEMA_VERSION = 1
@@ -386,7 +396,10 @@ def dependency_observation_is_complete(value: Any) -> bool:
     if conditional_dependency_observation_is_valid(value):
         return True
     if authoritative_dependency_observation_is_valid(value):
-        return authoritative_dependency_observation_is_complete(value)
+        return (
+            authoritative_dependency_observation_is_complete(value)
+            or authoritative_dependency_observation_is_conditional(value)
+        )
     return bool(
         dependency_observation_is_valid(value)
         and value.get("status") == "complete"
@@ -478,7 +491,7 @@ def authoritative_dependency_observation_is_valid(value: Any) -> bool:
     if (
         value.get("provider") != AUTHORITATIVE_OBSERVATION_PROVIDER_NAME
         or value.get("profile") not in AUTHORITATIVE_OBSERVATION_PROFILES
-        or value.get("status") not in OBSERVATION_STATUSES
+        or value.get("status") not in AUTHORITATIVE_OBSERVATION_STATUSES
         or not observation_paths_are_valid(value.get("paths"))
         or value.get("external_access") is not False
         or not isinstance(value.get("child_processes"), int)
@@ -530,7 +543,13 @@ def authoritative_dependency_observation_is_valid(value: Any) -> bool:
     ):
         return False
     complete = value.get("status") == "complete"
+    conditional = value.get("status") == "conditional"
     if complete != (not reasons):
+        return False
+    if conditional and (
+        not reasons
+        or any(reason not in AUTHORITATIVE_CONDITIONAL_REASONS for reason in reasons)
+    ):
         return False
     if complete and (
         value.get("process_tree_complete") is not True
@@ -538,7 +557,12 @@ def authoritative_dependency_observation_is_valid(value: Any) -> bool:
         or not click_observation_inputs.records_valid(value.get("inputs"))
     ):
         return False
-    if not complete and value.get("inputs") and not click_observation_inputs.records_valid(value["inputs"]):
+    if conditional and (
+        value.get("process_tree_complete") is not True
+        or not click_observation_inputs.records_valid(value.get("inputs"))
+    ):
+        return False
+    if not complete and not conditional and value.get("inputs") and not click_observation_inputs.records_valid(value["inputs"]):
         return False
     projected = []
     for row in value.get("inputs", []):
@@ -560,6 +584,30 @@ def authoritative_dependency_observation_is_complete(value: Any) -> bool:
     )
 
 
+def authoritative_dependency_observation_is_conditional(value: Any) -> bool:
+    """A native observation whose only gaps are disclosed dynamic categories."""
+    return bool(
+        authoritative_dependency_observation_is_valid(value)
+        and value.get("status") == "conditional"
+    )
+
+
+def conditional_observation_is_valid(value: Any) -> bool:
+    """Either conditional provider: reuse is explicitly limited to observed inputs."""
+    return bool(
+        conditional_dependency_observation_is_valid(value)
+        or authoritative_dependency_observation_is_conditional(value)
+    )
+
+
+def conditional_authority_source(value: Any) -> str:
+    if conditional_dependency_observation_is_valid(value):
+        return "conditional-js-observation"
+    if authoritative_dependency_observation_is_conditional(value):
+        return "conditional-python-observation"
+    return ""
+
+
 def conditional_observer():
     if __package__:
         from . import click_conditional_observer
@@ -576,6 +624,7 @@ def conditional_dependency_observation_is_valid(value: Any) -> bool:
 
 def bound_dependency_observation_is_reusable(value: Any) -> bool:
     return (authoritative_dependency_observation_is_complete(value)
+            or authoritative_dependency_observation_is_conditional(value)
             or conditional_dependency_observation_is_valid(value))
 
 
@@ -619,7 +668,10 @@ def authoritative_dependency_observation_matches(
     observed_binding = value["binding"]
     if any(observed_binding.get(field) != binding[field] for field in binding):
         return False
-    if authoritative_dependency_observation_is_complete(value):
+    if (
+        authoritative_dependency_observation_is_complete(value)
+        or authoritative_dependency_observation_is_conditional(value)
+    ):
         artifact_id = runtime.get("artifact_id")
         if not isinstance(artifact_id, str):
             return False

@@ -678,5 +678,9 @@
   "다음: 실행 중인 검증 완료 대기": "Next: wait for the running verification",
   "다음: 실패 수정 · {0}": "Next: fix the failure · {0}",
   "다음: 남은 검사 {0}개 실행": "Next: run the {0} remaining check(s)",
-  "다음: 완료 조건 검토": "Next: review completion conditions"
+  "다음: 완료 조건 검토": "Next: review completion conditions",
+  "보관된 그룹 요청 {0}개 판정: {1} · 재실행 사유 상위: {2}. 이 분포는 설명용이며 어떤 결합도 완화하지 않습니다.": "Retained group requests decided: {0} — {1} · Top rerun reasons: {2}. This distribution is explanatory and relaxes no binding.",
+  "보관된 그룹 요청 판정이 아직 없습니다.": "No retained group request decisions yet.",
+  "실행": "Executed",
+  "판정 불가": "Not evaluable"
 }

@@ -15,6 +15,7 @@ import re
 import stat
 
 PROVIDER = "conditional-js-observation-v1"
+FINGERPRINT_VERSION = 2
 LIMITATION = "observed-inputs-only-completeness-unproven"
 MAX_INPUTS = 4096
 MAX_BYTES = 512 * 1024 * 1024
@@ -131,7 +132,7 @@ def external_snapshot(rows):
         for part in [path, *path.parents]:
             if part.is_symlink():
                 info = part.lstat()
-                aliases.append([str(part), os.readlink(part), info.st_ino, info.st_mtime_ns, info.st_ctime_ns])
+                aliases.append([str(part), os.readlink(part), stat.S_IFMT(info.st_mode)])
         resolved = path.resolve(strict=False)
         normalized = {"path": str(resolved).lstrip("/"), "kind": row["kind"], "operations": row["operations"]}
         # openat(O_RDONLY) may open a directory without O_DIRECTORY (e.g.
@@ -200,13 +201,17 @@ def fingerprint(root, row, budget):
         return [getattr(info, field) for field in (
             "st_mode", "st_ino", "st_dev", "st_nlink", "st_uid", "st_gid",
             "st_size", "st_mtime_ns", "st_ctime_ns")]
-    payload = [metadata(before)]
+    # Same content identity as the native observer: type/permission bits plus
+    # content, membership or size. Inode, ownership and timestamps are runtime
+    # assumptions, so an equal-content rewrite keeps the conditional receipt.
+    payload = [FINGERPRINT_VERSION, before.st_mode]
     if stat.S_ISDIR(before.st_mode) and row["kind"] == "directory":
-        if "enumerate" in row["operations"]:
-            with os.scandir(target) as entries:
-                payload.append(sorted((entry.name, entry.inode(),
-                                       stat.S_IFMT(entry.stat(follow_symlinks=False).st_mode)) for entry in entries))
+        with os.scandir(target) as entries:
+            payload.append(sorted((entry.name,
+                                   stat.S_IFMT(entry.stat(follow_symlinks=False).st_mode)) for entry in entries))
     elif stat.S_ISREG(before.st_mode) and row["kind"] == "file":
+        if not set(row["operations"]) & {"read", "execute"}:
+            payload.append(before.st_size)
         if set(row["operations"]) & {"read", "execute"}:
             if before.st_size > 256 * 1024 * 1024:
                 raise ValueError("input-size-limit")

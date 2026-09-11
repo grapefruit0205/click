@@ -226,7 +226,7 @@ class ConditionalHookTests(support.ClickGateTestCase):
         (self.workspace/'local.cfg').write_text('ready')
         for name in ('alpha','beta'):
             source="const fs=require('node:fs'); const assert=require('node:assert/strict');\n"
-            if name=='alpha': source+="assert.equal(fs.readFileSync('local.cfg','utf8'),'ready');\n"
+            if name=='alpha': source+="assert.equal(fs.readFileSync('local.cfg','utf8').trim(),'ready');\n"
             source+=f"console.log('ran-{name}');\n"
             (self.workspace/(name+'.cjs')).write_text(source)
         # A tiny deterministic check-runner fixture exercises the existing
@@ -253,9 +253,12 @@ class ConditionalHookTests(support.ClickGateTestCase):
         self.assertNotIn('ran-alpha',result.stdout)
         self.assertNotIn('ran-beta',result.stdout)
         self.assertIn('입력 완전성 미보증',result.stdout)
-        # Git is unchanged; the ignored input must still invalidate only alpha.
-        (self.workspace/'local.cfg').write_text('ready\n')
+        # Git is unchanged; the ignored input's content change must still
+        # invalidate only alpha. An equal-content rewrite would not: identity
+        # is content, membership and mode, never timestamps or inodes.
         (self.workspace/'local.cfg').write_text('ready')
+        self.assertTrue(conditional.current(self.workspace, state['evidence_state']['sources'][support.CLICK_EVIDENCE.evidence_key('ALPHA')]['verified_dependency_observation']['inputs']))
+        (self.workspace/'local.cfg').write_text('ready\n')
         state,result=run('ignored-input-change')
         self.assertEqual(result.stdout.count('ran-alpha'),1,result.stdout)
         self.assertNotIn('ran-beta',result.stdout)
@@ -271,9 +274,10 @@ class ConditionalHookTests(support.ClickGateTestCase):
         self.assertTrue(all(row['decision']=='reuse-dependency' for row in decisions),decisions)
         self.assertTrue(all(row['authority_source']=='conditional-js-observation' for row in decisions),decisions)
 
-        # Environment bindings are conservative: a changed inherited variable
-        # invalidates both commands, even when its per-variable reader is unknown.
-        with support.mock.patch.dict(os.environ, {"CLICK_FIXTURE_SETTING": "changed"}):
+        # Environment bindings cover the fingerprinted runtime variables: a
+        # changed inherited value invalidates both commands, even when its
+        # per-variable reader is unknown.
+        with support.mock.patch.dict(os.environ, {"TZ": "Etc/GMT+7"}):
             state, result = run('environment-change')
         self.assertIn('ran-alpha', result.stdout)
         self.assertIn('ran-beta', result.stdout)

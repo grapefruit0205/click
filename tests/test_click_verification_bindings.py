@@ -127,6 +127,102 @@ class VerificationBindingStageTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(digest.call_count, 2 * per_stage)
 
+    def test_environment_fingerprint_is_an_allowlist_with_owner_extension(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / ".git").mkdir()
+            base = {
+                "PATH": "/usr/bin",
+                "PYTHONPATH": "/lib",
+                "LC_ALL": "C.UTF-8",
+                "TZ": "UTC",
+                "GOFLAGS": "-mod=vendor",
+                "DATABASE_URL": "postgres://one",
+                "SENTRY-TRACE": "abc",
+                "SHLVL": "3",
+                "CLAUDE_CODE_SESSION_ID": "s1",
+                "VSCODE_PID": "42",
+                "GIT_EDITOR": "vim",
+            }
+            with mock.patch.dict(os.environ, base, clear=True):
+                execution = bindings.verification_environment(cwd=root)
+            # The child still receives project variables; launcher bookkeeping
+            # and non-identifier names are dropped from execution as before.
+            self.assertEqual(execution["DATABASE_URL"], "postgres://one")
+            self.assertEqual(execution["PWD"], str(root))
+            self.assertNotIn("SHLVL", execution)
+            self.assertNotIn("SENTRY-TRACE", execution)
+            first = bindings.environment_fingerprint(execution)
+            self.assertEqual(
+                set(first),
+                {"PATH", "PYTHONPATH", "LC_ALL", "TZ", "GOFLAGS", "PWD"},
+            )
+            noisy = {**base, "DATABASE_URL": "postgres://two", "SENTRY-TRACE": "xyz",
+                     "SHLVL": "4", "CLAUDE_CODE_SESSION_ID": "s2", "NEW_IDE_VARIABLE": "1"}
+            with mock.patch.dict(os.environ, noisy, clear=True):
+                self.assertEqual(
+                    bindings.environment_fingerprint(bindings.verification_environment(cwd=root)), first
+                )
+            for key in ("SENTRY-TRACE", "SHLVL", "CLAUDE_CODE_SESSION_ID", "GIT_EDITOR", "DATABASE_URL"):
+                self.assertFalse(bindings.environment_key_is_fingerprinted(key), key)
+            for key in ("PATH", "PYTHONHASHSEED", "NODE_OPTIONS", "LC_MESSAGES", "CARGO_HOME", "TZ"):
+                self.assertTrue(bindings.environment_key_is_fingerprinted(key), key)
+
+            policy = root / ".click" / "environment.json"
+            policy.parent.mkdir()
+            policy.write_text(
+                '{"version": 1, "fingerprint": ["DATABASE_URL", "APP_*"]}',
+                encoding="utf-8",
+            )
+            with mock.patch.dict(os.environ, {**base, "APP_MODE": "test"}, clear=True):
+                extended = bindings.environment_fingerprint(bindings.verification_environment(cwd=root))
+            self.assertEqual(extended["DATABASE_URL"], "postgres://one")
+            self.assertEqual(extended["APP_MODE"], "test")
+            with mock.patch.dict(os.environ, {**base, "APP_MODE": "test", "DATABASE_URL": "postgres://two"}, clear=True):
+                self.assertNotEqual(
+                    bindings.environment_fingerprint(bindings.verification_environment(cwd=root)), extended
+                )
+            nested = root / "src"
+            nested.mkdir()
+            with mock.patch.dict(os.environ, {**base, "APP_MODE": "test"}, clear=True):
+                self.assertIn(
+                    "APP_MODE",
+                    bindings.environment_fingerprint(bindings.verification_environment(cwd=nested)),
+                )
+
+            for malformed in (
+                '{"version": 2, "fingerprint": ["DATABASE_URL"]}',
+                '{"version": 1, "fingerprint": ["bad name"]}',
+                '{"version": 1, "fingerprint": "DATABASE_URL"}',
+                '{"version": 1, "fingerprint": ["DATABASE_URL"], "extra": true}',
+                "not json",
+            ):
+                policy.write_text(malformed, encoding="utf-8")
+                with mock.patch.dict(os.environ, base, clear=True):
+                    self.assertEqual(
+                        bindings.environment_fingerprint(bindings.verification_environment(cwd=root)),
+                        first,
+                        malformed,
+                    )
+
+    def test_environment_binding_covers_only_the_fingerprint_subset(self):
+        execution = {"PATH": "/usr/bin", "PWD": "/work", "DATABASE_URL": "one", "TZ": "UTC"}
+        binding = bindings.verification_environment_binding(execution, "t" * 32)
+        self.assertEqual(len(binding), 3)
+        changed_noise = {**execution, "DATABASE_URL": "two", "RUNNER_ONLY": "x"}
+        projected, drifted, error = bindings.verification_environment_from_binding(
+            binding, "t" * 32, changed_noise
+        )
+        self.assertEqual((projected, drifted, error), (changed_noise, False, ""))
+        changed_bound = {**execution, "TZ": "Etc/GMT+7"}
+        projected, drifted, error = bindings.verification_environment_from_binding(
+            binding, "t" * 32, changed_bound
+        )
+        self.assertEqual((projected, drifted, error), (changed_bound, True, ""))
+        missing_bound = {"PATH": "/usr/bin", "PWD": "/work", "DATABASE_URL": "one"}
+        _, drifted, _ = bindings.verification_environment_from_binding(binding, "t" * 32, missing_bound)
+        self.assertTrue(drifted)
+
     def test_executable_payload_uses_content_instead_of_volatile_mtime(self):
         baseline = {
             "name": "npx.cmd",

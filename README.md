@@ -211,6 +211,8 @@ Click checks the exact command, workspace and mutation state, relevant inputs, e
 | Declared file inputs (policy v2) | The committed policy's allowed changes and complete owner-declared file boundary both match the baseline, including ignored inputs. This is owner policy, not automatic dependency discovery. |
 | Authoritative input observation | A complete signed input snapshot from supported automatic Evidence capture or an approved Guarded run, with all reuse conditions rechecked. |
 | Conditional JS observation | Eligible requested executions establish a separately attested observed-input receipt, then recheck inputs and execution bindings. Reports disclose that input completeness is unproven. |
+| Conditional Python observation | A native observation whose only gaps are a followed child process, threads, or dynamic introspection keeps its input snapshot as a conditional receipt. Reuse stays limited to unchanged observed inputs and is disclosed as completeness-unproven. |
+| Input identity and environment | Observed inputs are identified by content, type and membership, not timestamps or inodes. Receipts fingerprint interpreter, toolchain, locale, path and proxy variables plus an owner's `.click/environment.json`; other session variables are runtime assumptions. |
 
 For example, if a policy for the exact authentication test command was committed before revision 12 and permits `README.md` changes:
 

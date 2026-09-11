@@ -96,34 +96,141 @@ class FileDigestStage:
         return digest
 
 
+# The verification environment binds the variables that change how a check
+# runs: interpreter and toolchain configuration, locale, time zone, module and
+# package resolution, proxies and certificate bundles. Everything else that a
+# host, IDE, agent or shell adds is bookkeeping: it differs between the Hook
+# process and its rewritten runner and would otherwise turn every session into
+# a new environment. Owners extend the fingerprint for project variables with
+# `.click/environment.json`; an extension can only add reruns, never reuse.
+ENVIRONMENT_FINGERPRINT_KEYS = frozenset({
+    "PATH", "PATHEXT", "PWD", "HOME", "USERPROFILE", "SHELL", "COMSPEC",
+    "SYSTEMROOT", "SYSTEMDRIVE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
+    "TMPDIR", "TMP", "TEMP", "TZ", "LANG", "LANGUAGE", "CI",
+    "SOURCE_DATE_EPOCH", "NO_COLOR", "FORCE_COLOR", "PY_COLORS", "VIRTUAL_ENV",
+    "PYENV_VERSION", "PIPENV_ACTIVE", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+    "ALL_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
+    "CURL_CA_BUNDLE", "DOCKER_HOST", "KUBECONFIG", "JAVA_HOME", "ANDROID_HOME",
+})
+ENVIRONMENT_FINGERPRINT_PREFIXES = (
+    "PYTHON", "LC_", "XDG_", "CONDA_", "PIP_", "UV_", "POETRY_", "PDM_",
+    "HATCH_", "TOX_", "PYTEST_", "COVERAGE_", "NODE_", "NPM_CONFIG_", "YARN_",
+    "PNPM_", "BUN_", "JEST_", "VITEST", "DENO_", "GO", "CGO_", "CARGO_",
+    "RUST", "JAVA_", "JDK_", "GRADLE_", "MAVEN_", "DOTNET_", "NUGET_", "LD_",
+    "DYLD_", "CLICOLOR", "GIT_",
+)
+# Launcher-owned values that would otherwise match an accepted prefix.
+ENVIRONMENT_VOLATILE_KEYS = frozenset({
+    "LC_CTYPE", "GIT_EDITOR", "GIT_PAGER", "GIT_TERMINAL_PROMPT", "GIT_ASKPASS",
+    "GIT_PREFIX", "GIT_EXEC_PATH", "PYTHONUNBUFFERED",
+})
+ENVIRONMENT_POLICY_PATH = Path(".click") / "environment.json"
+ENVIRONMENT_POLICY_VERSION = 1
+MAX_ENVIRONMENT_POLICY_BYTES = 16 * 1024
+MAX_ENVIRONMENT_POLICY_PATTERNS = 256
+_ENVIRONMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}\*?$")
+_ENVIRONMENT_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _environment_policy_patterns(cwd: Path) -> tuple[set[str], set[str]]:
+    """Return (exact, prefixes) that an owner declared for this workspace.
+
+    The file is read from the working tree because it can only widen what is
+    fingerprinted. A missing, oversized or malformed file adds nothing.
+    """
+    root = cwd
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / ".git").exists():
+            root = candidate
+            break
+    path = root / ENVIRONMENT_POLICY_PATH
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_ENVIRONMENT_POLICY_BYTES:
+            return set(), set()
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set(), set()
+    patterns = value.get("fingerprint") if isinstance(value, dict) else None
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"version", "fingerprint"}
+        or value.get("version") != ENVIRONMENT_POLICY_VERSION
+        or not isinstance(patterns, list)
+        or len(patterns) > MAX_ENVIRONMENT_POLICY_PATTERNS
+        or any(not isinstance(item, str) or _ENVIRONMENT_PATTERN.fullmatch(item) is None for item in patterns)
+    ):
+        return set(), set()
+    exact = {item.upper() for item in patterns if not item.endswith("*")}
+    prefixes = {item[:-1].upper() for item in patterns if item.endswith("*")}
+    return exact, prefixes
+
+
+def environment_key_is_fingerprinted(key: str, *, exact: set[str] = frozenset(), prefixes: set[str] = frozenset()) -> bool:
+    if _ENVIRONMENT_IDENTIFIER.fullmatch(key) is None:
+        # A shell drops names that are not identifiers before the runner
+        # starts; binding them could never be reproduced by the runner.
+        return False
+    upper = key.upper()
+    if upper in ENVIRONMENT_VOLATILE_KEYS:
+        return False
+    return bool(
+        upper in ENVIRONMENT_FINGERPRINT_KEYS
+        or upper in exact
+        or upper.startswith(ENVIRONMENT_FINGERPRINT_PREFIXES)
+        or any(upper.startswith(prefix) for prefix in prefixes)
+    )
+
+
+# Shell launchers add bookkeeping variables that do not change check
+# semantics and are not stable across the Hook process and its rewritten
+# runner. The execution environment handed to the child keeps every other
+# variable; only the fingerprint subset above binds the receipt.
+ENVIRONMENT_LAUNCHER_KEYS = frozenset({
+    "_",
+    "__CF_USER_TEXT_ENCODING",
+    "CMDCMDLINE",
+    "CLICK_CONFIG_HOME",
+    "COMMAND_MODE",
+    "LC_CTYPE",
+    "OLDPWD",
+    "PROMPT",
+    "PROMPT_COMMAND",
+    "PS1",
+    "PS2",
+    "PLUGIN_DATA",
+    "PLUGIN_ROOT",
+    "SHLVL",
+})
+
+
 def verification_environment(*, cwd: Path) -> dict[str, str]:
-    # Shell launchers add bookkeeping variables that do not change check
-    # semantics and are not stable across the Hook process and its rewritten
-    # runner. Keep user/project variables fingerprinted, but canonicalize these
-    # launcher-owned values so an unchanged receipt remains portable.
-    volatile = {
-        "_",
-        "__CF_USER_TEXT_ENCODING",
-        "CMDCMDLINE",
-        "CLICK_CONFIG_HOME",
-        "COMMAND_MODE",
-        "LC_CTYPE",
-        "OLDPWD",
-        "PROMPT",
-        "PROMPT_COMMAND",
-        "PS1",
-        "PS2",
-        "PLUGIN_DATA",
-        "PLUGIN_ROOT",
-        "SHLVL",
-    }
+    """Return the environment the verification child runs with."""
     environment = {
         str(key): str(value)
         for key, value in os.environ.items()
-        if str(key).upper() not in volatile and not str(key).startswith("=")
+        if str(key).upper() not in ENVIRONMENT_LAUNCHER_KEYS
+        and _ENVIRONMENT_IDENTIFIER.fullmatch(str(key)) is not None
     }
     environment["PWD"] = str(cwd.resolve())
     return environment
+
+
+def environment_fingerprint(environment: dict[str, str], *, cwd: Path | None = None) -> dict[str, str]:
+    """Return the subset of an execution environment that binds a receipt."""
+    exact: set[str] = set()
+    prefixes: set[str] = set()
+    try:
+        if cwd is None and environment.get("PWD"):
+            cwd = Path(str(environment["PWD"]))
+        if cwd is not None:
+            exact, prefixes = _environment_policy_patterns(cwd.resolve())
+    except (OSError, RuntimeError, ValueError, NotImplementedError):
+        exact, prefixes = set(), set()
+    return {
+        str(key): str(value)
+        for key, value in environment.items()
+        if environment_key_is_fingerprinted(str(key), exact=exact, prefixes=prefixes)
+    }
 
 
 def observer_environment(
@@ -157,7 +264,7 @@ def verification_environment_binding(
     environment: dict[str, str], runner_token: str
 ) -> list[dict[str, str]]:
     records = []
-    for key, value in environment.items():
+    for key, value in environment_fingerprint(environment).items():
         normalized_key = verification_environment_key(str(key))
         records.append(
             {
@@ -241,27 +348,29 @@ def verification_environment_from_binding(
             return None, False, "Click verification runner environment binding was malformed."
         expected[key_digest] = value_digest
 
-    projected: dict[str, str] = {}
+    # The child keeps the full execution environment. Only the fingerprint
+    # subset is compared with the prepared binding; a changed or missing
+    # fingerprinted value rebinds the receipt to what actually runs.
     matched: set[str] = set()
     drifted = False
-    for key, value in current_environment.items():
+    for key, value in environment_fingerprint(current_environment).items():
         normalized_key = verification_environment_key(str(key))
         key_digest = verification_environment_hmac(
             runner_token, "key", normalized_key
         )
         expected_value = expected.get(key_digest)
         if expected_value is None:
+            drifted = True
             continue
         current_value = verification_environment_hmac(
             runner_token, "value", f"{normalized_key}\0{value}"
         )
         if not secrets.compare_digest(expected_value, current_value):
             drifted = True
-        projected[str(key)] = str(value)
         matched.add(key_digest)
     if matched != set(expected):
         drifted = True
-    return projected, drifted, ""
+    return dict(current_environment), drifted, ""
 
 
 def executable_search_path(environment: dict[str, str], *, cwd: Path) -> str:
@@ -415,7 +524,7 @@ def _environment_context(cwd: Path, environment: dict[str, str]) -> dict[str, An
                 verification_environment_key(str(key)),
                 str(value),
             )
-            for key, value in environment.items()
+            for key, value in environment_fingerprint(environment, cwd=cwd).items()
         ),
         ensure_ascii=False,
         separators=(",", ":"),
