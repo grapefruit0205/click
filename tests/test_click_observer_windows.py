@@ -751,6 +751,17 @@ class WindowsNativeSmokeTests(unittest.TestCase):
             self.assertEqual(result.record["backend"]["name"], "windows-etw")
             self.assertIn(result.record["status"], {"complete", "partial"})
             self.assertGreaterEqual(result.record["child_process_count"], 1)
+            lost = set(result.record["ineligibility_reasons"]) & {
+                "unresolved-event", "process-tree-incomplete", "event-loss"
+            }
+            if lost:
+                # The backend itself reports that it lost events on this host.
+                # The record must say so honestly and grant nothing; it cannot
+                # then be asked for an input it told us it did not see. A skip
+                # keeps the loss visible in the run summary.
+                self.assertEqual(result.record["status"], "partial", result.record)
+                self.assertFalse(result.record["reuse_authorized"], result.record)
+                self.skipTest(f"ETW lost events on this host: {sorted(lost)}")
             self.assertTrue(
                 any(
                     item["path"].lower() == "input.txt"
