@@ -155,6 +155,11 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
     finally:
         if collector:
             collector.close()
+    if isinstance(runtime, dict) and int(runtime.get("workers", 0) or 0) > 0:
+        # A Worker isolate's runtime facilities are outside the Inspector
+        # session, so the run cannot earn a conditional receipt. Decide that
+        # from the Worker count, never from where a probe happened to land.
+        projection = None
     value = {
         "version": 4, "framework": name, "capture": result.record, "runtime": runtime,
         "workspace_digest": workspace_digest if isinstance(workspace_digest, str) and conditional.DIGEST.fullmatch(workspace_digest) else "",
