@@ -383,6 +383,9 @@ def _darwin_command(
             observation_root,
             str(runtime["artifact_id"]),
             profile=str(runtime["profile"]),
+            shared=click_observation_inputs.shared_runtime_index(
+                observation_root, str(runtime["artifact_id"]), profile=str(runtime["profile"])
+            ),
         )
     except (OSError, ValueError, RuntimeError, TypeError):
         if descriptor >= 0:
@@ -572,6 +575,9 @@ def _windows_command(
             observation_root,
             str(runtime["artifact_id"]),
             profile=str(runtime["profile"]),
+            shared=click_observation_inputs.shared_runtime_index(
+                observation_root, str(runtime["artifact_id"]), profile=str(runtime["profile"])
+            ),
         )
         read_descriptor, write_descriptor, inherited_handle = (
             _windows_native_channel()
@@ -849,7 +855,10 @@ def _run_command(
         os.mkfifo(native_fifo, mode=0o600)
         native_descriptor = os.open(native_fifo, os.O_RDWR | os.O_NONBLOCK | os.O_CLOEXEC)
         snapshot = click_observation_inputs.InputSnapshot(
-            observation_root, str(runtime["artifact_id"]), profile=str(profile)
+            observation_root, str(runtime["artifact_id"]), profile=str(profile),
+            shared=click_observation_inputs.shared_runtime_index(
+                observation_root, str(runtime["artifact_id"]), profile=str(profile)
+            ),
         )
         trace_reader = threading.Thread(
             target=click_observer_linux._read_fifo,

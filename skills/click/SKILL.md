@@ -9,7 +9,7 @@ Click is an incremental-verification runtime. In **Evidence** mode, the default,
 
 ## What Click records on its own
 
-- The user prompt becomes the intent lineage of the Evidence session. An in-scope or narrowing follow-up continues it; the next request after a completed session starts a fresh one.
+- The user prompt becomes the intent lineage of the Evidence session. An in-scope or narrowing follow-up continues it; the next request after a completed session starts a fresh one. A fresh session, including a new Claude Code session of the same repository, starts from the archived receipts of the last completed one; Click requalifies them, so do not re-run a check only because the session is new.
 - Every recognized file edit and every `click-gate mutate` advances the mutation revision, which invalidates earlier receipts.
 - Every check submitted through `click-gate verify` gets an exact receipt bound to its argv, revision, protected tree, environment, executable, and host coverage. Supported checks also capture their inputs automatically.
 

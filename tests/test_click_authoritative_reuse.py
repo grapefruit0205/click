@@ -786,8 +786,10 @@ class AuthoritativeCrossContractReuseTests(ClickGateTestCase):
             observed = shared_completed["evidence_state"]["sources"][key].get(
                 "verified_dependency_observation", {}
             )
-            self.assertEqual(
-                observed.get("status"), "complete",
+            # A host whose native backend lost events (Windows ETW) reports a
+            # failed observation; that is a skip, not a reuse defect.
+            assert_complete_unless_backend_lost(
+                self, observed,
                 {"source": key, "observation": observed,
                  "runner_stderr": shared_result.stderr},
             )

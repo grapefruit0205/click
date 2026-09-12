@@ -348,6 +348,10 @@ def _claim_verification_run(
     batch["_click_source_labels"] = (
         {str(key): str(value) for key, value in labels.items()} if isinstance(labels, dict) else {}
     )
+    groups = verification.get("parallel_groups")
+    batch["_click_parallel_groups"] = (
+        {str(key): str(value) for key, value in groups.items()} if isinstance(groups, dict) else {}
+    )
     measured_batch = click_incremental.current_batch(verification)
     batch["_click_incremental_batch_id"] = (
         str(measured_batch.get("batch_id", ""))

@@ -1291,6 +1291,32 @@ def _host_duration(value: Any, *, estimated: bool = False) -> str:
     return f"약 {rendered}" if estimated else rendered
 
 
+def _concurrent_execution_wall_ms(batch: dict[str, Any]) -> float | None:
+    """Wall time of the executed commands when at least two of them overlapped."""
+    spans: list[tuple[float, float]] = []
+    for source in batch.get("sources", []):
+        if not isinstance(source, dict):
+            continue
+        for command in source.get("commands", []) or []:
+            if not isinstance(command, dict):
+                continue
+            started = command.get("started_offset_ms")
+            finished = command.get("finished_offset_ms")
+            if (
+                isinstance(started, (int, float)) and not isinstance(started, bool)
+                and isinstance(finished, (int, float)) and not isinstance(finished, bool)
+                and finished >= started
+            ):
+                spans.append((float(started), float(finished)))
+    if len(spans) < 2:
+        return None
+    wall = max(end for _, end in spans) - min(start for start, _ in spans)
+    summed = sum(end - start for start, end in spans)
+    if wall <= 0 or summed <= wall * 1.05:
+        return None
+    return wall
+
+
 def host_summary(verification: Any, sources: Any = None) -> str:
     batch = current_batch(verification)
     if batch is None:
@@ -1349,6 +1375,11 @@ def host_summary(verification: Any, sources: Any = None) -> str:
 
     full_text = _host_duration(full, estimated=True)
     executed_text = _host_duration(executed)
+    concurrent_wall = _concurrent_execution_wall_ms(batch)
+    if concurrent_wall is not None:
+        # Shard children ran in parallel: the summed duration keeps the
+        # sequential comparison honest, the wall clock is what the host waited.
+        executed_text += f" 합산 · 병렬 실행 벽시계 {_host_duration(concurrent_wall)}"
     reduction_text = (
         "측정 정보 없음"
         if ratio is None

@@ -91,6 +91,34 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   prefix instead of raising once per non-matching root. Recording a six-shard
   suite's inputs is 91% faster and locating them 98% faster, so a reuse-heavy
   request's runner segment drops about 15% and its first use about 30%.
+- Passing receipts now outlive the host session. Receipts are stored per host
+  session, so a new Claude Code session used to start with none and re-ran every
+  check once. When an Evidence session completes, and at session end, its
+  successor facts are also archived per repository root under the plugin data
+  directory; a new session of the same root starts from that archive as
+  successor candidates, and the existing requalification decides what is still
+  valid: identical argv, root, executable, environment, host coverage and shard
+  binding, then either an unchanged tree or unchanged observed inputs behind a
+  recorded mutation boundary. An edit made outside the host's tool hooks still
+  makes the boundary ambiguous and re-runs the checks; a check that failed last
+  is never archived while its passing siblings are; another repository never
+  sees the archive.
+- The host-runtime part of the observer's input index is built once per
+  process. Every shard's pre-execution snapshot walked the same ~16,000 stdlib,
+  site-packages, loader and locale paths; now the runtime roots are indexed once
+  per runner and each snapshot copies that index and re-indexes only the
+  repository. A runtime file that changes after the shared index was taken is
+  still refused, because binding compares the pre-execution metadata with the
+  current one. Measured on the six-shard fixture: runner 9.08 s → 6.16 s.
+- Shard children of one committed plan now execute concurrently on Linux
+  hosts. The runner forks one worker per child, up to `CLICK_VERIFICATION_WORKERS`
+  (default: the core count, at most 8), and consumes the results in submission
+  order, so output, receipts and fail-fast behaviour match a sequential run:
+  siblings already running when one child fails are still recorded, and no
+  later check starts. Measured on three 3-second shards: 13.1 s → 5.2 s. Raw
+  reporting, bounded failure collection, Node framework observation and Shadow
+  mode keep the sequential path. The result line shows the summed duration
+  alongside the parallel wall clock when children overlapped.
 - Supported suites are sharded automatically in Evidence mode. A broad
   `unittest`, `pytest`, Vitest or Jest parent check without a committed plan is
   collected by Click's own proposal generator, and the resulting shard policy is

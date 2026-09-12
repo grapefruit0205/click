@@ -100,6 +100,7 @@
               "tests.test_click_gate_execution",
               "tests.test_click_gate_inspection",
               "tests.test_click_gate_lifecycle",
+              "tests.test_click_workspace_receipts",
               "tests.test_click_gate_receipt",
               "tests.test_click_gate_service",
               "-q"
@@ -113,7 +114,8 @@
             "tests/test_click_gate_inspection.py",
             "tests/test_click_gate_lifecycle.py",
             "tests/test_click_gate_receipt.py",
-            "tests/test_click_gate_service.py"
+            "tests/test_click_gate_service.py",
+            "tests/test_click_workspace_receipts.py"
           ]
         },
         {
@@ -133,6 +135,7 @@
               "tests.test_click_failure_collection",
               "tests.test_click_gate_verification",
               "tests.test_click_incremental",
+              "tests.test_click_parallel_shards",
               "tests.test_click_mixed_project",
               "tests.test_click_multilang_execution",
               "tests.test_click_receipt",
@@ -146,19 +149,20 @@
           ],
           "covers": [
             "tests/test_click_change_policy.py",
-            "tests/test_click_scoped_input_policy.py",
             "tests/test_click_content_validation.py",
             "tests/test_click_dependency_cache.py",
             "tests/test_click_diagnostics.py",
-            "tests/test_click_evidence_shards.py",
             "tests/test_click_efficiency.py",
+            "tests/test_click_evidence_shards.py",
             "tests/test_click_failure_collection.py",
             "tests/test_click_gate_verification.py",
             "tests/test_click_incremental.py",
             "tests/test_click_mixed_project.py",
             "tests/test_click_multilang_execution.py",
+            "tests/test_click_parallel_shards.py",
             "tests/test_click_receipt.py",
             "tests/test_click_receipt_runtime.py",
+            "tests/test_click_scoped_input_policy.py",
             "tests/test_click_status_summary.py",
             "tests/test_click_verification.py",
             "tests/test_click_verification_bindings.py",
@@ -179,6 +183,7 @@
               "tests.test_click_authoritative_reuse",
               "tests.test_click_automatic_observation",
               "tests.test_click_observer_runtime_memo",
+              "tests.test_click_shared_runtime_index",
               "tests.test_click_conditional_observation",
               "tests.test_click_framework_observation",
               "tests.test_click_framework_candidates",
@@ -222,6 +227,7 @@
             "tests/test_click_observer_windows.py",
             "tests/test_click_shadow_dashboard.py",
             "tests/test_click_shadow_intelligence.py",
+            "tests/test_click_shared_runtime_index.py",
             "tests/test_runner_state_recovery.py"
           ]
         },
