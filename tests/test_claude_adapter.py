@@ -290,6 +290,15 @@ class ClaudeHookProcessTests(unittest.TestCase):
         self.assertEqual((code, stderr), (0, ""))
         self.assertEqual(payload["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit")
         self.assertIn("Click Evidence mode is enabled", payload["hookSpecificOutput"]["additionalContext"])
+        context = payload["hookSpecificOutput"]["additionalContext"]
+        # The Evidence context is a directive with the command's shape inline,
+        # states that `click-gate` is a hook-rewritten command rather than a
+        # binary, and tells the model not to re-verify what Click reused.
+        self.assertIn("Run every test or check command through Click instead of directly", context)
+        self.assertIn('click-gate verify \'{"version":2,"workdir":"<absolute repository path>"', context)
+        self.assertIn("do not look for it on PATH", context)
+        self.assertIn("do not re-verify a reused check by hand", context)
+        self.assertIn("must never block work", context)
 
         tool_input = {
             "command": "click-gate status --json",
