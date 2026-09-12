@@ -165,6 +165,15 @@ class AutomaticShardTests(ClickGateTestCase):
         self.assertNotIn("Evidence Shards", json.dumps(payload, ensure_ascii=False))
         self.assertFalse(self.store().exists())
 
+    def test_the_switch_turns_automatic_plans_off(self) -> None:
+        parent = self.suite()
+        with mock.patch.dict("os.environ", {"CLICK_AUTOMATIC_SHARDS": "off"}):
+            payload, result, output = self.verify(parent, "turn-1")
+        self.assertEqual(result.returncode, 0, output)
+        self.assertEqual(len(self.headers(output)), 1, output)
+        self.assertNotIn("Evidence Shards", json.dumps(payload, ensure_ascii=False))
+        self.assertFalse(self.store().exists())
+
     def test_the_store_ignores_garbage_and_forgets_plans(self) -> None:
         with mock.patch.dict("os.environ", {"PLUGIN_DATA": str(self.plugin_data)}):
             path = automatic.store_path(self.workspace)

@@ -29,6 +29,11 @@ class MixedProjectReuseTests(ClickGateTestCase):
     hook_in_process = True
 
     def setUp(self) -> None:
+        # This suite asserts per-check owner-policy decisions; automatic
+        # sharding of the vitest parent would replace it with shard children.
+        environment = mock.patch.dict(os.environ, {"CLICK_AUTOMATIC_SHARDS": "off"})
+        environment.start()
+        self.addCleanup(environment.stop)
         super().setUp()
         project = self.workspace / "mixed project"
         shutil.copytree(SOURCE, project, symlinks=True)

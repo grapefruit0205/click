@@ -90,7 +90,8 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   a committed one on every request — inventory patterns against the current
   repository inventory, every file covered exactly once — so a new or removed
   test file drops it and the next preparation regenerates it. A committed
-  manifest takes precedence; Guarded mode is unchanged. Generated unittest
+  manifest takes precedence; Guarded mode is unchanged; `CLICK_AUTOMATIC_SHARDS=off`
+  turns the automatic plans off. Generated unittest
   children use `discover -p <file>`, whose discovery stats every file in the
   start directory, so an edit re-runs that directory's shards; pytest, Vitest
   and Jest children are exact file targets and reuse unchanged siblings.
