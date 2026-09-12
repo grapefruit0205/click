@@ -119,6 +119,19 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   reporting, bounded failure collection, Node framework observation and Shadow
   mode keep the sequential path. The result line shows the summed duration
   alongside the parallel wall clock when children overlapped.
+- Supported suites are sharded automatically in Evidence mode. A broad
+  `unittest`, `pytest`, Vitest or Jest parent check without a committed plan is
+  collected by Click's own proposal generator, and the resulting shard policy is
+  kept in Click's state per repository root and parent check set and used at
+  once; nothing is written into the repository, and `click-gate sharding init`
+  still produces the reviewable file. The stored plan is validated exactly like
+  a committed one on every request — inventory patterns against the current
+  repository inventory, every file covered exactly once — so a new or removed
+  test file drops it and the next preparation regenerates it. A committed
+  manifest takes precedence; Guarded mode is unchanged. Generated unittest
+  children use `discover -p <file>`, whose discovery stats every file in the
+  start directory, so an edit re-runs that directory's shards; pytest, Vitest
+  and Jest children are exact file targets and reuse unchanged siblings.
 - The runner indexes the host runtime once before forking its shard workers,
   so every child inherits the shared index instead of walking the runtime roots
   itself. Three 3-second shards: workers admitted their targets at 0.75 s

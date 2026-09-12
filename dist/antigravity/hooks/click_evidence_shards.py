@@ -348,9 +348,12 @@ def _load_entries(
     if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", head) is None:
         return None, "head-invalid"
     committed = git_capture(root, ["show", f"{head}:{CONFIG_RELATIVE_PATH}"])
-    if committed is None:
+    automatic = _automatic_policies(root)
+    if committed is None and not automatic:
         return None, "manifest-not-committed"
-    if len(committed) > MAX_CONFIG_BYTES or not _policy_file_matches(root, committed):
+    if committed is not None and (
+        len(committed) > MAX_CONFIG_BYTES or not _policy_file_matches(root, committed)
+    ):
         return None, "manifest-working-copy-mismatch"
     listed = git_capture(
         root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]
@@ -368,7 +371,68 @@ def _load_entries(
     if len(repository_paths) > MAX_REPOSITORY_PATHS:
         return None, "inventory-invalid-or-too-large"
 
-    canonical = _canonical_config_bytes(committed)
+    entries: dict[str, dict[str, Any]] = {}
+    parent_digests: set[str] = set()
+    if committed is not None:
+        raw_entries, error = _manifest_entries(committed)
+        if error or raw_entries is None:
+            return None, error
+        for raw_entry in raw_entries:
+            entry, error = _normalize_entry(
+                raw_entry,
+                repository_paths,
+                working_prefix=working_prefix,
+                parent_digests=parent_digests,
+            )
+            if error or entry is None:
+                return None, error or "entry-invalid"
+            entries[str(entry["parent_check_digest"])] = entry
+    # A plan Click generated itself covers a parent the committed manifest
+    # does not declare. It is validated exactly like a committed entry; one
+    # that no longer matches the repository's inventory is dropped, and the
+    # preparation that needed it regenerates it.
+    for policy in automatic:
+        raw_entries, error = _manifest_entries(policy)
+        if error or not raw_entries or len(raw_entries) != 1:
+            continue
+        declared = _manifest_group_digest(raw_entries[0].get("checks")) if isinstance(raw_entries[0], dict) else ""
+        if not declared or declared in entries:
+            continue
+        entry, error = _normalize_entry(
+            raw_entries[0],
+            repository_paths,
+            working_prefix=working_prefix,
+            parent_digests=parent_digests,
+        )
+        if error or entry is None:
+            _forget_automatic_policy(root, declared)
+            continue
+        entry["origin"] = "automatic"
+        entries[str(entry["parent_check_digest"])] = entry
+    if not entries:
+        # Every automatic plan was dropped as stale: from the caller's point of
+        # view there is no plan, and Evidence mode may generate a new one.
+        return None, "manifest-not-committed" if committed is None else "manifest-entries-invalid"
+
+    # Recheck both mutable inputs after parsing so a racing edit cannot become
+    # decomposition authority for the prepared batch.
+    listed_again = git_capture(
+        root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]
+    )
+    ignored_again = git_capture(
+        root, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]
+    )
+    if (
+        listed_again != listed
+        or ignored_again != ignored
+        or (committed is not None and not _policy_file_matches(root, committed))
+    ):
+        return None, "manifest-or-inventory-raced"
+    return entries, ""
+
+
+def _manifest_entries(raw: bytes) -> tuple[list[Any] | None, str]:
+    canonical = _canonical_config_bytes(raw)
     try:
         value = json.loads(canonical.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -384,35 +448,23 @@ def _load_entries(
         or len(raw_entries) > MAX_ENTRIES
     ):
         return None, "manifest-entries-invalid"
+    return raw_entries, ""
 
-    entries: dict[str, dict[str, Any]] = {}
-    parent_digests: set[str] = set()
-    for raw_entry in raw_entries:
-        entry, error = _normalize_entry(
-            raw_entry,
-            repository_paths,
-            working_prefix=working_prefix,
-            parent_digests=parent_digests,
-        )
-        if error or entry is None:
-            return None, error or "entry-invalid"
-        entries[str(entry["parent_check_digest"])] = entry
 
-    # Recheck both mutable inputs after parsing so a racing edit cannot become
-    # decomposition authority for the prepared batch.
-    listed_again = git_capture(
-        root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]
-    )
-    ignored_again = git_capture(
-        root, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]
-    )
-    if (
-        listed_again != listed
-        or ignored_again != ignored
-        or not _policy_file_matches(root, committed)
-    ):
-        return None, "manifest-or-inventory-raced"
-    return entries, ""
+def _automatic_policies(root: Path) -> list[bytes]:
+    try:
+        (automatic,) = click_import_bootstrap.load_siblings(__package__, "click_automatic_shards")
+        return list(automatic.policies(root))
+    except Exception:  # noqa: BLE001 - a missing or unreadable store means no automatic plan
+        return []
+
+
+def _forget_automatic_policy(root: Path, parent_check_digest: str) -> None:
+    try:
+        (automatic,) = click_import_bootstrap.load_siblings(__package__, "click_automatic_shards")
+        automatic.forget(root, parent_check_digest)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def resolve_plan(
@@ -478,6 +530,7 @@ def _plan_from_entry(
     return {
         "status": "sharded",
         "reason": "matched",
+        "origin": str(entry.get("origin", "committed")),
         "provider": PROVIDER_NAME,
         "parent_source_key": parent_source_key,
         "parent_check_digest": parent_check_digest,

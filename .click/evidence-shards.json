@@ -259,10 +259,12 @@
               "unittest",
               "tests.test_click_sharding_setup",
               "tests.test_click_verification_economics",
+              "tests.test_click_automatic_shards",
               "-q"
             ]
           ],
           "covers": [
+            "tests/test_click_automatic_shards.py",
             "tests/test_click_sharding_setup.py",
             "tests/test_click_verification_economics.py"
           ]

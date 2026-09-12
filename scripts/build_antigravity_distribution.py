@@ -17,6 +17,7 @@ HOOK_FILES = (
     "click_auto_sharding.py",
     "click_shard_proposal.py",
     "click_sharding_setup.py",
+    "click_automatic_shards.py",
     "click_authoritative_observer.py",
     "click_framework_observer.py",
     "click_conditional_observer.py",

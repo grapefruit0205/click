@@ -133,7 +133,7 @@ class ClickGateServiceTests(ClickGateTestCase):
                 state_path = next(
                     (self.plugin_data / "gate-state").glob("session-contract-*.json")
                 ).resolve()
-                state = json.loads(state_path.read_text(encoding="utf-8"))
+                state = self.read_state(state_path)
                 state["service"]["started_at"] = started_at
                 state_path.write_text(json.dumps(state), encoding="utf-8")
                 normalized, error = validate_service_request(json.dumps(request))
@@ -270,7 +270,7 @@ class ClickGateServiceTests(ClickGateTestCase):
                 ),
                 "",
             )
-        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state = self.read_state(state_path)
         state["service"]["runner_claimed_at"] = (
             int(time.time()) - CLICK_GATE.SERVICE_START_TIMEOUT_SECONDS * 2 - 1
         )
@@ -336,6 +336,24 @@ class ClickGateServiceTests(ClickGateTestCase):
             self.assertEqual(CLICK_GATE._run_service_start(arguments), 2)
         popen.assert_not_called()
 
+    @staticmethod
+    def read_state(path: Path) -> dict:
+        """Read the contract state while its writer may be replacing it.
+
+        A supervisor writes the state through a temporary file and os.replace.
+        On Windows the target is briefly unopenable during that replace, so a
+        reader outside Click's state lock — which this test deliberately is —
+        retries instead of failing.
+        """
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (PermissionError, json.JSONDecodeError):
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
+
     def test_long_running_local_server_uses_managed_service_lifecycle(self) -> None:
         self.approve_contract()
         argv = [sys.executable, "-m", "http.server", "0", "--bind", "127.0.0.1"]
@@ -370,7 +388,7 @@ class ClickGateServiceTests(ClickGateTestCase):
         state_path = next(
             (self.plugin_data / "gate-state").glob("session-contract-*.json")
         )
-        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state = self.read_state(state_path)
         self.assertEqual(state["service"]["status"], "stopped")
 
         restart = self.pre_tool(
@@ -400,7 +418,7 @@ class ClickGateServiceTests(ClickGateTestCase):
 
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state = self.read_state(state_path)
             # The stopped status is persisted before the final claim result.
             # Do not remove the fixture while its supervisor still writes.
             if (
@@ -417,7 +435,7 @@ class ClickGateServiceTests(ClickGateTestCase):
         state_path = next(
             (self.plugin_data / "gate-state").glob("session-contract-*.json")
         )
-        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state = self.read_state(state_path)
         state["service"] = {
             **CLICK_SERVICE.fresh_state(),
             "status": "stopped",
