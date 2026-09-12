@@ -62,6 +62,14 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   receipt; a source whose content changed still reruns. Runtime bytecode
   caches bind their code object rather than the source-timestamp validation
   field of their header.
+- The Evidence context injected on every prompt is now a directive: run every
+  test or check command through `click-gate verify`, with the request shape
+  inline, a statement that `click-gate` is a hook-rewritten command rather than
+  a binary on PATH, and an instruction not to re-verify a reused check by hand.
+  Measured against Opus 5, the earlier "prefer ... when useful" wording was
+  followed in none of eight sessions, and the sessions that did use Click loaded
+  the Skill first and re-checked reused results by hand. The host's authority,
+  the absence of any approval contract and the fail-open clause are unchanged.
 - Shard children of one committed plan now execute concurrently on Linux
   hosts. The runner forks one worker per child, up to `CLICK_VERIFICATION_WORKERS`
   (default: the core count, at most 8), and consumes the results in submission

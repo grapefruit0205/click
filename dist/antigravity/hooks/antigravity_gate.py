@@ -68,6 +68,15 @@ def _configure_storage() -> None:
 
 
 def _emit(payload: dict[str, Any]) -> None:
+    # The Evidence context carries non-ASCII text (the runner's result-line
+    # label); a Windows console stream defaults to a legacy code page and would
+    # raise here, failing the hook. The host reads UTF-8 JSON.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
