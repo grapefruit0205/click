@@ -406,7 +406,7 @@ def _prepare_verification(
     trace: dict[str, Any] = {}
     # One preparation is one decision: every candidate is judged against one
     # reading of the inputs they share instead of one reading each.
-    with click_observation_inputs.identity_pass():
+    with click_verification_bindings.binding_pass(), click_observation_inputs.identity_pass():
         result = _prepare_verification_impl(
             event, raw, runner_script=runner_script, render_command=render_command,
             git_workspace_snapshot=git_workspace_snapshot, git_capture=git_capture,
