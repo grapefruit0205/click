@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 48530,
+ "stop_reason": "end_turn",
+ "session_id": "629f48f4-4c57-4048-9545-bcccdc85da37",
+ "total_cost_usd": 0.5591275,
+ "usage": {
+  "input_tokens": 22,
+  "cache_creation_input_tokens": 21482,
+  "cache_read_input_tokens": 488545,
+  "output_tokens": 3997,
+  "output_tokens_details": {
+   "thinking_tokens": 396
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 21482,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 230,
+    "cache_read_input_tokens": 49812,
+    "cache_creation_input_tokens": 270,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 270
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-opus-5": {
+   "inputTokens": 22,
+   "outputTokens": 3997,
+   "cacheReadInputTokens": 488545,
+   "cacheCreationInputTokens": 21482,
+   "webSearchRequests": 0,
+   "costUSD": 0.5591275,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 64000,
+   "thinkingTokens": 396,
+   "canonicalModel": "claude-opus-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 19,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "Final run: `Ran 19 tests \u2026 OK`. Nothing under `tests/` was touched; `ledger/delta.py` was already correct.\n\nFiles changed:\n- `ledger/alpha.py` \u2014 `paginate` used a zero-based offset (`page * size`) for a 1-based page; now `(page - 1) * size`.\n- `ledger/beta.py` \u2014 `allocate` computed the leftover cents but never distributed them; now hands them to the shares with the largest fractional parts, earliest index on ties.\n- `ledger/gamma.py` \u2014 `slugify` replaced each separator character individually; the regex now matches runs (`[^a-z0-9]+`) so they collapse to a single dash.",
+ "ttft_ms": 1795,
+ "type": "result",
+ "duration_ms": 374509,
+ "uuid": "9c4835dd-a865-40ba-b0fe-57b337b89d24",
+ "ttft_stream_ms": 1541,
+ "time_to_request_ms": 126,
+ "first_content_frame_ms": 1794,
+ "queued_turn_count": 0,
+ "result_index": 0
+}

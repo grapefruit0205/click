@@ -1,0 +1,35 @@
+model=claude-opus-5 order=ABBAABBA rounds=300000
+session       arm          wall s  test s  exec  turns  cost $  out tok  total tok  click   ok
+session-01-A  click-off     363.8   263.1    20     10   0.478     2688     454267      0 True
+session-02-B  click-on      119.9    59.5    10     16   0.546     3688     475761      5 True
+session-03-B  click-on      122.8    56.3    10     16   0.690     4075     743528      5 True
+session-04-A  click-off     383.4   273.7    20     16   0.632     3122     726694      0 True
+session-05-A  click-off     378.1   267.3    20     19   0.559     3997     514046      0 True
+session-06-B  click-on      122.3    56.1    10     16   0.672     3845     733437      5 True
+session-07-B  click-on      128.0    60.5    10     19   0.653     3849     629347      5 True
+session-08-A  click-off     407.6   260.7    20     16   0.753     2954     480568      0 True
+
+per-request trajectory (executed shards or modules, wall s):
+  session-01-A: 4/45s, 4/57s, 4/51s, 4/57s, 4/53s
+  session-02-B: 4/14s, 3/16s, 2/14s, 1/15s, 0/0s*
+  session-03-B: 4/12s, 3/16s, 2/14s, 1/15s, 0/0s*
+  session-04-A: 4/55s, 4/51s, 4/55s, 4/56s, 4/57s
+  session-05-A: 4/50s, 4/56s, 4/55s, 4/53s, 4/53s
+  session-06-B: 4/14s, 3/14s, 2/14s, 1/13s, 0/0s*
+  session-07-B: 4/16s, 3/15s, 2/15s, 1/15s, 0/0s*
+  session-08-A: 4/57s, 4/55s, 4/57s, 4/51s, 4/41s
+  (* = every shard reused, nothing executed)
+
+median (min–max) | mean                                  A click-off                        B click-on  median Δ
+session wall time s                              381 (364–408) | 383               123 (120–128) | 123    -67.8%
+test wall time s                                 265 (261–274) | 266                   58 (56–60) | 58    -78.2%
+test module executions                               20 (20–20) | 20                   10 (10–10) | 10    -50.0%
+turns                                                16 (10–19) | 15                   16 (16–19) | 17     +0.0%
+cost USD                                 0.596 (0.478–0.753) | 0.606       0.662 (0.546–0.690) | 0.640    +11.2%
+output tokens                                3038 (2688–3997) | 3190           3847 (3688–4075) | 3864    +26.6%
+cache-read input tokens              460299 (431300–703308) | 513802   653610 (449192–716438) | 618212    +42.0%
+cache-creation input tokens              20857 (19506–46292) | 26878       22922 (22188–25625) | 23414     +9.9%
+total tokens incl. cache             497307 (454267–726694) | 543894   681392 (475761–743528) | 645518    +37.0%
+
+all final suites pass: True | tests/ untouched everywhere: True
+click-gate requests per Click-on session: [5, 5, 5, 5] (5 test cycles requested by the task)

@@ -101,3 +101,10 @@ result is valid and is not converted into a positive estimate.
 The [implementation validation and one local paired sample](../history/verification-economics/FINAL_REPORT.md)
 record a negative result for a tiny CLI fixture. Its fresh Hook processes do
 not measure the installed resident worker or a complete agent task.
+
+[Eight paired Opus 5 sessions](../history/agent-ab-2026-09-12/README.md) on a
+40 s four-module fixture measured complete agent tasks with the installed
+plugin: session time −68% and test executions −50%, with cost +6–11% because
+of extra turns and longer commands. The gain came mostly from concurrent
+shard execution on equal-length shards; it is a fixture record, not a
+production claim.
