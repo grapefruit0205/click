@@ -550,6 +550,21 @@ def _run_verification_impl(
         and not shadow_enabled
     ):
         parallel_blocks = _parallel_blocks(checks, parallel_groups, grouped_checks)
+    if parallel_blocks and authoritative_enabled and isinstance(authoritative_runtime, dict):
+        # Forked workers inherit this process's memory: index the host runtime
+        # once here so every child starts from the shared index instead of
+        # walking the runtime roots itself.
+        try:
+            (click_observation_inputs,) = click_import_bootstrap.load_siblings(
+                __package__, "click_observation_inputs"
+            )
+            click_observation_inputs.shared_runtime_index(
+                shadow_workspace,
+                str(authoritative_runtime["artifact_id"]),
+                profile=str(authoritative_runtime["profile"]),
+            )
+        except Exception:  # noqa: BLE001 - each worker's snapshot reports the real reason
+            pass
     # Shard children run in forked workers: the observer's snapshot work is
     # CPU-bound Python, so threads would only serialize it on the GIL. Each
     # worker returns its _CheckExecution over a pipe; the loop below consumes
