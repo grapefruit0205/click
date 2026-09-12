@@ -158,6 +158,29 @@ class VerificationBindingStageTests(unittest.TestCase):
             bindings.normalized_search_path(os.pathsep.join([*entries, "/opt/tools/bin"])),
         )
 
+    def test_other_installed_plugins_offered_by_the_host_do_not_split_the_identity(self):
+        # Claude Code appends every installed plugin's bin directory to the
+        # tool call's search path. The `plugins/cache/<marketplace>/<plugin>/
+        # <version>/bin` shape identifies them wherever Click itself was loaded
+        # from, so a sibling plugin cannot make each request rebind.
+        cache = Path("/home/user/.claude/plugins/cache")
+        sibling = cache / "agent-plugins-for-aws" / "deploy-on-aws" / "1.3.0" / "bin"
+        codex_sibling = Path("/home/user/.codex/plugins/cache/personal/agy-runner/0.2.0/bin")
+        entries = ["/usr/local/bin", "/usr/bin"]
+        hook = os.pathsep.join(entries)
+        runner = os.pathsep.join([*entries, str(sibling), str(codex_sibling)])
+        self.assertEqual(bindings.normalized_search_path(runner), bindings.normalized_search_path(hook))
+        # Only that exact shape is host-owned; anything else stays part of
+        # the identity, including deeper or shallower paths under a cache.
+        for kept in (str(cache / "other" / "bin"), str(cache / "a" / "b" / "c" / "lib"),
+                     str(cache / "a" / "b" / "c" / "bin" / "extra"), "/home/user/tools/v1/bin",
+                     "/opt/plugins/a/b/c/bin"):
+            with self.subTest(kept=kept):
+                self.assertNotEqual(
+                    bindings.normalized_search_path(os.pathsep.join([*entries, kept])),
+                    bindings.normalized_search_path(hook),
+                )
+
     def test_environment_fingerprint_is_an_allowlist_with_owner_extension(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

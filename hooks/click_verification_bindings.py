@@ -219,16 +219,20 @@ def verification_environment(*, cwd: Path) -> dict[str, str]:
 SEARCH_PATH_KEYS = frozenset({"PATH"})
 
 
+def _own_roots() -> list[str]:
+    # Plain path text, so a host whose separator rules are emulated in a test
+    # cannot make locating Click's own directory raise.
+    roots = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+    configured = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+    if configured:
+        roots.append(configured)
+    return roots
+
+
 def _own_command_directories() -> set[str]:
     """Directories a host adds to the search path to offer Click's commands."""
     directories: set[str] = set()
-    # Plain path text, so a host whose separator rules are emulated in a test
-    # cannot make locating Click's own directory raise.
-    candidates = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
-    configured = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
-    if configured:
-        candidates.append(configured)
-    for root in candidates:
+    for root in _own_roots():
         try:
             directories.add(os.path.normcase(os.path.join(root, "bin")))
         except (OSError, RuntimeError, ValueError, TypeError):
@@ -236,25 +240,40 @@ def _own_command_directories() -> set[str]:
     return directories
 
 
-def normalized_search_path(value: str) -> str:
-    """Drop repeated entries and Click's own command directory.
+def _is_plugin_command_directory(key: str) -> bool:
+    """Whether a search-path entry is a host-offered plugin command directory.
 
-    A host can offer Click's commands by adding the plugin's own directory to
-    the search path of the tool call that runs a verification, while the Hook
-    process that decides reuse never sees it, and either side can repeat an
-    entry. Neither difference changes which executable a check resolves to --
-    a repeat can never win over its first occurrence, and Click's own
-    directory holds only Click's commands -- and the executables a check
-    actually resolves are fingerprinted separately by content. Normalizing
-    here keeps one environment identity for one environment, instead of one
-    per process that computes it.
+    Claude Code and Codex install plugins under `.../plugins/cache/<marketplace>/
+    <plugin>/<version>` and the host appends each installed plugin's `bin` to
+    the search path of the tool call, not only Click's. The shape of the entry
+    identifies it wherever Click itself is loaded from, including a development
+    checkout passed with `--plugin-dir`.
+    """
+    parts = [part for part in key.split(os.sep) if part]
+    return (len(parts) >= 6 and parts[-1] == "bin"
+            and parts[-5] == "cache" and parts[-6] == "plugins")
+
+
+def normalized_search_path(value: str) -> str:
+    """Drop repeated entries and host-offered plugin command directories.
+
+    A host can offer plugin commands by adding each installed plugin's own
+    directory to the search path of the tool call that runs a verification,
+    while the Hook process that decides reuse never sees them, and either side
+    can repeat an entry. Neither difference changes which executable a check
+    resolves to -- a repeat can never win over its first occurrence, a plugin
+    directory holds only that plugin's commands -- and the executables a check
+    actually resolves are fingerprinted separately by content, so a plugin
+    that did shadow one would still change the receipt. Normalizing here keeps
+    one environment identity for one environment, instead of one per process
+    that computes it.
     """
     own = _own_command_directories()
     entries: list[str] = []
     seen: set[str] = set()
     for entry in str(value).split(os.pathsep):
         key = os.path.normcase(entry)
-        if key in own or key in seen:
+        if key in own or key in seen or _is_plugin_command_directory(key):
             continue
         seen.add(key)
         entries.append(entry)
