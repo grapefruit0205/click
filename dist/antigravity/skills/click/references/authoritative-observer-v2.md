@@ -112,6 +112,10 @@ directory listing ignores a `__pycache__` member, and a cache written by an
 interpreter run outside Click keeps the receipt. A runtime bytecode cache binds
 its code object and not the source timestamp/size validation field of its
 header.
+One request's reuse decision reads each observed path once, however many
+sources of the batch share it, so a sharded suite judges its shared runtime
+inputs against one reading instead of one reading per shard. Execution-time
+revalidation is a separate decision with its own reading.
 Persisted project paths are repository-relative. Absolute runtime paths are
 reduced to role and identity records; raw trace paths are transient. Reuse
 re-fingerprints every record, so a content or permission change, directory

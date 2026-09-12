@@ -81,6 +81,16 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   itself still runs for every capture. Measured on a six-shard fixture: hook
   preparation 0.44 s → 0.32 s, all-reused preparation 0.95 s → 0.82 s, runner
   9.35 s → 9.08 s.
+- One verification request's reuse decision reads each observed input once
+  instead of once per source. A sharded suite re-fingerprinted the runtime
+  inputs its shards share once per shard; the recheck of a six-shard suite is
+  78% faster (0.26 s to 0.06 s, 145 MB hashed to 24 MB). Execution-time
+  revalidation remains a separate decision with its own reading.
+- The one-use runner's observation resolves each parent directory once per
+  snapshot phase and matches an input against its runtime roots by lexical
+  prefix instead of raising once per non-matching root. Recording a six-shard
+  suite's inputs is 91% faster and locating them 98% faster, so a reuse-heavy
+  request's runner segment drops about 15% and its first use about 30%.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
