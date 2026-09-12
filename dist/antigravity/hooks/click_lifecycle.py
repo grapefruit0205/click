@@ -572,15 +572,26 @@ def prompt_context(event: dict[str, Any]) -> str:
             "local servers use `click-gate service` start/stop."
         )
     else:
+        # Directive, not advisory: measured against Opus 5, the earlier "prefer
+        # ... when useful" wording was followed in none of eight sessions, and
+        # the sessions that did use Click loaded the Skill first and re-checked
+        # reused results by hand. The command's shape is given here so no Skill
+        # load is needed, and its nature as a hook-rewritten command is stated
+        # so the model does not probe PATH for a binary and give up.
         context = (
-            "Click Evidence mode is enabled. Do not ask for a Click approval contract for "
-            "ordinary software work. The host remains the execution authority; Click records "
-            "intent lineage, host-observed mutation revisions, exact verification receipts, "
-            "and cache lineage without claiming auto-approval. Prefer structured `click-gate "
-            "inspect`, `click-gate verify`, and managed service capabilities when their exact "
-            "receipts are useful, but never block ordinary host work merely because Evidence "
-            "state is missing or recoverable. Use @Click or $click to opt one task into "
-            "Guarded approval, or `click-gate default guarded` for a persistent choice."
+            "Click Evidence mode is enabled. Run every test or check command through Click "
+            "instead of directly, with the Bash tool: `click-gate verify '{\"version\":2,"
+            "\"workdir\":\"<absolute repository path>\",\"checks\":[{\"evidence_id\":\"E1\","
+            "\"argv\":[\"python3\",\"-m\",\"pytest\",\"-q\"],\"class\":\"broad\"}]}'`. "
+            "`click-gate` is rewritten by the Click hook \u2014 do not look for it on PATH, "
+            "prefix it, or test whether it exists. When you re-run a check after an edit, "
+            "resubmit the same evidence_id and argv; Click decides at execution time whether it "
+            "runs or is reused and says so in its `[Click \uacb0\uacfc]` line \u2014 do not re-verify a "
+            "reused check by hand. The host remains the execution authority: edits, reads and "
+            "non-check commands need nothing from Click, no approval contract is involved, and "
+            "missing or recoverable Evidence state must never block work. `@Click` or `$click` "
+            "opts one task into Guarded approval; `click-gate default guarded` makes that "
+            "persistent."
         )
     if migrated_from:
         migrated_label = {
