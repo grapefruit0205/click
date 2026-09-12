@@ -1,5 +1,17 @@
 # Release notes
 
+## Unreleased v1.1 candidate
+
+- `click-gate verify -- <check argv>` submits one check without the JSON
+  envelope. The evidence id is derived from the argv (`E_` plus twelve hex
+  digits of its SHA-256), so resubmitting the same command resubmits the same
+  check; the class is the command's minimum verification class; the working
+  directory is the tool call's. The Evidence directive now shows this form.
+  Batches, explicit ids, `reporting` and a different `workdir` keep the JSON
+  form. In the eight paired Opus 5 sessions of
+  `docs/history/agent-ab-2026-09-12/`, the ~200-character JSON the model typed
+  for every cycle was the main output-token overhead of running with Click.
+
 ## v1.0.1 — 2026-09-12 — receipts survive other plugins
 
 Patch release. Both marketplaces pin `v1.0.1`; updating v1.0.0 installs it.
