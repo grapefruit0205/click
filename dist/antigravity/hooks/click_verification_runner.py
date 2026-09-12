@@ -105,6 +105,9 @@ def _run_verification(
         sys.stderr.write(f"{grouping_error}\n")
         return 2
     command_plans = batch.pop("_click_command_plans", None)
+    source_labels = batch.pop("_click_source_labels", {})
+    if not isinstance(source_labels, dict):
+        source_labels = {}
     if not isinstance(command_plans, dict):
         sys.stderr.write("Click verification runner lost its command outcome binding.\n")
         return 2
@@ -318,12 +321,17 @@ def _run_verification(
                     if os.name == "nt"
                     else shlex.join(argv)
                 )
+                source_key = _evidence_key(str(check["evidence_id"]))
+                # The caller's own id, plus the committed shard id for a shard
+                # child; the synthetic child id is never shown to the host.
+                label = source_labels.get(source_key)
+                if not isinstance(label, str) or not (0 < len(label) <= 80) or not label.isprintable():
+                    label = str(check["evidence_id"])
                 print(
                     f"[Click verification {index}/{len(checks)}:"
-                    f"{check['evidence_id']}:{check['class']}] {rendered}",
+                    f"{label}:{check['class']}] {rendered}",
                     flush=True,
                 )
-                source_key = _evidence_key(str(check["evidence_id"]))
                 source_position = source_completed_commands.get(source_key, 0) + 1
                 plans_for_source = command_plans.get(source_key)
                 if (
@@ -553,7 +561,7 @@ def _run_verification(
                         batch_id=incremental_batch_id,
                         task_ref=task_ref,
                         revision=int(shadow_revision),
-                        evidence_id=str(check["evidence_id"]),
+                        evidence_id=label,
                         source_key=source_key,
                         command_position=int(command_plan["position"]),
                         check_digest=command_check_digest,
