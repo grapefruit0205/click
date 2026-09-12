@@ -100,6 +100,15 @@ class SharedRuntimeIndexTests(unittest.TestCase):
             self.project, "not-an-artifact-id", profile=self.profile
         ))
 
+    def test_a_replaced_snapshot_class_is_left_to_the_observer(self) -> None:
+        from unittest import mock
+        with mock.patch.object(observation_inputs, "InputSnapshot", side_effect=KeyboardInterrupt):
+            base = observation_inputs.shared_runtime_index(self.project, self.artifact_id, profile=self.profile)
+        self.assertIsNotNone(base)
+        with mock.patch.object(observation_inputs, "runtime_roots", side_effect=RuntimeError("boom")):
+            observation_inputs.clear_shared_runtime_index()
+            self.assertIsNone(observation_inputs.shared_runtime_index(self.project, self.artifact_id, profile=self.profile))
+
     def test_a_shared_index_for_another_project_is_ignored(self) -> None:
         other = self.project.parent / "other"
         (other / "tests").mkdir(parents=True)

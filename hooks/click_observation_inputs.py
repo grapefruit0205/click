@@ -584,6 +584,10 @@ class InputSnapshot:
 # changes after the shared index was taken is still caught: records() compares
 # the pre-execution metadata with the current one and refuses the input.
 _SHARED_RUNTIME_INDEX: dict[tuple[str, str, str], InputSnapshot] = {}
+# The real class, captured at import: a test that replaces the module's
+# InputSnapshot to simulate a failing or interrupted snapshot must see its
+# replacement called by the observer, not by the shared-index builder.
+_RUNTIME_INDEX_CLASS = InputSnapshot
 
 
 def shared_runtime_index(
@@ -597,10 +601,10 @@ def shared_runtime_index(
     key = (str(project), artifact_id, profile)
     base = _SHARED_RUNTIME_INDEX.get(key)
     if base is None:
-        base = object.__new__(InputSnapshot)
         try:
+            base = object.__new__(_RUNTIME_INDEX_CLASS)
             base.roots = runtime_roots(project, artifact_id, profile=profile)
-        except InputError:
+        except Exception:  # noqa: BLE001 - the snapshot itself reports the real reason
             return None
         base.artifact_id = artifact_id
         base.profile = profile
@@ -610,7 +614,7 @@ def shared_runtime_index(
         base.total_bytes = 0
         try:
             base._index(roles=frozenset(base.roots) - {"project"})
-        except InputError:
+        except Exception:  # noqa: BLE001 - see above; interrupts still propagate
             return None
         _SHARED_RUNTIME_INDEX.clear()
         _SHARED_RUNTIME_INDEX[key] = base
