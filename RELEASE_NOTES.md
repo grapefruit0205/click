@@ -1,5 +1,17 @@
 # Release notes
 
+## Unreleased v1.1 candidate
+
+- Receipts survive other installed plugins on Claude Code. The host appends
+  every installed plugin's `bin` directory to the tool call's search path, and
+  the environment fingerprint dropped only Click's own, so with any second
+  plugin installed the Hook and runner fingerprints differed on every request
+  (`Verification runner environment changed after preparation`) and no receipt
+  was ever reused. Every `plugins/cache/<marketplace>/<plugin>/<version>/bin`
+  entry is now treated as host-owned wherever Click itself is loaded from; the
+  executables a check resolves stay fingerprinted by content. Found while
+  recording `docs/history/agent-ab-2026-09-12/`.
+
 ## v1.0.0 — 2026-09-12 — automatic Evidence observation
 
 v1.0.0 publishes the automatic Evidence observation work that `main` carried
