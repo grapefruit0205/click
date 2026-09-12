@@ -359,8 +359,8 @@ class VerificationEfficiencyTests(unittest.TestCase):
         self.assertEqual(savings["reason_codes"], [])
         host = metrics.host_summary(state)
         self.assertIn(
-            "10개 중 2개만 실행 · 8개 재사용으로 약 6분 40초의 "
-            "테스트 재실행 생략〔추정〕",
+            "10개 중 2개 실행 · 8개는 마지막 통과 이후 입력 불변으로 현재 유효(재사용) · "
+            "약 6분 40초 재실행 생략〔추정〕",
             host,
         )
         self.assertIn("동일 샤드 전체 순차 실행 예상: 약 8분 20초", host)
