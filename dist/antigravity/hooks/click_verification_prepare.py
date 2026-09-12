@@ -79,6 +79,7 @@ def _automatic_shards():
     return module
 click_host_coverage = _common.click_host_coverage
 click_incremental = _common.click_incremental
+click_observation_inputs = _common.click_verification_reuse.click_observation_inputs
 click_observer_control = _common.click_observer_control
 click_observer_runtime = _common.click_observer_runtime
 click_runtime_state = _common.click_runtime_state
@@ -441,7 +442,9 @@ def _prepare_verification(
     started = time.perf_counter_ns()
     request_started = time.monotonic_ns()
     trace: dict[str, Any] = {}
-    with click_verification_bindings.binding_pass():
+    # One preparation is one decision: every candidate is judged against one
+    # reading of the inputs they share instead of one reading each.
+    with click_verification_bindings.binding_pass(), click_observation_inputs.identity_pass():
         result = _prepare_verification_impl(
             event, raw, runner_script=runner_script, render_command=render_command,
             git_workspace_snapshot=git_workspace_snapshot, git_capture=git_capture,

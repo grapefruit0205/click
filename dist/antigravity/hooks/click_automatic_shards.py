@@ -48,7 +48,13 @@ MAX_PLANS = 16
 MAX_STORE_BYTES = 4 * 1024 * 1024
 BUDGET_VARIABLE = "CLICK_AUTOMATIC_SHARDS_BUDGET_SECONDS"
 DEFAULT_BUDGET_SECONDS = 20.0
-QUIET_REASONS = frozenset({"unsupported-command", "project-boundary", "unsupported-runtime"})
+SWITCH_VARIABLE = "CLICK_AUTOMATIC_SHARDS"
+QUIET_REASONS = frozenset({"unsupported-command", "project-boundary", "unsupported-runtime", "disabled"})
+
+
+def enabled() -> bool:
+    """Automatic plans are on unless CLICK_AUTOMATIC_SHARDS says off/0/false/no."""
+    return os.environ.get(SWITCH_VARIABLE, "").strip().lower() not in {"0", "off", "false", "no"}
 
 
 def _store_root() -> Path:
@@ -128,6 +134,8 @@ def generate(root: Path, cwd: Path, parent_checks: list[dict[str, Any]]) -> tupl
     the runner's collection could not produce a plan. Reasons in
     QUIET_REASONS describe commands that are not test runners at all.
     """
+    if not enabled():
+        return None, "disabled"
     if len(parent_checks) != 1 or not isinstance(parent_checks[0].get("argv"), list):
         return None, "parent-not-single-command"
     argv = [str(item) for item in parent_checks[0]["argv"]]

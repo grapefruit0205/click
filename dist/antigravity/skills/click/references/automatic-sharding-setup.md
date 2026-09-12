@@ -9,7 +9,8 @@ stored plan is validated like a committed one on every request, so a new or
 removed test file drops it and the next preparation regenerates it. A committed
 `.click/evidence-shards.json` always takes precedence, and Guarded mode keeps
 the reviewed flow below. `CLICK_AUTOMATIC_SHARDS_BUDGET_SECONDS` (default 20)
-bounds the collection time per attempt.
+bounds the collection time per attempt; `CLICK_AUTOMATIC_SHARDS=off` turns
+automatic plans off and keeps the committed-manifest behaviour.
 
 Click exposes one JSON-free setup surface for supported unittest, pytest, Vitest 5, and Jest 30 profiles:
 
