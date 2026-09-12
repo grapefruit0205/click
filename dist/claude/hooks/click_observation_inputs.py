@@ -6,6 +6,7 @@ module validates snapshots, never approvals or caller claims of completeness.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -95,8 +96,40 @@ def _read_flags() -> int:
     )
 
 
+# Resolving a parent directory costs one realpath walk, and an observation
+# names thousands of paths that share a few hundred parents. A scope resolves
+# each parent once; it lasts for one snapshot phase, never across the executed
+# command, so a directory replaced during execution is still caught.
+_resolved_parents: dict[str, Path] | None = None
+
+
+@contextlib.contextmanager
+def path_scope():
+    """Resolve each parent directory once for one snapshot phase."""
+    global _resolved_parents
+    if _resolved_parents is not None:
+        yield
+        return
+    _resolved_parents = {}
+    try:
+        yield
+    finally:
+        _resolved_parents = None
+
+
 def _lexical_canonical_path(path: Path) -> Path:
     absolute = Path(os.path.normpath(os.path.abspath(path)))
+    parent = absolute.parent
+    if _resolved_parents is not None:
+        key = str(parent)
+        resolved = _resolved_parents.get(key)
+        if resolved is None:
+            try:
+                resolved = parent.resolve(strict=False)
+            except (OSError, RuntimeError):
+                return absolute
+            _resolved_parents[key] = resolved
+        return resolved / absolute.name
     try:
         # Resolve filesystem aliases in parent components while retaining the
         # final lexical component so symlink identity remains independently
@@ -373,7 +406,9 @@ class InputSnapshot:
         self.enumerated: set[str] = set()
         self.project_content: dict[str, str] = {}
         self.total_bytes = 0
-        self._index()
+        self._root_prefixes: dict[str, tuple[str, str]] = {}
+        with path_scope():
+            self._index()
 
     def _index(self) -> None:
         seen = set()
@@ -455,13 +490,27 @@ class InputSnapshot:
 
     def locator(self, path: Path) -> tuple[str, str]:
         path = _lexical_canonical_path(path)
+        # A root match is a lexical prefix of whole components, which string
+        # comparison decides without raising once per non-matching root.
+        # Folding keeps the host's own case rule; it never changes a length,
+        # so the relative name is still sliced from the real path.
+        text = str(path)
+        folded = os.path.normcase(text)
         candidates = []
         for role, root in self.roots.items():
-            try:
-                relative = path.relative_to(root).as_posix()
-            except ValueError:
+            entry = self._root_prefixes.get(role)
+            if entry is None:
+                prefix = os.path.normcase(str(root))
+                # A filesystem or drive root already ends in the separator.
+                entry = (prefix, prefix if prefix.endswith(os.sep) else prefix + os.sep)
+                self._root_prefixes[role] = entry
+            prefix, base = entry
+            if folded == prefix:
+                relative = ""
+            elif folded.startswith(base):
+                relative = text[len(base):].replace(os.sep, "/")
+            else:
                 continue
-            relative = "" if relative == "." else relative
             if role.endswith("-root") and "/" in relative:
                 continue
             if role in ("binaries", "system-config") and "/" in relative:
@@ -544,6 +593,10 @@ class InputSnapshot:
         return self.before[_path_key(candidate)] is None
 
     def records(self, inputs: dict[str, set[str]]) -> list[dict]:
+        with path_scope():
+            return self._records(inputs)
+
+    def _records(self, inputs: dict[str, set[str]]) -> list[dict]:
         # Follow and bind each lexical symlink component as well as the final
         # resolved input. A replacement link must not reuse a target's old pass.
         expanded = {path: set(operations) for path, operations in inputs.items()}
@@ -611,6 +664,28 @@ def records_valid(records) -> bool:
     return keys == sorted(set(keys))
 
 
+# One batch's reuse decision is a single point-in-time judgement. Without a
+# pass, an input shared by several sources is read once per source, which both
+# samples it at different instants and repeats the work; a sharded suite shares
+# nearly all of its runtime inputs. A pass never outlives one decision:
+# execution-time revalidation opens its own.
+_identity_pass: dict[tuple[str, tuple[str, ...]], tuple[str, str]] | None = None
+
+
+@contextlib.contextmanager
+def identity_pass():
+    """Read each (path, operations) once for the duration of one decision."""
+    global _identity_pass
+    if _identity_pass is not None:
+        yield  # an enclosing pass already owns this decision's readings
+        return
+    _identity_pass = {}
+    try:
+        yield
+    finally:
+        _identity_pass = None
+
+
 def records_current(
     project: Path,
     artifact_id: str,
@@ -624,6 +699,7 @@ def records_current(
         roots = runtime_roots(project, artifact_id, profile=profile)
         reader = object.__new__(InputSnapshot)
         reader.total_bytes = 0
+        reader._root_prefixes = {}
         for row in records:
             root = roots.get(row["root"])
             if root is None:
@@ -631,7 +707,14 @@ def records_current(
             path = root / row["path"]
             if row["root"].endswith("-root") and "/" in row["path"]:
                 return False
-            fingerprint, kind = reader._fingerprint(path, set(row["operations"]))
+            operations = set(row["operations"])
+            key = (str(path), tuple(sorted(operations)))
+            identity = _identity_pass.get(key) if _identity_pass is not None else None
+            if identity is None:
+                identity = reader._fingerprint(path, operations)
+                if _identity_pass is not None:
+                    _identity_pass[key] = identity
+            fingerprint, kind = identity
             if fingerprint != row["digest"] or kind != row["kind"]:
                 return False
         return True
