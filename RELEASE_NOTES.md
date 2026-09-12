@@ -1,6 +1,8 @@
 # Release notes
 
-## Unreleased v1.1 candidate
+## v1.0.1 — 2026-09-12 — receipts survive other plugins
+
+Patch release. Both marketplaces pin `v1.0.1`; updating v1.0.0 installs it.
 
 - Receipts survive other installed plugins on Claude Code. The host appends
   every installed plugin's `bin` directory to the tool call's search path, and
