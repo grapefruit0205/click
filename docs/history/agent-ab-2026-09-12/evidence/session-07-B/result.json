@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 52226,
+ "stop_reason": "end_turn",
+ "session_id": "11bbb47d-430c-4762-a28f-38e25867dcdf",
+ "total_cost_usd": 0.6525285000000001,
+ "usage": {
+  "input_tokens": 26,
+  "cache_creation_input_tokens": 25625,
+  "cache_read_input_tokens": 599847,
+  "output_tokens": 3849,
+  "output_tokens_details": {
+   "thinking_tokens": 242
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 25625,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 408,
+    "cache_read_input_tokens": 53588,
+    "cache_creation_input_tokens": 637,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 637
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-opus-5": {
+   "inputTokens": 26,
+   "outputTokens": 3849,
+   "cacheReadInputTokens": 599847,
+   "cacheCreationInputTokens": 25625,
+   "webSearchRequests": 0,
+   "costUSD": 0.6525285000000001,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 64000,
+   "thinkingTokens": 242,
+   "canonicalModel": "claude-opus-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 19,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "The suite is green. Click ran it as four shards (one per test module); the final submission found all four receipts current for the final revision and reused them rather than re-executing \u2014 no tree changes since the last passing run of each shard.\n\nFixes, one module at a time (each confirmed with a full-suite run):\n\n- `ledger/alpha.py` \u2014 `paginate` used `page * size` as the offset, so page 1 skipped the first `size` items. Changed to `(page - 1) * size`.\n- `ledger/beta.py` \u2014 `allocate` computed `leftover` but never distributed it, so shares summed short of the total. Added the largest-remainder step: sort indices by descending fractional part (ties to the earlier index) and add one cent to the first `leftover` of them.\n- `ledger/gamma.py` \u2014 `slugify` replaced each non-alphanumeric character with its own dash, so `\"Hello,  World\"` became `hello---world`. Changed the regex to `[^a-z0-9]+` so runs collapse to a single dash.\n\n`ledger/delta.py` was already passing and is untouched; nothing under `tests/` was modified.\n\nFiles changed:\n- `ledger/alpha.py`\n- `ledger/beta.py`\n- `ledger/gamma.py`",
+ "ttft_ms": 3088,
+ "type": "result",
+ "duration_ms": 124252,
+ "uuid": "adbf22ed-f12e-4579-a499-aeccaf013a46",
+ "ttft_stream_ms": 1459,
+ "time_to_request_ms": 362,
+ "first_content_frame_ms": 1952,
+ "queued_turn_count": 0,
+ "result_index": 0
+}

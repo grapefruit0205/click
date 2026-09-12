@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 38070,
+ "stop_reason": "end_turn",
+ "session_id": "2da8eb3b-53c0-4beb-8157-3f06e69b3100",
+ "total_cost_usd": 0.47838649999999994,
+ "usage": {
+  "input_tokens": 20,
+  "cache_creation_input_tokens": 19506,
+  "cache_read_input_tokens": 432053,
+  "output_tokens": 2688,
+  "output_tokens_details": {
+   "thinking_tokens": 185
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 19506,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 253,
+    "cache_read_input_tokens": 47820,
+    "cache_creation_input_tokens": 286,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 286
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-opus-5": {
+   "inputTokens": 20,
+   "outputTokens": 2688,
+   "cacheReadInputTokens": 432053,
+   "cacheCreationInputTokens": 19506,
+   "webSearchRequests": 0,
+   "costUSD": 0.47838649999999994,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 64000,
+   "thinkingTokens": 185,
+   "canonicalModel": "claude-opus-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 10,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "Final run: `Ran 19 tests \u2026 OK`. Nothing under `tests/` was touched; `ledger/delta.py` was already correct.\n\nFiles changed:\n- `ledger/alpha.py` \u2014 `paginate` used `page * size` as the start offset for a 1-based page; changed to `(page - 1) * size`.\n- `ledger/beta.py` \u2014 `allocate` computed the leftover cents but never distributed them; now uses integer floor/remainder and hands the leftover to the largest remainders (earliest index on ties), so shares sum exactly to the total.\n- `ledger/gamma.py` \u2014 `slugify` replaced each non-alphanumeric character with its own dash; the regex is now `[^a-z0-9]+` so runs collapse to a single dash.",
+ "ttft_ms": 4318,
+ "type": "result",
+ "duration_ms": 360341,
+ "uuid": "83cb6933-00e7-4db5-b469-53037deddd40",
+ "ttft_stream_ms": 1350,
+ "time_to_request_ms": 92,
+ "first_content_frame_ms": 1350,
+ "queued_turn_count": 0,
+ "result_index": 0
+}

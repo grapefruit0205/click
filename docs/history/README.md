@@ -10,6 +10,7 @@ provenance, not current execution instructions.
 | Dashboard impact | Revalidation savings dashboard and language selection | [Record](dashboard-impact/README.md) |
 | Review hardening | Verification reuse and lifecycle boundary hardening | [Record](review-hardening/README.md) |
 | Multilanguage expansion | Python, Node, npm, Go, content, Vitest, and Jest profiles | [Record](multilang-expansion/README.md) |
+| Paired agent sessions | Eight Opus 5 sessions, Click on vs off, on a 40 s four-module fixture | [Record](agent-ab-2026-09-12/README.md) |
 
 Files under `prompts/` are the inputs that guided the historical work. Files
 under `reports/`, `evidence/`, and `logs/` are outputs. Literal paths and command

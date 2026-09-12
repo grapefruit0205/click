@@ -51,6 +51,10 @@ Click fits projects with **slow checks, repeated edit/test cycles, and separable
 test groups**. If your entire suite takes two seconds, setup and bookkeeping may
 cost more than rerunning it. The goal is less time spent completing the same work;
 production minutes and token savings still need representative measurement.
+One measured data point exists: [eight paired Opus 5 sessions](docs/history/agent-ab-2026-09-12/README.md)
+on a 40 s fixture finished the same bug-fix task in 123 s with Click versus
+381 s without (−68%, test executions −50%) at +6–11% cost — a fixture
+record, not a production result.
 
 ## Install and update
 

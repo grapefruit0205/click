@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 53530,
+ "stop_reason": "end_turn",
+ "session_id": "3c307be2-5d45-4775-8322-f8dbeb7e7953",
+ "total_cost_usd": 0.690084,
+ "usage": {
+  "input_tokens": 32,
+  "cache_creation_input_tokens": 22983,
+  "cache_read_input_tokens": 716438,
+  "output_tokens": 4075,
+  "output_tokens_details": {
+   "thinking_tokens": 456
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 22983,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 447,
+    "cache_read_input_tokens": 50941,
+    "cache_creation_input_tokens": 642,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 642
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-opus-5": {
+   "inputTokens": 32,
+   "outputTokens": 4075,
+   "cacheReadInputTokens": 716438,
+   "cacheCreationInputTokens": 22983,
+   "webSearchRequests": 0,
+   "costUSD": 0.690084,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 64000,
+   "thinkingTokens": 456,
+   "canonicalModel": "claude-opus-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 16,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "The full suite passes. Click confirmed all 4 shards (`test_alpha`, `test_beta`, `test_gamma`, `test_delta`) are valid against the current tree \u2014 the final run reused the passing receipts since nothing changed after the last green run.\n\nBugs fixed, one module at a time:\n\n- **`ledger/alpha.py`** \u2014 `paginate` treated the 1-based `page` as 0-based (`start = page * size`), so page 1 skipped the first `size` items and the last page came back empty. Changed to `(page - 1) * size`.\n- **`ledger/beta.py`** \u2014 `allocate` computed `leftover` but never distributed it, so shares summed to less than the total. Implemented the largest-remainder hand-out using integer `//` and `%` (no float rounding), with ties broken by position so `[1,1,1]` \u2192 `[34, 33, 33]`.\n- **`ledger/gamma.py`** \u2014 `slugify`'s regex `[^a-z0-9]` replaced each separator character individually, so `\",  \"` became `\"---\"`. Added `+` so runs of separators collapse to a single dash.\n\nFiles changed:\n- `ledger/alpha.py`\n- `ledger/beta.py`\n- `ledger/gamma.py`\n\nNothing under `tests/` was touched; `ledger/delta.py` was already passing and was left alone.",
+ "ttft_ms": 1784,
+ "type": "result",
+ "duration_ms": 121032,
+ "uuid": "ece3ad05-864d-4b1f-aaa0-ee7f600494be",
+ "ttft_stream_ms": 1493,
+ "time_to_request_ms": 334,
+ "first_content_frame_ms": 1686,
+ "queued_turn_count": 0,
+ "result_index": 0
+}
