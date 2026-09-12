@@ -319,6 +319,17 @@ class AutomaticEvidenceTests(ClickGateTestCase):
         path.write_text(path.read_text().replace(old, new))
         self.tool_hook("post-tool", "apply_patch", {"patch": patch}, turn_id=turn, tool_use_id=turn + name)
 
+    def resave_file(self, name: str, turn: str) -> None:
+        # An editor's atomic save of unchanged content, reported to the host
+        # as an edit: the revision advances while the tree digest does not.
+        path = self.workspace / name
+        patch = f"*** Begin Patch\n*** Update File: {path}\n@@\n-VALUE = 1\n+VALUE = 1\n*** End Patch"
+        self.pre_tool("apply_patch", patch, turn, tool_use_id=turn + name)
+        replacement = path.with_name(name + ".tmp")
+        replacement.write_bytes(path.read_bytes())
+        os.replace(replacement, path)
+        self.tool_hook("post-tool", "apply_patch", {"patch": patch}, turn_id=turn, tool_use_id=turn + name)
+
     def decisions(self, state: dict) -> dict[str, str]:
         return {row["source_key"]: row["decision"] for row in state["verification"]["incremental_plan"]["decisions"]}
 
@@ -398,6 +409,30 @@ class AutomaticEvidenceTests(ClickGateTestCase):
         self.patch_file("beta.py", "VALUE = 1", "VALUE = 2", "turn-3")
         third = self.run_checks(commands, "turn-3")
         self.assertEqual(self.decisions(third), {alpha: "reuse-dependency", beta: "run"})
+
+    def test_bytecode_cache_written_outside_click_keeps_the_receipt(self) -> None:
+        commands = self.fixture()
+        first = self.run_checks(commands, "turn-1")
+        alpha, beta = [CLICK_EVIDENCE.evidence_key(name) for name in ("ALPHA", "BETA")]
+        for key in (alpha, beta):
+            observation = first["evidence_state"]["sources"][key]["verified_dependency_observation"]
+            self.assertEqual(observation["status"], "complete", observation)
+            # The interpreter looked for a cache the observed run never writes.
+            # Neither the absent directory nor its files are observed inputs.
+            self.assertEqual([row["path"] for row in observation["inputs"]
+                              if row["root"] == "project" and "__pycache__" in row["path"]], [], observation)
+        # An editor re-saves alpha.py unchanged, then a terminal run outside
+        # Click writes __pycache__ beside the sources.
+        self.resave_file("alpha.py", "turn-2")
+        environment = {key: value for key, value in os.environ.items() if key != "PYTHONDONTWRITEBYTECODE"}
+        subprocess.run([sys.executable, "-m", "unittest", "alpha.Check"], cwd=self.workspace,
+                       env=environment, check=True, capture_output=True)
+        self.assertTrue(list((self.workspace / "__pycache__").glob("alpha.*.pyc")))
+        second = self.run_checks(commands, "turn-2")
+        self.assert_decisions(second, {alpha: "reuse-exact", beta: "reuse-exact"})
+        self.patch_file("alpha.py", "VALUE = 1", "VALUE = 2", "turn-3")
+        third = self.run_checks(commands, "turn-3")
+        self.assert_decisions(third, {alpha: "run", beta: "reuse-dependency"})
 
     def test_ignored_input_failure_is_executed_and_reported(self) -> None:
         commands = self.fixture()
