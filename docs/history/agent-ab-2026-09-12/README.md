@@ -149,3 +149,28 @@ python3 docs/history/agent-ab-2026-09-12/evidence/analyze.py /tmp/click-ab
 `bash_calls.json`, `result.json` and the full `stream.jsonl`. It disables the
 `deploy-on-aws` plugin in both arms because it was installed on the
 measurement machine; on a machine without other plugins that entry is inert.
+
+## Addendum: the plain `click-gate verify -- <argv>` form (v1.1 candidate)
+
+The JSON envelope the model typed for every cycle was the main output-token
+overhead above, so the v1.1 candidate accepts `click-gate verify -- <check
+argv>` and the Evidence directive shows that form. Two more Click-on sessions
+(`evidence/argv-form/`) ran the same task with that build loaded from a pinned
+copy outside the worktree via `--plugin-dir` (installed Click disabled). Both
+used the plain form for all five cycles.
+
+| median | JSON form, Click on (n=4) | plain form, Click on (n=2) | Click off (n=4) |
+|---|---|---|---|
+| output tokens | 3,847 | **3,219** | 3,038 |
+| cost | $0.662 | **$0.572** | $0.596 |
+| characters typed for `verify` commands | 1,525 | 290 | — |
+| turns | 16 | 16 | 16 |
+| test module executions | 10 | 10 | 20 |
+| session wall time | 123 s | 144 s (API latency; test time 94 s in both) | 381 s |
+
+With the plain form the Click-on cost falls to the Click-off level. Two
+sessions are a direction, not a measurement of the same weight as the eight
+above. A first attempt at this addendum was discarded: the plugin directory it
+loaded was the worktree's `dist/claude`, which a branch switch replaced with
+v1.0.1 while the sessions were running, so the parser rejected `verify --` mid
+session and the model fell back to the JSON form.

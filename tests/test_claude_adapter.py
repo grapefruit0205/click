@@ -295,7 +295,8 @@ class ClaudeHookProcessTests(unittest.TestCase):
         # states that `click-gate` is a hook-rewritten command rather than a
         # binary, and tells the model not to re-verify what Click reused.
         self.assertIn("Run every test or check command through Click instead of directly", context)
-        self.assertIn('click-gate verify \'{"version":2,"workdir":"<absolute repository path>"', context)
+        self.assertIn("`click-gate verify -- <the exact check command>`", context)
+        self.assertIn("`click-gate verify -- python3 -m pytest -q`", context)
         self.assertIn("do not look for it on PATH", context)
         self.assertIn("do not re-verify a reused check by hand", context)
         self.assertIn("must never block work", context)

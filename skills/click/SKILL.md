@@ -17,14 +17,20 @@ None of this needs a contract, an approval, or a dependency declaration from you
 
 ## Run checks through `click-gate verify`
 
-Choose concrete checks from repository evidence while you work and submit them with stable ids. Evidence registers an argv id on its first accepted use:
+Choose concrete checks from repository evidence while you work. The plain form names one check after its exact command:
+
+```text
+click-gate verify -- python3 -m pytest -q
+```
+
+Its evidence id is derived from the argv, so resubmitting the same command resubmits the same check; its class is the command's own minimum; its working directory is the tool call's. Several checks in one request, an explicit id, a `reporting` block, or a different `workdir` use the JSON form:
 
 ```text
 click-gate verify '{"version":2,"workdir":"/absolute/path/to/repository","checks":[{"evidence_id":"E1","argv":["python3","-m","pytest","-q"],"class":"broad"}]}'
 ```
 
 - `class` is `targeted`, `broad`, or `deep`. Include the absolute `workdir` whenever the execution tool runs outside the Hook session directory.
-- After a change, resubmit the same id and argv. For a sharded broad suite, always submit the parent id and argv, never an internal shard id. In Evidence mode a supported `unittest`, `pytest`, Vitest or Jest suite is sharded automatically: Click collects it and keeps the plan in its own state, so no `.click/evidence-shards.json` is needed; `click-gate sharding init` writes a reviewable copy into the repository when you want one.
+- After a change, resubmit the same command (or the same id and argv). For a sharded broad suite, always submit the parent id and argv, never an internal shard id. In Evidence mode a supported `unittest`, `pytest`, Vitest or Jest suite is sharded automatically: Click collects it and keeps the plan in its own state, so no `.click/evidence-shards.json` is needed; `click-gate sharding init` writes a reviewable copy into the repository when you want one.
 - Use `click-gate inspect` for tracked read-only argv and `click-gate mutate` for structured mutations; ordinary file edits go through the host's editors directly. Exact forms, limits, observer, dashboard, and receipt-export controls are in the [capability protocol](references/capability-protocol.md).
 - Stop when every registered check is current for the final revision and no managed service remains active.
 - A request that omits `reporting` uses the `actionable` format for unittest/pytest checks: a failure arrives as a bounded summary with a local log reference, not the raw stream. Pass `reporting.format: "raw"` when you need the full output.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import ast
 from pathlib import Path
 import unittest
@@ -195,6 +197,37 @@ class ClickLifecycleTests(unittest.TestCase):
                 r"click-gate receipt verify C:\temp\completion-receipt.json"
             ),
             ("receipt-verify", r"C:\temp\completion-receipt.json", ""),
+        )
+        # The argv form names one check after its exact command: the same
+        # command yields the same evidence id, the class is the command's own
+        # minimum, and the JSON envelope stays available for batches.
+        action, value, error = click_lifecycle.control_request(
+            "click-gate verify -- python3 -m unittest discover -s tests"
+        )
+        self.assertEqual((action, error), ("verify", ""))
+        request = json.loads(value)
+        self.assertEqual(request["version"], 2)
+        self.assertNotIn("workdir", request)
+        [check] = request["checks"]
+        self.assertEqual(check["argv"], ["python3", "-m", "unittest", "discover", "-s", "tests"])
+        self.assertEqual(check["class"], "broad")
+        self.assertRegex(check["evidence_id"], r"^E_[0-9a-f]{12}$")
+        self.assertEqual(
+            json.loads(click_lifecycle.control_request(
+                "click-gate verify -- python3 -m unittest discover -s tests")[1]),
+            request,
+        )
+        [targeted] = json.loads(click_lifecycle.control_request(
+            "click-gate verify -- python3 -m pytest tests/test_alpha.py -q")[1])["checks"]
+        self.assertEqual(targeted["class"], "targeted")
+        self.assertNotEqual(targeted["evidence_id"], check["evidence_id"])
+        self.assertEqual(
+            click_lifecycle.control_request("click-gate verify --")[0::2],
+            ("", "Use `click-gate verify -- <check argv>`; the `--` keeps the checked command explicit."),
+        )
+        self.assertEqual(
+            click_lifecycle.control_request("click-gate verify '{\"version\":2,\"checks\":[]}'"),
+            ("verify", '{"version":2,"checks":[]}', ""),
         )
         self.assertEqual(
             click_lifecycle.control_request("click-gate stage 'unterminated"),
