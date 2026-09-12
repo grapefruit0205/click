@@ -15,7 +15,7 @@
         "source": "git-subdir",
         "url": "https://github.com/grapefruit0205/click.git",
         "path": "dist/claude",
-        "ref": "v1.0.1"
+        "ref": "v1.1.0"
       }
     }
   ]
