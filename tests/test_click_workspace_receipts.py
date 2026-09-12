@@ -10,6 +10,14 @@ from pathlib import Path
 
 from click_gate_test_support import ClickGateTestCase
 
+# Reuse of an unchanged sibling after an edit rests on observed inputs, which
+# only the authoritative CPython 3.12.3 native profile records.
+OBSERVED_INPUTS = (
+    sys.platform in {"linux", "darwin", "win32"}
+    and sys.implementation.name == "cpython"
+    and sys.version_info[:3] == (3, 12, 3)
+)
+
 
 class WorkspaceReceiptTests(ClickGateTestCase):
     def fixture(self, workspace: Path | None = None) -> list[str]:
@@ -81,6 +89,7 @@ class WorkspaceReceiptTests(ClickGateTestCase):
         self.assertNotIn("ran-beta", output)
         self.assertNotIn("[Click verification", output)
 
+    @unittest.skipUnless(OBSERVED_INPUTS, "observed-input reuse needs the native observer profile")
     def test_a_changed_shard_runs_while_its_unchanged_sibling_is_reused(self) -> None:
         parent = self.fixture()
         self.initialize_git(".gitignore", ".click/evidence-shards.json", "tests/__init__.py",
