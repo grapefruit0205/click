@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 47231,
+ "stop_reason": "end_turn",
+ "session_id": "491f90d5-ab47-4040-8e7a-fd3b7352c90a",
+ "total_cost_usd": 0.6226705,
+ "usage": {
+  "input_tokens": 32,
+  "cache_creation_input_tokens": 19203,
+  "cache_read_input_tokens": 708011,
+  "output_tokens": 3059,
+  "output_tokens_details": {
+   "thinking_tokens": 270
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 19203,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 256,
+    "cache_read_input_tokens": 50133,
+    "cache_creation_input_tokens": 503,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 503
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-opus-5": {
+   "inputTokens": 32,
+   "outputTokens": 3059,
+   "cacheReadInputTokens": 708011,
+   "cacheCreationInputTokens": 19203,
+   "webSearchRequests": 0,
+   "costUSD": 0.6226705,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 64000,
+   "thinkingTokens": 270,
+   "canonicalModel": "claude-opus-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 16,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "Full suite passes (Click reused the four passing shard receipts since nothing changed after the last run). `delta` was already green and untouched; nothing under `tests/` was modified.\n\nFiles changed:\n- `ledger/gamma.py` \u2014 `slugify` replaced each non-alphanumeric char with its own dash; now `[^a-z0-9]+` collapses runs into a single dash.\n- `ledger/alpha.py` \u2014 `paginate` used `page * size` as the start offset for a 1-based page; now `(page - 1) * size`.\n- `ledger/beta.py` \u2014 `allocate` computed `leftover` but never distributed it; now uses integer floor/remainder and hands leftover cents to the largest remainders (ties to the earlier index), so shares sum exactly to the total.",
+ "ttft_ms": 2816,
+ "type": "result",
+ "duration_ms": 130014,
+ "uuid": "194d817f-c8b9-4335-ac17-ad54b0b666b1",
+ "ttft_stream_ms": 2072,
+ "time_to_request_ms": 897,
+ "first_content_frame_ms": 2463,
+ "queued_turn_count": 0,
+ "result_index": 0
+}

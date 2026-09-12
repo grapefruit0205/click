@@ -10,7 +10,9 @@
   Batches, explicit ids, `reporting` and a different `workdir` keep the JSON
   form. In the eight paired Opus 5 sessions of
   `docs/history/agent-ab-2026-09-12/`, the ~200-character JSON the model typed
-  for every cycle was the main output-token overhead of running with Click.
+  for every cycle was the main output-token overhead of running with Click;
+  two further sessions with the plain form brought the Click-on cost to the
+  Click-off level ($0.57 vs $0.60 median, n=2; see the record's addendum).
 
 ## v1.0.1 — 2026-09-12 — receipts survive other plugins
 
