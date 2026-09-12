@@ -119,6 +119,10 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   reporting, bounded failure collection, Node framework observation and Shadow
   mode keep the sequential path. The result line shows the summed duration
   alongside the parallel wall clock when children overlapped.
+- The runner indexes the host runtime once before forking its shard workers,
+  so every child inherits the shared index instead of walking the runtime roots
+  itself. Three 3-second shards: workers admitted their targets at 0.75 s
+  instead of 1.76 s; wall 6.4 s → 5.1 s.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
