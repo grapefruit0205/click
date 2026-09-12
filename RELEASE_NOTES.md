@@ -55,6 +55,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   not run. Identity, receipts and check digests are unchanged; the labels are
   derived at preparation, stored beside the plan and carried to the runner
   outside the caller-visible request schema.
+- A project `__pycache__` directory and its bytecode files are derived from
+  the bound source content and interpreter identity, so they are no longer
+  observed inputs and a directory listing ignores a `__pycache__` member. An
+  equal-content re-save followed by any Python run outside Click keeps the
+  receipt; a source whose content changed still reruns. Runtime bytecode
+  caches bind their code object rather than the source-timestamp validation
+  field of their header.
 - Passing receipts now outlive the host session. Receipts are stored per host
   session, so a new Claude Code session used to start with none and re-ran every
   check once. When an Evidence session completes, and at session end, its
