@@ -41,7 +41,31 @@ class InputError(ValueError):
 
 # Bump when the identity payload changes so an older receipt can never match
 # a digest computed under the new rules; it simply reruns once.
-FINGERPRINT_VERSION = 2
+FINGERPRINT_VERSION = 3
+
+
+# PEP 552 bytecode caches: magic (4) + flags (4) + either source mtime and
+# size (4 + 4) or a source hash (8). The validation field changes whenever the
+# source is merely re-saved, while the code object after it does not. Binding
+# the code object, not the header, keeps an equal-source cache current and
+# still detects a cache whose code differs.
+PYC_HEADER_BYTES = 16
+PYC_VALIDATION_OFFSET = 8
+
+
+def _is_project_bytecode_cache(relative: str) -> bool:
+    """Whether a repository-relative path is inside a `__pycache__` directory."""
+    return "__pycache__" in relative.split("/")
+
+
+def _identity_bytes(path: Path, content: bytes) -> bytes:
+    if (
+        path.suffix == ".pyc"
+        and path.parent.name == "__pycache__"
+        and len(content) >= PYC_HEADER_BYTES
+    ):
+        return content[:PYC_VALIDATION_OFFSET] + content[PYC_HEADER_BYTES:]
+    return content
 
 
 def digest(value) -> str:
@@ -526,6 +550,11 @@ class InputSnapshot:
             entries = []
             with os.scandir(path) as iterator:
                 for entry in iterator:
+                    if entry.name == "__pycache__":
+                        # A bytecode cache directory is derived from the
+                        # sources beside it; whether the interpreter has
+                        # created it yet is not a membership change.
+                        continue
                     info = entry.stat(follow_symlinks=False)
                     entries.append([entry.name, stat.S_IFMT(info.st_mode)])
                     if len(entries) > MAX_INDEX_FILES:
@@ -542,7 +571,7 @@ class InputSnapshot:
                 if len(content) > MAX_FILE_BYTES:
                     raise InputError("input-byte-limit")
                 self.total_bytes += len(content)
-                payload.append(hashlib.sha256(content).hexdigest())
+                payload.append(hashlib.sha256(_identity_bytes(path, content)).hexdigest())
             else:
                 payload.append(before[6])
         else:
@@ -593,6 +622,13 @@ class InputSnapshot:
         for key in sorted(canonical):
             path, operations = canonical[key]
             role, relative = self.locator(path)
+            if role == "project" and _is_project_bytecode_cache(relative):
+                # A `__pycache__` directory and its bytecode files are pure
+                # derivatives of the source content and interpreter identity,
+                # both already bound. Their presence, absence, or regeneration
+                # by any later interpreter run is not an independent input, so
+                # they never enter the observation and never invalidate it.
+                continue
             if role == "project" and (relative == ".git" or relative.startswith(".git/")) and operations != {"metadata"}:
                 raise InputError("git-internal-input")
             old = self.before.get(key)

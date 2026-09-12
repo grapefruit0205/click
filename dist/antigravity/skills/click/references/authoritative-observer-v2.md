@@ -105,7 +105,13 @@ type and permission bits, the content of a read or executed file, the size of
 a metadata-only file, the sorted member names and types of a directory, or the
 link text of a symlink. Inode numbers, link counts, ownership and timestamps
 are runtime assumptions rather than modeled inputs, so an equal-content
-rewrite, a checkout of identical content or a `touch` keeps the receipt.
+rewrite, a checkout of identical content or a `touch` keeps the receipt. A
+project `__pycache__` directory and its bytecode files are derived from the
+bound source content and interpreter identity: they are not observed inputs, a
+directory listing ignores a `__pycache__` member, and a cache written by an
+interpreter run outside Click keeps the receipt. A runtime bytecode cache binds
+its code object and not the source timestamp/size validation field of its
+header.
 One request's reuse decision reads each observed path once, however many
 sources of the batch share it, so a sharded suite judges its shared runtime
 inputs against one reading instead of one reading per shard. Execution-time

@@ -643,6 +643,55 @@ class ClickDependencyBehaviorTests(
             click_dependency_cache.dependency_observation_is_complete(observation)
         )
 
+    def test_bytecode_cache_identity_ignores_the_source_validation_header(self) -> None:
+        from hooks import click_observation_inputs as observation_inputs
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory) / "__pycache__"
+            cache.mkdir()
+            pyc = cache / "module.cpython-312.pyc"
+            magic, flags = b"\x6f\x0d\x0d\x0a", b"\x00\x00\x00\x00"
+            code = b"marshalled code object bytes"
+            reader = object.__new__(observation_inputs.InputSnapshot)
+            reader.total_bytes = 0
+
+            def fingerprint(validation: bytes, body: bytes = code, target: Path = pyc) -> str:
+                target.write_bytes(magic + flags + validation + body)
+                return reader._fingerprint(target, {"read"})[0]
+
+            resaved = fingerprint(b"\x01\x00\x00\x00\x10\x00\x00\x00")
+            self.assertEqual(resaved, fingerprint(b"\x09\x00\x00\x00\x10\x00\x00\x00"))
+            self.assertNotEqual(resaved, fingerprint(b"\x01\x00\x00\x00\x10\x00\x00\x00", body=code + b"!"))
+            self.assertNotEqual(resaved, fingerprint(b"\x01\x00\x00\x00\x10\x00\x00\x00", body=code[:-1]))
+            # Only bytecode caches get the special case; a same-named file
+            # outside __pycache__ and a truncated header bind their full content.
+            plain = Path(directory) / "module.cpython-312.pyc"
+            self.assertNotEqual(
+                fingerprint(b"\x01\x00\x00\x00\x10\x00\x00\x00", target=plain),
+                fingerprint(b"\x09\x00\x00\x00\x10\x00\x00\x00", target=plain),
+            )
+            short = cache / "short.cpython-312.pyc"
+            short.write_bytes(magic + flags + b"\x01\x00")
+            first = reader._fingerprint(short, {"read"})[0]
+            short.write_bytes(magic + flags + b"\x02\x00")
+            self.assertNotEqual(first, reader._fingerprint(short, {"read"})[0])
+
+    def test_directory_membership_ignores_a_bytecode_cache_directory(self) -> None:
+        from hooks import click_observation_inputs as observation_inputs
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+            reader = object.__new__(observation_inputs.InputSnapshot)
+            reader.total_bytes = 0
+            before = reader._fingerprint(root, {"metadata"})
+            # The interpreter creating its cache beside the sources is not a
+            # membership change; any other new sibling still is.
+            (root / "__pycache__").mkdir()
+            (root / "__pycache__" / "module.cpython-312.pyc").write_bytes(b"cache")
+            self.assertEqual(before, reader._fingerprint(root, {"metadata"}))
+            (root / "sibling.py").write_text("", encoding="utf-8")
+            self.assertNotEqual(before, reader._fingerprint(root, {"metadata"}))
     def test_one_identity_pass_reads_each_shared_input_once(self) -> None:
         from hooks import click_observation_inputs as observation_inputs
 
