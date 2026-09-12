@@ -193,8 +193,8 @@ mismatch and is not a supported-profile success test.
 
 The historical physical trigger remains unconfirmed. The follow-up below
 reproduces the same unsafe decision through companion loss and contrasts it
-with the current safeguards. Keep this work as a draft pending review and
-native CI results; passing retries alone do not establish historical cause.
+with the current safeguards. The safeguards ship in v1.0.0 with this
+attribution left open; passing retries alone do not establish historical cause.
 
 ### Bounded child-decision investigation (2026-09-10)
 

@@ -1,14 +1,23 @@
 # Release notes
 
-## Unreleased v0.97 candidate — automatic Evidence observation
+## v1.0.0 — 2026-09-12 — automatic Evidence observation
 
-Draft stabilization: companion loss reproduces the earlier opposite-child
+v1.0.0 publishes the automatic Evidence observation work that `main` carried
+as the v0.97 candidate: automatic input observation with signed receipts,
+conditional JS reuse, recovery after capture loss, automatic sharding in
+Evidence mode, concurrent shard execution and receipts that outlive the host
+session. Both marketplaces pin `v1.0.0`; updating v0.96.1 installs it.
+
+Stabilization note: companion loss reproduces the earlier opposite-child
 decision when capture-loss safeguards are disabled in an isolated control.
 Current safeguards report the affected child's failure; the exact historical
-trigger remains unconfirmed. The preceding stabilization was merged in PR #103
-after its 43 checks passed; that historical run does not validate later changes.
-This candidate remains unreleased. See `docs/architecture/automatic-observation.md`.
+trigger remains unconfirmed. See `docs/architecture/automatic-observation.md`.
 
+- The Node Inspector controller now exits on its own after reporting. The
+  runner unlinks the endpoint FIFO and releases its own writer before waiting,
+  so the controller's blocking FIFO read ends; previously every observed JS
+  execution waited five seconds and then terminated the controller. Each
+  observed execution is about five seconds shorter; records are unchanged.
 - `click-gate status` now prints at most three short lines in the dashboard
   language (`CLICK_LANGUAGE`, then the POSIX locale; Korean by default):
   executed and reused counts with the estimated avoided time, mode and

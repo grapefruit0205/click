@@ -93,9 +93,9 @@ claude plugin marketplace update click
 claude plugin update click@click
 ```
 
-Current release: **v0.96.1**. Restart and start a new task after updating.
+Current release: **v1.0.0**. Restart and start a new task after updating.
 
-This README also describes the **unreleased v0.97 candidate** source on `main`: automatic observation, conditional JS reuse and recovery. The published release remains **v0.96.1**; updating it does not install candidate changes. See [release notes](RELEASE_NOTES.md).
+v1.0.0 publishes what `main` carried as the v0.97 candidate: automatic input observation with signed receipts, conditional JS reuse, recovery after capture loss, automatic sharding in Evidence mode, concurrent shard execution and receipts that survive a new host session. Both marketplaces pin `v1.0.0`, so updating from v0.96.1 installs it. See [release notes](RELEASE_NOTES.md).
 
 ## Try it on your next change
 
