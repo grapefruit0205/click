@@ -344,6 +344,10 @@ def _claim_verification_run(
     batch["_click_verification_environment"] = verification_environment
     batch["_click_verification_environment_rebound"] = environment_rebound
     batch["_click_command_plans"] = runtime_command_plans
+    labels = verification.get("source_labels")
+    batch["_click_source_labels"] = (
+        {str(key): str(value) for key, value in labels.items()} if isinstance(labels, dict) else {}
+    )
     measured_batch = click_incremental.current_batch(verification)
     batch["_click_incremental_batch_id"] = (
         str(measured_batch.get("batch_id", ""))

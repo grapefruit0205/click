@@ -1321,15 +1321,18 @@ def host_summary(verification: Any, sources: Any = None) -> str:
         omitted_text = "0 ms · 실제 재사용 없음"
     elif savings["omitted_test_execution_status"] == "estimated":
         omitted_text = _host_duration(omitted, estimated=True)
+        # Say what the reused checks are, not what was skipped: their inputs are
+        # unchanged since they last passed, so they are current now. The
+        # reader otherwise re-verifies by hand what Click already verified.
         if executed_count == 0:
             headline = (
-                f"{requested}개 중 실제 실행 0개 · {reused_count}개 모두 재사용으로 "
-                f"{omitted_text}의 테스트 재실행 생략〔추정〕"
+                f"{requested}개 모두 현재 유효 · 마지막 통과 이후 입력 불변으로 재실행 없음 · "
+                f"{omitted_text} 재실행 생략〔추정〕"
             )
         else:
             headline = (
-                f"{requested}개 중 {executed_count}개만 실행 · {reused_count}개 재사용으로 "
-                f"{omitted_text}의 테스트 재실행 생략〔추정〕"
+                f"{requested}개 중 {executed_count}개 실행 · {reused_count}개는 마지막 통과 이후 "
+                f"입력 불변으로 현재 유효(재사용) · {omitted_text} 재실행 생략〔추정〕"
             )
     elif savings["omitted_test_execution_status"] == "partial":
         omitted_text = f"부분 추정 합계 약 {_host_duration(omitted)}〔추정〕"
