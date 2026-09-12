@@ -198,6 +198,11 @@ def _expand_evidence_shards(
 
     expanded: list[dict[str, Any]] = []
     advisories: list[str] = []
+    # Presentation only: a shard child is executed under a synthetic id that
+    # the caller never chose. Its label names the caller's own evidence id and
+    # the committed shard id, so the host recognizes what ran. Identity,
+    # receipts and check digests are untouched by it.
+    source_labels: dict[str, str] = {}
     for parent_source_key, parent_checks in grouped.items():
         evidence_id = str(parent_checks[0].get("evidence_id", "argv"))
         parent_check_digest = _verification_group_digest(parent_checks)
@@ -242,7 +247,7 @@ def _expand_evidence_shards(
             for field, message in incompatible_bindings:
                 bound = str(submitted_source.get(field, ""))
                 if bound and bound != parent_check_digest:
-                    return None, None, advisories, message
+                    return None, None, advisories, message, {}
         eligible = any(
             check.get("class") in {"broad", "deep"} for check in parent_checks
         )
@@ -278,7 +283,7 @@ def _expand_evidence_shards(
                 state, parent_source_key
             )
             if collapse_error or sources is None:
-                return None, None, advisories, collapse_error
+                return None, None, advisories, collapse_error, {}
             evidence_state = state["evidence_state"]
             reason = validation_error or str(
                 decision.get("reason", "plan-unavailable")
@@ -295,7 +300,7 @@ def _expand_evidence_shards(
                 state, parent_source_key, decision
             )
             if activation_error or sources is None:
-                return None, None, advisories, activation_error
+                return None, None, advisories, activation_error, {}
             evidence_state = state["evidence_state"]
         elif active is not None and plan_current and not (
             click_evidence_shards.plan_matches_shard_set(decision, active)
@@ -304,7 +309,7 @@ def _expand_evidence_shards(
                 state, parent_source_key, decision
             )
             if refresh_error or sources is None:
-                return None, None, advisories, refresh_error
+                return None, None, advisories, refresh_error, {}
             evidence_state = state["evidence_state"]
             advisories.append(
                 f"Click Evidence Shards [{evidence_id}]: complete committed plan "
@@ -313,6 +318,9 @@ def _expand_evidence_shards(
         if plan_current:
             assert shard_checks is not None
             expanded.extend(shard_checks)
+            for child in decision.get("children", []):
+                if isinstance(child, dict) and isinstance(child.get("source_key"), str):
+                    source_labels[child["source_key"]] = f"{evidence_id}[{child.get('shard_id', '')}]"
             advisories.append(
                 f"Click Evidence Shards [{evidence_id}]: expanded the broad suite "
                 f"into {len(decision['children'])} independent shard(s)."
@@ -358,6 +366,7 @@ def _expand_evidence_shards(
         sources,
         advisories,
         "",
+        source_labels,
     )
 
 
@@ -607,7 +616,7 @@ def _prepare_verification_impl(
     if not workspace.is_dir():
         return "", "Click verification workdir is not an existing directory.", ""
     provisional["workdir"] = str(workspace)
-    expanded, sources, shard_advisories, error = _expand_evidence_shards(
+    expanded, sources, shard_advisories, error, source_labels = _expand_evidence_shards(
         state,
         provisional,
         scale=scale,
@@ -1438,6 +1447,9 @@ def _prepare_verification_impl(
             "",
         )
     click_incremental.store_plan(verification, incremental_plan)
+    verification["source_labels"] = {
+        key: label for key, label in source_labels.items() if key in requested_keys
+    }
     if measurement is not None:
         measurement["plan"] = incremental_plan
         measurement["labels"] = {
