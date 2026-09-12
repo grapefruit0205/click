@@ -110,6 +110,15 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   repository. A runtime file that changes after the shared index was taken is
   still refused, because binding compares the pre-execution metadata with the
   current one. Measured on the six-shard fixture: runner 9.08 s → 6.16 s.
+- Shard children of one committed plan now execute concurrently on Linux
+  hosts. The runner forks one worker per child, up to `CLICK_VERIFICATION_WORKERS`
+  (default: the core count, at most 8), and consumes the results in submission
+  order, so output, receipts and fail-fast behaviour match a sequential run:
+  siblings already running when one child fails are still recorded, and no
+  later check starts. Measured on three 3-second shards: 13.1 s → 5.2 s. Raw
+  reporting, bounded failure collection, Node framework observation and Shadow
+  mode keep the sequential path. The result line shows the summed duration
+  alongside the parallel wall clock when children overlapped.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the

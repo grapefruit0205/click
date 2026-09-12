@@ -1450,6 +1450,15 @@ def _prepare_verification_impl(
     verification["source_labels"] = {
         key: label for key, label in source_labels.items() if key in requested_keys
     }
+    # Children expanded from one committed shard plan are independent by the
+    # plan's own declaration, so the runner may execute them concurrently.
+    verification["parallel_groups"] = {
+        key: str(source["shard"]["parent_source_key"])
+        for key, source in sources.items()
+        if key in requested_keys
+        and isinstance(source, dict)
+        and click_evidence_shards.source_metadata_is_valid(source.get("shard"))
+    }
     if measurement is not None:
         measurement["plan"] = incremental_plan
         measurement["labels"] = {
