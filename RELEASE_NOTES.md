@@ -70,13 +70,6 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   followed in none of eight sessions, and the sessions that did use Click loaded
   the Skill first and re-checked reused results by hand. The host's authority,
   the absence of any approval contract and the fail-open clause are unchanged.
-- The host-runtime part of the observer's input index is built once per
-  process. Every shard's pre-execution snapshot walked the same ~16,000 stdlib,
-  site-packages, loader and locale paths; now the runtime roots are indexed once
-  per runner and each snapshot copies that index and re-indexes only the
-  repository. A runtime file that changes after the shared index was taken is
-  still refused, because binding compares the pre-execution metadata with the
-  current one. Measured on the six-shard fixture: runner 9.08 s → 6.16 s.
 - Runtime identity checks are memoized per process. A runner validates the
   native observer twice per shard plus at claim and record time, and every
   validation hashed the artifact, the compiler, the interpreter and about two
@@ -88,6 +81,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   itself still runs for every capture. Measured on a six-shard fixture: hook
   preparation 0.44 s → 0.32 s, all-reused preparation 0.95 s → 0.82 s, runner
   9.35 s → 9.08 s.
+- The host-runtime part of the observer's input index is built once per
+  process. Every shard's pre-execution snapshot walked the same ~16,000 stdlib,
+  site-packages, loader and locale paths; now the runtime roots are indexed once
+  per runner and each snapshot copies that index and re-indexes only the
+  repository. A runtime file that changes after the shared index was taken is
+  still refused, because binding compares the pre-execution metadata with the
+  current one. Measured on the six-shard fixture: runner 9.08 s → 6.16 s.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the
