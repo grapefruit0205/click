@@ -103,9 +103,24 @@ class ClickGateTestCase(unittest.TestCase):
     # transport tests to cover stdin/stdout and interpreter startup.
     hook_in_process = False
 
+    def _remove_temporary(self) -> None:
+        """Remove the fixture; on Windows a child that just stopped may still
+        hold the workspace as its working directory for a moment, which locks
+        the directory against removal. Retry briefly instead of failing the
+        test after its assertions already passed."""
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                self.temporary.cleanup()
+                return
+            except PermissionError:
+                if os.name != "nt" or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.2)
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
+        self.addCleanup(self._remove_temporary)
         self.plugin_data = Path(self.temporary.name) / "plugin-data"
         self.workspace = Path(self.temporary.name) / "workspace"
         self.workspace.mkdir()
