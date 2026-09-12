@@ -246,6 +246,38 @@ def _successor_digest(value: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def workspace_successor_scope(root: str) -> str:
+    """Scope of the archive shared by every session of one repository root."""
+    return successor_scope_digest("workspace:" + root)
+
+
+def rescope_successor_evidence(
+    value: Any, *, scope_digest: str, expected_contract_schema_version: int
+) -> dict[str, Any] | None:
+    """Copy Evidence successor facts under another scope, integrity digest recomputed.
+
+    Only Evidence-mode archives move between scopes; Guarded facts stay bound to
+    the approving contract. Every other field, including the origin session,
+    intent and revision, is carried unchanged, and the copy is validated under
+    the new scope before it is returned.
+    """
+    if not isinstance(value, dict) or value.get("version") != SUCCESSOR_EVIDENCE_VERSION:
+        return None
+    if not isinstance(scope_digest, str) or re.fullmatch(r"[0-9a-f]{64}", scope_digest) is None:
+        return None
+    rescoped = json.loads(json.dumps(value))
+    rescoped["scope_digest"] = scope_digest
+    rescoped["digest"] = ""
+    rescoped["digest"] = _successor_digest(rescoped)
+    if not successor_evidence_is_valid(
+        rescoped,
+        expected_contract_schema_version=expected_contract_schema_version,
+        scope_digest=scope_digest,
+    ):
+        return None
+    return rescoped
+
+
 def successor_evidence_is_valid(
     value: Any,
     *,

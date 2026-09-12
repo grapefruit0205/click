@@ -793,6 +793,10 @@ def _handle_prompt_submit(event: dict[str, Any]) -> None:
 
 
 def _handle_session_end(event: dict[str, Any]) -> None:
+    try:
+        click_lifecycle.publish_workspace_successor(event)
+    except Exception:
+        pass  # Archiving facts for a later session must never fail the host's exit.
     click_service.request_stop(event)
     click_shadow_dashboard.request_stop(event)
 
