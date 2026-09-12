@@ -362,3 +362,52 @@ class VerificationBindingStageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GitResolutionPassTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.workspace = Path(self.temporary.name) / "workspace"
+        self.workspace.mkdir()
+        subprocess.run(["git", "init", "-q", str(self.workspace)], check=True)
+
+    def test_git_is_resolved_once_per_workspace_inside_a_pass(self) -> None:
+        inspection = bindings.click_inspection
+        with mock.patch.object(
+            inspection, "resolve_read_only_executable", wraps=inspection.resolve_read_only_executable
+        ) as resolved:
+            with bindings.binding_pass():
+                for _ in range(3):
+                    output = bindings.git_capture(self.workspace, ["rev-parse", "--show-toplevel"])
+                    self.assertEqual(Path(output.decode().strip()).resolve(), self.workspace.resolve())
+            self.assertEqual(resolved.call_count, 1)
+            # Git itself still ran every time: the answer reflects the current tree.
+            (self.workspace / "note.txt").write_text("x", encoding="utf-8")
+            with bindings.binding_pass():
+                status = bindings.git_capture(self.workspace, ["status", "--porcelain"])
+            self.assertIn(b"note.txt", status)
+
+    def test_without_a_pass_every_call_resolves_again(self) -> None:
+        inspection = bindings.click_inspection
+        with mock.patch.object(
+            inspection, "resolve_read_only_executable", wraps=inspection.resolve_read_only_executable
+        ) as resolved:
+            for _ in range(2):
+                bindings.git_capture(self.workspace, ["rev-parse", "--show-toplevel"])
+            self.assertEqual(resolved.call_count, 2)
+
+    def test_nested_passes_share_one_memo_and_a_new_path_misses(self) -> None:
+        inspection = bindings.click_inspection
+        with mock.patch.object(
+            inspection, "resolve_read_only_executable", wraps=inspection.resolve_read_only_executable
+        ) as resolved:
+            with bindings.binding_pass():
+                bindings.git_capture(self.workspace, ["rev-parse", "--show-toplevel"])
+                with bindings.binding_pass():
+                    bindings.git_capture(self.workspace, ["rev-parse", "--show-toplevel"])
+                self.assertEqual(resolved.call_count, 1)
+                with mock.patch.dict(os.environ, {"PATH": os.environ.get("PATH", "") + os.pathsep + str(self.workspace)}):
+                    bindings.git_capture(self.workspace, ["rev-parse", "--show-toplevel"])
+                self.assertEqual(resolved.call_count, 2)
+            self.assertIsNone(bindings._binding_pass)

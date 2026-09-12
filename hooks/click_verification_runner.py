@@ -45,6 +45,7 @@ click_observer_control = _common.click_observer_control
 click_process = _common.click_process
 click_shadow_intelligence = _common.click_shadow_intelligence
 click_verification_inputs = _common.click_verification_inputs
+click_verification_bindings = _common.click_verification_bindings
 
 (_results,) = click_import_bootstrap.load_siblings(__package__, "click_verification_results")
 VerificationRunResult = _results.VerificationRunResult
@@ -126,7 +127,13 @@ def _parallel_blocks(
     return blocks
 
 
-def _run_verification(
+def _run_verification(arguments: list[str], **options: Any) -> int:
+    """One binding pass per runner: git resolution is computed once per workspace."""
+    with click_verification_bindings.binding_pass():
+        return _run_verification_impl(arguments, **options)
+
+
+def _run_verification_impl(
     arguments: list[str],
     *,
     file_content_digest: Callable[[Path], str] = _file_content_digest,
