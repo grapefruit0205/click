@@ -103,6 +103,13 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   makes the boundary ambiguous and re-runs the checks; a check that failed last
   is never archived while its passing siblings are; another repository never
   sees the archive.
+- The host-runtime part of the observer's input index is built once per
+  process. Every shard's pre-execution snapshot walked the same ~16,000 stdlib,
+  site-packages, loader and locale paths; now the runtime roots are indexed once
+  per runner and each snapshot copies that index and re-indexes only the
+  repository. A runtime file that changes after the shared index was taken is
+  still refused, because binding compares the pre-execution metadata with the
+  current one. Measured on the six-shard fixture: runner 9.08 s → 6.16 s.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the

@@ -181,6 +181,7 @@
               "tests.test_click_authoritative_reuse",
               "tests.test_click_automatic_observation",
               "tests.test_click_observer_runtime_memo",
+              "tests.test_click_shared_runtime_index",
               "tests.test_click_conditional_observation",
               "tests.test_click_framework_observation",
               "tests.test_click_framework_candidates",
@@ -224,6 +225,7 @@
             "tests/test_click_observer_windows.py",
             "tests/test_click_shadow_dashboard.py",
             "tests/test_click_shadow_intelligence.py",
+            "tests/test_click_shared_runtime_index.py",
             "tests/test_runner_state_recovery.py"
           ]
         },
