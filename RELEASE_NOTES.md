@@ -81,6 +81,19 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   itself still runs for every capture. Measured on a six-shard fixture: hook
   preparation 0.44 s → 0.32 s, all-reused preparation 0.95 s → 0.82 s, runner
   9.35 s → 9.08 s.
+- Supported suites are sharded automatically in Evidence mode. A broad
+  `unittest`, `pytest`, Vitest or Jest parent check without a committed plan is
+  collected by Click's own proposal generator, and the resulting shard policy is
+  kept in Click's state per repository root and parent check set and used at
+  once; nothing is written into the repository, and `click-gate sharding init`
+  still produces the reviewable file. The stored plan is validated exactly like
+  a committed one on every request — inventory patterns against the current
+  repository inventory, every file covered exactly once — so a new or removed
+  test file drops it and the next preparation regenerates it. A committed
+  manifest takes precedence; Guarded mode is unchanged. Generated unittest
+  children use `discover -p <file>`, whose discovery stats every file in the
+  start directory, so an edit re-runs that directory's shards; pytest, Vitest
+  and Jest children are exact file targets and reuse unchanged siblings.
 - A receipt's environment fingerprint normalizes the search path: repeated
   entries and Click's own command directory are dropped. A host that offers
   Click's commands by adding the plugin's directory to the search path of the

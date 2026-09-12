@@ -70,6 +70,13 @@ click_change_policy = _common.click_change_policy
 click_dependency_cache = _common.click_dependency_cache
 click_evidence = _common.click_evidence
 click_evidence_shards = _common.click_evidence_shards
+
+
+def _automatic_shards():
+    # Loaded on use: the proposal generator imports the verification package,
+    # which imports this module.
+    (module,) = click_import_bootstrap.load_siblings(__package__, "click_automatic_shards")
+    return module
 click_host_coverage = _common.click_host_coverage
 click_incremental = _common.click_incremental
 click_observer_control = _common.click_observer_control
@@ -260,6 +267,37 @@ def _expand_evidence_shards(
             parent_source_key=parent_source_key,
             git_capture=git_capture,
         )
+        if (
+            decision.get("status") != "sharded"
+            and decision.get("reason") in {"manifest-not-committed", "parent-not-declared"}
+            and state.get("runtime_mode") == "evidence"
+        ):
+            # Evidence mode: a supported suite without a plan is sharded by
+            # Click itself, from the runner's own collection, kept in Click's
+            # state. The committed manifest, when present, still wins.
+            automatic = _automatic_shards()
+            generated, generation_reason = automatic.generate(
+                workspace, workspace, parent_checks
+            )
+            if generated is not None:
+                decision = click_evidence_shards.resolve_plan(
+                    workspace,
+                    parent_checks,
+                    parent_source_key=parent_source_key,
+                    git_capture=git_capture,
+                )
+                if decision.get("status") == "sharded":
+                    advisories.append(
+                        f"Click Evidence Shards [{evidence_id}]: collected the suite and "
+                        f"generated a {len(decision.get('children', []))}-shard plan "
+                        "automatically; it lives in Click's state, and `click-gate "
+                        "sharding init` writes a reviewable copy into the repository."
+                    )
+            elif generation_reason not in automatic.QUIET_REASONS:
+                advisories.append(
+                    f"Click Evidence Shards [{evidence_id}]: automatic sharding "
+                    f"unavailable ({generation_reason}); running the original broad suite."
+                )
         plan_current = decision.get("status") == "sharded"
         shard_checks: list[dict[str, Any]] | None = None
         validation_error = ""
