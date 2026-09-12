@@ -1,6 +1,8 @@
 # Release notes
 
-## Unreleased v1.1 candidate
+## v1.1.0 — 2026-09-13 — plain `click-gate verify -- <check argv>`
+
+Both marketplaces pin `v1.1.0`; updating v1.0.1 installs it.
 
 - `click-gate verify -- <check argv>` submits one check without the JSON
   envelope. The evidence id is derived from the argv (`E_` plus twelve hex
