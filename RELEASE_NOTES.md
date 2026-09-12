@@ -70,6 +70,17 @@ This candidate remains unreleased. See `docs/architecture/automatic-observation.
   followed in none of eight sessions, and the sessions that did use Click loaded
   the Skill first and re-checked reused results by hand. The host's authority,
   the absence of any approval contract and the fail-open clause are unchanged.
+- Runtime identity checks are memoized per process. A runner validates the
+  native observer twice per shard plus at claim and record time, and every
+  validation hashed the artifact, the compiler, the interpreter and about two
+  hundred CPython headers and probed the tracer twice; the answers cannot change
+  while those files keep their identity, so they are now computed once per
+  process and keyed by each file's path, size, mtime, inode and device. Git
+  executable resolution and its sanitized environment are likewise computed once
+  per workspace for the duration of one hook preparation or one runner; git
+  itself still runs for every capture. Measured on a six-shard fixture: hook
+  preparation 0.44 s → 0.32 s, all-reused preparation 0.95 s → 0.82 s, runner
+  9.35 s → 9.08 s.
 - Passing receipts now outlive the host session. Receipts are stored per host
   session, so a new Claude Code session used to start with none and re-ran every
   check once. When an Evidence session completes, and at session end, its
