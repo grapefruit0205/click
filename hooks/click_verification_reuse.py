@@ -17,8 +17,8 @@ if __package__:
 else:  # Installed launchers execute hooks directly.
     import click_import_bootstrap
 
-(click_capability, click_change_policy, click_dependency_cache, click_evidence, click_evidence_shards, click_host_coverage, click_incremental,) = click_import_bootstrap.load_siblings(
-    __package__, "click_capability", "click_change_policy", "click_dependency_cache", "click_evidence", "click_evidence_shards", "click_host_coverage", "click_incremental"
+(click_capability, click_change_policy, click_dependency_cache, click_evidence, click_evidence_shards, click_host_coverage, click_incremental, click_observation_inputs,) = click_import_bootstrap.load_siblings(
+    __package__, "click_capability", "click_change_policy", "click_dependency_cache", "click_evidence", "click_evidence_shards", "click_host_coverage", "click_incremental", "click_observation_inputs"
 )
 
 def automatic_observation_required(source: dict[str, Any]) -> bool:
@@ -145,16 +145,19 @@ def changed_observed_inputs(
     executed sibling can change ignored data without changing the Git tree.
     """
     changed = set()
-    for source_key in source_keys:
-        observation = sources[source_key].get("verified_dependency_observation")
-        if not click_dependency_cache.bound_dependency_observation_is_reusable(observation):
-            continue
-        if not click_dependency_cache.bound_dependency_observation_matches(
-            observation, project=project, runtime=runtime,
-            binding={field: observation["binding"][field]
-                     for field in click_dependency_cache.AUTHORITATIVE_CURRENT_BINDING_FIELDS},
-        ):
-            changed.add(source_key)
+    # This boundary is one decision of its own, after execution; it never
+    # reuses the preparation's readings.
+    with click_observation_inputs.identity_pass():
+        for source_key in source_keys:
+            observation = sources[source_key].get("verified_dependency_observation")
+            if not click_dependency_cache.bound_dependency_observation_is_reusable(observation):
+                continue
+            if not click_dependency_cache.bound_dependency_observation_matches(
+                observation, project=project, runtime=runtime,
+                binding={field: observation["binding"][field]
+                         for field in click_dependency_cache.AUTHORITATIVE_CURRENT_BINDING_FIELDS},
+            ):
+                changed.add(source_key)
     return changed
 
 
