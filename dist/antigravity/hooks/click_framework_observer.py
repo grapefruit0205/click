@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 
 if __package__:
@@ -26,6 +27,9 @@ else:
 
 STATE_FIELD = "framework_observations"
 MAX_RECORDS = 256
+# The native backend a conditional receipt binds: strace on Linux, the inbox
+# ETW controller on Windows (its converter is bound with it).
+BACKEND_EXECUTABLE = "logman" if os.name == "nt" else "strace"
 FRAMEWORKS = frozenset({"node-test", "node-script", "vitest", "jest", "package-script"})
 
 
@@ -71,9 +75,7 @@ def record_valid(value) -> bool:
                         or len(projection["external"]) > conditional.MAX_INPUTS):
                     return False
                 for row in projection["external"]:
-                    if (not isinstance(row, dict) or set(row) != {"path", "kind", "operations"}
-                            or not isinstance(row["path"], str) or not row["path"].startswith("/")
-                            or not conditional.seed_valid([{**row, "path": row["path"][1:]}])):
+                    if not conditional.external_row_valid(row):
                         return False
             except (KeyError, ValueError, TypeError):
                 return False
@@ -133,7 +135,11 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
     projection = None
     def observed(raw, **options):
         nonlocal tree, projection
-        tree = processes.inspect(raw, **options)
+        if os.name == "nt":
+            tree = conditional._windows().inspect_tree(
+                raw, root_pid=options.get("root_pid", -1), truncated=bool(options.get("truncated", False)))
+        else:
+            tree = processes.inspect(raw, truncated=bool(options.get("truncated", False)))
         if collector and collector.location:
             projection = conditional.project_capture(raw, project=project, cwd=kwargs["workspace"],
                                                      directory=collector.location.name, **options)
@@ -176,7 +182,7 @@ def run_command(argv, *, runtime_inputs: bool = True, previous=None,
     refusal = ""
     if (result.exit_code == 0 and before and conditional_context and collector
             and starting_digest == conditional.source_digest()):
-        backend, error = kwargs["resolve_backend"]("strace", workspace=Path(kwargs["workspace"]))
+        backend, error = kwargs["resolve_backend"](BACKEND_EXECUTABLE, workspace=Path(kwargs["workspace"]))
         if not error:
             envelope = conditional.issue(value, before=before, project=project,
                                          external_before=external_before,

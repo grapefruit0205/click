@@ -21,6 +21,7 @@ HOOK_FILES = (
     "click_authoritative_observer.py",
     "click_framework_observer.py",
     "click_conditional_observer.py",
+    "click_conditional_windows.py",
     "click_node_observer.py",
     "click_node_bootstrap.mjs",
     "click_node_controller.cjs",

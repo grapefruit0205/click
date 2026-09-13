@@ -42,7 +42,7 @@ class NodeObservationBoundaryTests(unittest.TestCase):
                     collector.close()
 
 
-@unittest.skipUnless(sys.platform == "linux" and shutil.which("node"), "native Node inspector requires Linux")
+@unittest.skipUnless(sys.platform in observer.PROFILES and shutil.which("node"), "native Node inspector profile for this host")
 class RealNodeObservationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

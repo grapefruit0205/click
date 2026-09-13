@@ -35,6 +35,10 @@ if (directory && ownedOptions && isMainThread && !testRunner && !priorPreload) {
         }, 20);
       });
       if (!attached) inspector.close();
+      // The boundary between the runtime's own bootstrap reads and the
+      // check's inputs, as one file event every backend can see; strace
+      // also has the acknowledgement probe above, ETW has only this.
+      else fs.writeFileSync(path.join(directory, `started-${process.pid}`), '', { mode: 0o600 });
     }
   } catch {
     if (owned) { try { inspector.close(); } catch {} }

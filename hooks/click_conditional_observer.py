@@ -35,21 +35,46 @@ def modules():
     return click_dependency_cache, click_node_observer
 
 
+# The projection sources that decide what a receipt binds, per host backend.
+# A change to one host's projection relearns that host's receipts only.
+PROJECTION_SOURCES = {
+    "nt": ("click_conditional_observer.py", "click_framework_observer.py", "click_conditional_windows.py",
+           "click_observer_windows.py", "click_observer_process_tree.py"),
+    "posix": ("click_conditional_observer.py", "click_framework_observer.py", "click_observer_linux.py",
+              "click_observer_process_tree.py"),
+}
+
+
 def source_digest():
     _, node = modules()
     return digest([node.source_digest(), *[
-        hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in (
-            "click_conditional_observer.py", "click_framework_observer.py", "click_observer_linux.py",
-            "click_observer_process_tree.py")]])
+        hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
+        for name in PROJECTION_SOURCES["nt" if os.name == "nt" else "posix"]]])
 
 
-def project_capture(raw, *, project, cwd, directory, truncated=False):
+def _windows():
+    if __package__:
+        from . import click_conditional_windows
+    else:
+        import click_conditional_windows
+    return click_conditional_windows
+
+
+def project_capture(raw, *, project, cwd, directory, truncated=False, **options):
     """Conditional projection; retain ordinary external files as bound inputs.
 
 Only the fixed Node bootstrap's proc/cgroup probes and ancestor metadata are
 outside this confidence scope. The same probes after the acknowledgement are
 ordinary inputs. No application read is removed because it is later written.
+
+On Windows ``raw`` is the ETW document tuple and ``options`` carry the root
+pid and device map; the projection then comes from ``click_conditional_windows``.
     """
+    if os.name == "nt":
+        return _windows().project_capture(
+            raw, project=project, cwd=cwd, directory=directory, truncated=truncated,
+            root_pid=options.get("root_pid", -1), device_paths=options.get("device_paths"),
+        )
     if __package__:
         from . import click_observer_linux as linux, click_observer_process_tree as processes
     else:
@@ -142,13 +167,38 @@ ordinary inputs. No application read is removed because it is later written.
     return {"inputs": list(parsed.inputs), "external": external}
 
 
+EXTERNAL_WINDOWS = re.compile(r"^[A-Za-z]:/(?!/)")
+
+
+def external_row_valid(row):
+    """One absolute input row in the receipt's spelling for this host.
+
+    POSIX rows start with ``/``; Windows rows are spelled ``C:/dir/file`` so
+    the same seed rules (no backslashes, no empty or dot segments) apply to the
+    part after the drive.
+    """
+    if not isinstance(row, dict) or set(row) != {"path", "kind", "operations"} or not isinstance(row["path"], str):
+        return False
+    path = row["path"]
+    if os.name == "nt":
+        if EXTERNAL_WINDOWS.match(path) is None:
+            return False
+        return seed_valid([{**row, "path": path[3:]}])
+    if not path.startswith("/"):
+        return False
+    return seed_valid([{**row, "path": path[1:]}])
+
+
 def external_snapshot(rows):
     if not isinstance(rows, list) or len(rows) > MAX_INPUTS:
         raise ValueError("external-input-limit")
     output, budget = [], [0]
     for row in rows:
         path = Path(row["path"])
-        if not path.is_absolute() or path.parts[1:2] in [("proc",), ("sys",), ("dev",)]:
+        if os.name == "nt":
+            if EXTERNAL_WINDOWS.match(row["path"]) is None or not path.is_absolute():
+                raise ValueError("external-input-unsupported")
+        elif not path.is_absolute() or path.parts[1:2] in [("proc",), ("sys",), ("dev",)]:
             raise ValueError("external-input-unsupported")
         aliases = []
         for part in [path, *path.parents]:
@@ -156,21 +206,23 @@ def external_snapshot(rows):
                 info = part.lstat()
                 aliases.append([str(part), os.readlink(part), stat.S_IFMT(info.st_mode)])
         resolved = path.resolve(strict=False)
-        normalized = {"path": str(resolved).lstrip("/"), "kind": row["kind"], "operations": row["operations"]}
+        anchor = Path(resolved.anchor) if os.name == "nt" else Path("/")
+        relative = resolved.relative_to(anchor).as_posix() if os.name == "nt" else str(resolved).lstrip("/")
+        normalized = {"path": relative, "kind": row["kind"], "operations": row["operations"]}
         # openat(O_RDONLY) may open a directory without O_DIRECTORY (e.g.
         # libc locale discovery). Bind its actual metadata; getdents still
         # needs an explicit enumerate event and cannot be inferred here.
         if row["kind"] == "file" and resolved.is_dir():
             normalized["kind"] = "directory"
-        output.append({**row, "digest": digest([aliases, fingerprint(Path("/"), normalized, budget)])})
+        output.append({**row, "digest": digest([aliases, fingerprint(anchor, normalized, budget)])})
     return output
 
 
 def external_valid(rows):
     return bool(isinstance(rows, list) and len(rows) <= MAX_INPUTS and
                 all(isinstance(row, dict) and set(row) == {"path", "kind", "operations", "digest"}
-                    and isinstance(row["path"], str) and row["path"].startswith("/")
-                    and records_valid([{**row, "path": row["path"][1:]}]) for row in rows)
+                    and isinstance(row["digest"], str) and DIGEST.fullmatch(row["digest"])
+                    and external_row_valid({key: row[key] for key in ("path", "kind", "operations")}) for row in rows)
                 and [row["path"] for row in rows] == sorted(set(row["path"] for row in rows)))
 
 
@@ -324,13 +376,35 @@ def matches(value, *, project, binding, **_):
     runtime = value["runtime"]
     try:
         return (runtime["collector_digest"] == source_digest()
-                and stat.S_ISCHR(os.stat("/dev/null").st_mode) and os.stat("/dev/null").st_rdev == os.makedev(1, 3)
+                and null_device_is_genuine()
                 and node.digest_file(Path(runtime["node"])) == runtime["node_digest"]
-                and node.digest_file(Path(runtime["backend_path"])) == runtime["backend_digest"]
+                and backend_digest(runtime["backend_path"]) == runtime["backend_digest"]
                 and external_snapshot(value["external_inputs"]) == value["external_inputs"]
                 and current(project, value["inputs"]))
     except (OSError, ValueError):
         return False
+
+
+def null_device_is_genuine():
+    """The projection set the null device aside; it must still be the real one."""
+    if os.name == "nt":
+        return True  # \Device\Null is a kernel object, not a path a project can replace
+    info = os.stat("/dev/null")
+    return stat.S_ISCHR(info.st_mode) and info.st_rdev == os.makedev(1, 3)
+
+
+def backend_digest(backend_path):
+    """Identity of the native backend the receipt was learned with.
+
+    Linux binds the strace binary; Windows binds the inbox logman/tracerpt
+    pair the ETW backend records as one combined digest.
+    """
+    _, node = modules()
+    if os.name == "nt":
+        logman = Path(backend_path)
+        return _windows().windows.combined_backend_digest(
+            node.digest_file(logman), node.digest_file(logman.with_name("tracerpt.exe")))
+    return node.digest_file(Path(backend_path))
 
 
 def issue(record, *, before, external_before, project, context, secret, node_path, backend_path):

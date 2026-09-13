@@ -373,8 +373,16 @@ def parse_windows_etw(
     device_paths: Mapping[str, str] | None = None,
     transparent_child_images: Sequence[str] = (),
     allow_workspace_root: bool = False,
+    event_filter: Callable[[int, int | None, str, str | None, str | None], bool] | None = None,
 ) -> ParsedTrace:
-    """Normalize bounded ETW XML into content-free repository inputs."""
+    """Normalize bounded ETW XML into content-free repository inputs.
+
+    ``event_filter`` sees every scoped file event in capture order as
+    ``(pid, event_id, path, kind, operation)`` (kind and operation are None
+    for ids the parser ignores) and returns False to set that event aside.
+    The conditional projection uses it to separate the collector's own
+    transport and the runtime's bootstrap probes from the check's inputs.
+    """
 
     documents = (raw,) if isinstance(raw, bytes) else tuple(raw)
     events, unresolved = _iter_events(documents)
@@ -575,6 +583,8 @@ def parse_windows_etw(
         if not path:
             key = _first_text(fields, _FILE_KEY_FIELDS).lower()
             path = file_keys.get(key, "")
+        operation: str | None
+        kind: str | None
         if event_id in _DIRECTORY_EVENT_IDS:
             operation, kind = "enumerate", "directory"
         elif event_id in _READ_EVENT_IDS:
@@ -582,9 +592,13 @@ def parse_windows_etw(
         elif event_id in _METADATA_EVENT_IDS:
             operation, kind = "metadata", "file"
         elif event_id in _IGNORED_FILE_EVENT_IDS:
-            continue
+            operation, kind = None, None
         else:
             unresolved = _bounded_add(unresolved, 1)
+            continue
+        if event_filter is not None and path and not event_filter(pid, event_id, path, kind, operation):
+            continue
+        if kind is None or operation is None:
             continue
         if not path:
             unresolved = _bounded_add(unresolved, 1)
@@ -933,8 +947,15 @@ def run_command(
     terminate_group: TerminateGroup = click_process.terminate_process_group,
     system_name: str | None = None,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
+    process_observer: Callable[..., None] | None = None,
 ) -> ShadowExecution:
-    """Execute one target and attach best-effort native Windows telemetry."""
+    """Execute one target and attach best-effort native Windows telemetry.
+
+    ``process_observer`` receives the bounded ETW documents once the target
+    has run, with the root pid, the device map and the loss flags, so a caller
+    can derive lifecycle facts and a conditional projection from the same
+    capture that produced the shadow record.
+    """
 
     try:
         system = platform.system() if system_name is None else system_name
@@ -1029,6 +1050,17 @@ def run_command(
     raw_documents = collected.raw
     try:
         mappings = device_map_provider()
+        if process_observer is not None:
+            try:
+                process_observer(
+                    raw_documents,
+                    root_pid=int(collected.root_pid or -1),
+                    device_paths=mappings,
+                    truncated=collected.truncated or collected.failed,
+                    process_scope_complete=collected.process_scope_complete,
+                )
+            except Exception:
+                pass  # Candidate analysis cannot change or repeat target execution.
         parsed = parse_windows_etw(
             raw_documents,
             workspace=observation_root or workspace,
