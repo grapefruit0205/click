@@ -16,6 +16,9 @@ records. Start here when deciding which Markdown file is authoritative.
   current behavior.
 - [Architecture](architecture/README.md) contains maintained design and
   optimization documents.
+- [Privacy](privacy.md) describes what Click stores and never does;
+  [Claude community marketplace listing](claude-community-listing.md) is the
+  submission kit kept in step with the README.
 
 ## Runtime prompts and generated files
 

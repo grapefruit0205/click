@@ -97,8 +97,8 @@ receipts never cross hosts.
   transport). Without Git Bash, Claude Code offers only its PowerShell tool,
   which this package does not rewrite yet. The Codex Windows batch bridge is
   not part of this package.
-- Python checks are the Windows scope: the resident worker, receipts, sharding
-  and the inbox ETW observer follow the shared runtime. Conditional JS reuse
+- The shared runtime runs on Windows: the resident worker, receipts, sharding
+  and the inbox ETW observer for Python checks. Conditional JS reuse
   (the Node inspector observer with an ETW projection) works on Windows from
   an elevated session, since the inbox `logman` sessions need it; without
   elevation checks run and same-state receipts still reuse. The native
