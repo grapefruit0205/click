@@ -54,7 +54,7 @@ PROCESS_KEYWORDS = "0x10"
 # conditional projection which files the check itself created.
 FILE_KEYWORDS = "0x11b0"
 TRACE_LEVEL = "0xff"
-MAX_ETL_MIB = 64
+MAX_ETL_MIB = 32
 MAX_RAW_TRACE_BYTES = 96 * 1024 * 1024
 MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
 MAX_XML_EVENTS = 2_000_000
@@ -126,7 +126,9 @@ class ParsedTrace:
 @dataclass(frozen=True, slots=True)
 class CollectedExecution:
     exit_code: int
-    raw: tuple[bytes, ...]
+    # Converted XML documents as bytes, or documents already streamed into
+    # scoped ``{"events": [...], "lost": n}`` records by the collector.
+    raw: tuple[Any, ...]
     truncated: bool
     failed: bool
     target_started: bool
@@ -357,6 +359,15 @@ def _iter_events(
     events: list[ExtractedEvent] = []
     unresolved = 0
     for raw in raw_documents:
+        if isinstance(raw, dict) and isinstance(raw.get("events"), list):
+            # Already extracted by the collector while the XML streamed from disk.
+            lost = raw.get("lost", 0)
+            if isinstance(lost, int) and not isinstance(lost, bool) and lost > 0:
+                unresolved = _bounded_add(unresolved, lost)
+            for extracted in raw["events"]:
+                if keep is None or keep(*extracted):
+                    events.append(extracted)
+            continue
         if not isinstance(raw, bytes) or not raw:
             unresolved = _bounded_add(unresolved, 1)
             continue
@@ -411,45 +422,15 @@ def parse_windows_etw(
     """
 
     documents = (raw,) if isinstance(raw, bytes) else tuple(raw)
+    if not isinstance(root_pid, int) or isinstance(root_pid, bool):
+        root_pid = -1
     unresolved_reasons: dict[str, int] = {}
 
     def _note(reason: str) -> None:
         # Counts only, for the caller's diagnostics; never paths or contents.
         unresolved_reasons[reason] = unresolved_reasons.get(reason, 0) + 1
 
-    # Process starts precede the file session's events in the collector's
-    # document order, so the root's descendants are known before a file event
-    # is retained. Events of unrelated processes are dropped as they stream
-    # by; keyless path bindings still need every descendant event.
-    scope: dict[str, Any] = {"parents": {}, "descendants": None}
-
-    def keep(provider: str, event_id: int | None, fields: dict[str, str]) -> bool:
-        if provider in _PROCESS_NAMES:
-            if event_id == 1:
-                pid = _first_integer(fields, _PID_FIELDS)
-                parent = _first_integer(fields, _PARENT_PID_FIELDS)
-                if pid is not None and parent is not None:
-                    scope["parents"][pid] = parent
-            return True
-        if provider not in _FILE_NAMES:
-            return False
-        pid = _event_pid(fields)
-        if pid is None:
-            return True  # accounted as unresolved when it names a workspace path
-        if scope["descendants"] is None or scope.get("parent_count") != len(scope["parents"]):
-            descendants = {root_pid}
-            changed = True
-            while changed:
-                changed = False
-                for child, parent in scope["parents"].items():
-                    if parent in descendants and child not in descendants:
-                        descendants.add(child)
-                        changed = True
-            scope["descendants"] = descendants
-            scope["parent_count"] = len(scope["parents"])
-        return pid in scope["descendants"]
-
-    events, unresolved = _iter_events(documents, keep)
+    events, unresolved = _iter_events(documents, scoped_keep(root_pid))
     if truncated:
         unresolved = _bounded_add(unresolved, 1); _note("truncated")
     if not isinstance(root_pid, int) or isinstance(root_pid, bool) or root_pid <= 0:
@@ -750,6 +731,78 @@ def _read_bounded(path: Path, limit: int) -> tuple[bytes, bool]:
     return raw[:limit], bool(size > limit or len(raw) > limit)
 
 
+def scoped_keep(root_pid: int) -> Callable[[str, int | None, dict[str, str]], bool]:
+    """Keep process events and the file events of the root's descendants.
+
+    Process starts precede the file session's events in the collector's
+    document order, so the descendant set is complete before a file event is
+    judged; events of unrelated processes are dropped as they stream by.
+    """
+    parents: dict[int, int] = {}
+    scope: dict[str, Any] = {"descendants": None, "count": -1}
+
+    def keep(provider: str, event_id: int | None, fields: dict[str, str]) -> bool:
+        if provider in _PROCESS_NAMES:
+            if event_id == 1:
+                pid = _first_integer(fields, _PID_FIELDS)
+                parent = _first_integer(fields, _PARENT_PID_FIELDS)
+                if pid is not None and parent is not None:
+                    parents[pid] = parent
+            return True
+        if provider not in _FILE_NAMES:
+            return False
+        pid = _event_pid(fields)
+        if pid is None:
+            return True  # accounted as unresolved when it names a workspace path
+        if scope["count"] != len(parents):
+            descendants = {root_pid}
+            changed = True
+            while changed:
+                changed = False
+                for child, parent in parents.items():
+                    if parent in descendants and child not in descendants:
+                        descendants.add(child)
+                        changed = True
+            scope["descendants"] = descendants
+            scope["count"] = len(parents)
+        return pid in scope["descendants"]
+
+    return keep
+
+
+def _extract_document(
+    path: Path, keep: Callable[[str, int | None, dict[str, str]], bool]
+) -> tuple[dict[str, Any], bool]:
+    """Stream one converted XML file into scoped events; never hold the XML.
+
+    Returns the document and whether the parse was cut short (a malformed
+    file or more events than the bound), which the caller treats as loss.
+    """
+    events: list[ExtractedEvent] = []
+    lost = 0
+    seen = 0
+    cut = False
+    try:
+        for _, element in ElementTree.iterparse(str(path), events=("end",)):
+            name = _local_name(element.tag)
+            if name == "event":
+                seen += 1
+                if seen > MAX_XML_EVENTS:
+                    cut = True
+                    break
+                extracted = _event_fields(element)
+                if keep(*extracted):
+                    events.append(extracted)
+                element.clear()
+            elif name in {"eventslost", "bufferslost", "logbufferslost"}:
+                counted = _parse_integer(element.text)
+                if counted:
+                    lost = _bounded_add(lost, counted)
+    except (ElementTree.ParseError, ValueError, OSError):
+        cut = True
+    return {"events": events, "lost": lost, "seen": seen}, cut
+
+
 def _wait_for_target(target: subprocess.Popen[Any]) -> int:
     """Wait in bounded intervals so Windows can deliver KeyboardInterrupt."""
     while True:
@@ -775,13 +828,7 @@ def collect_command(
     """Collect process and file ETW while executing the target at most once."""
 
     started = time.monotonic()
-    bounded_limit = (
-        capture_limit
-        if isinstance(capture_limit, int)
-        and not isinstance(capture_limit, bool)
-        and capture_limit > 0
-        else MAX_RAW_TRACE_BYTES
-    )
+    del capture_limit  # events are streamed and scoped; the XML size bounds nothing
     target: subprocess.Popen[Any] | None = None
     target_started = False
     root_pid: int | None = None
@@ -789,7 +836,7 @@ def collect_command(
     failed = False
     failure_codes: set[str] = set()
     truncated = False
-    raw_documents: list[bytes] = []
+    raw_documents: list[Any] = []
     sessions: list[str] = []
     preparation_ms = 0
     cleanup_ms = 0
@@ -935,13 +982,24 @@ def collect_command(
                         failure_codes.add("conversion-failed")
                         failed = True
                         continue
-                    raw, was_truncated = _read_bounded(xml_path, bounded_limit)
-                    if not raw:
+                    try:
+                        size = xml_path.stat().st_size
+                    except OSError:
+                        size = 0
+                    if size <= 0:
                         failure_codes.add("xml-unavailable")
                         failed = True
+                        raw_documents.append({"events": [], "lost": 0, "seen": 0})
+                        continue
+                    # The session is system-wide; only the process tree's
+                    # events are kept, streamed from disk, so the size of the
+                    # XML bounds nothing but the conversion time.
+                    document, was_truncated = _extract_document(
+                        xml_path, scoped_keep(int(root_pid or -1))
+                    )
                     if was_truncated:
                         failure_codes.add("xml-truncated")
-                    raw_documents.append(raw)
+                    raw_documents.append(document)
                     truncated = bool(truncated or was_truncated)
     except KeyboardInterrupt:
         failure_codes.add("interrupted")
