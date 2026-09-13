@@ -15,7 +15,11 @@ in length, and one machine and one model were used.
 | turns | 16 (10–19) | 16 (16–19) | 0 |
 | cost | $0.60 (0.48–0.75) | $0.66 (0.55–0.69) | **+11%** (mean +5.6%) |
 | output tokens | 3,038 | 3,847 | +27% |
-| total tokens incl. cache | 497k (454k–727k) | 681k (476k–744k) | +37% (mean +19%) |
+
+Cost is the comparable measure of token use: it weights cache reads, cache
+creation, uncached input and output at their prices. Raw token totals are
+dominated by cache reads (each turn re-reads the context) and are given only in
+the breakdown below, not as a headline.
 
 All eight sessions fixed all three seeded bugs, left `tests/` untouched, and
 passed an independent full-suite run afterwards. Every Click-on session sent
