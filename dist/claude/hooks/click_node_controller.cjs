@@ -221,8 +221,14 @@ class Session {
       contextId, silent: true,
     });
     const object = bridge.result;
-    // A sandbox may already own this name. Never delete its property or invoke
-    // its accessors/proxies. Inspector reads the native function descriptions.
+    // A realm the extension never reached (created before the reader was
+    // loaded, like Node's internal side-effect-free regex realm) has no
+    // bridge at all: `undefined`, so the caller leaves the probe without
+    // native state and any value consumed there reports itself. A sandbox
+    // may already own this name with something else: `null`, a setup
+    // failure. Never delete a foreign property or invoke its accessors/proxies;
+    // the inspector reads the native function descriptions.
+    if (object?.type === 'undefined') return undefined;
     if (!object?.objectId || object.type !== 'object' || object.subtype || object.className !== 'Object') return null;
     const properties = await this.request('Runtime.getProperties', { objectId: object.objectId, ownProperties: true });
     const functions = ['randomState', 'memoryState'].map(name => properties.result.find(item => item.name === name)?.value);
@@ -281,7 +287,9 @@ class Session {
       const valueBreakpoint = await this.request('Debugger.setBreakpointOnFunctionCall', { objectId: probeFunction });
       this.valueBreakpoints.set(valueBreakpoint.breakpointId, contextId);
       this.valueProbes.set(contextId, probe.result.objectId);
-      const nativeFunctions = await this.nativeForContext(contextId) || this.nativeFunctions;
+      const bridged = contextId === this.defaultContext ? null : await this.nativeForContext(contextId);
+      const nativeFunctions = bridged === undefined ? null : (bridged || this.nativeFunctions);
+      if (bridged === null && contextId !== this.defaultContext && this.nativeFunctions) failure('input-value-setup-incomplete');
       if (nativeFunctions) {
         try {
           const configured = await this.request('Runtime.callFunctionOn', { objectId: probe.result.objectId,

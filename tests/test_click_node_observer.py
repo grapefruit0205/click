@@ -42,6 +42,22 @@ class NodeObservationBoundaryTests(unittest.TestCase):
                     collector.close()
 
 
+def _companion_toolchain(node) -> bool:
+    """The host has what the state reader compiles against, so it must build.
+
+    Linux needs `c++`; Windows needs the MSVC tools on PATH (a developer
+    command prompt) and this Node version's headers (MSI install or node-gyp
+    cache). Without them the reader is legitimately absent.
+    """
+    state = observer.click_node_state
+    if observer.digest_file(Path(node)) != state.NODE_DIGEST:
+        return False
+    if os.name == "nt":
+        return (all(shutil.which(tool) for tool in state.WINDOWS_TOOLS)
+                and state._windows_headers(Path(node).resolve(), dict(os.environ)) is not None)
+    return bool(shutil.which("c++"))
+
+
 @unittest.skipUnless(sys.platform in observer.PROFILES and shutil.which("node"), "native Node inspector profile for this host")
 class RealNodeObservationTests(unittest.TestCase):
     @classmethod
@@ -49,6 +65,7 @@ class RealNodeObservationTests(unittest.TestCase):
         cls.node = shutil.which("node")
         if subprocess.check_output([cls.node, "--version"]).strip().decode() != observer.VERSION:
             raise unittest.SkipTest("versioned Node input profile unavailable")
+        cls.companion = observer.click_node_state.prepare(Path(cls.node).resolve(), Path.cwd(), dict(os.environ))
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="click-node-case-")
@@ -114,7 +131,7 @@ console.log('VALUES', JSON.stringify({
             self.assertEqual(observed["last_value_digest"], expected, (source, observed))
         self.assertEqual(consumed["atomics-add"], "0")
         self.assertEqual(consumed["atomics-load"], "7")
-        if shutil.which("c++") and observer.digest_file(Path(self.node)) == observer.click_node_state.NODE_DIGEST:
+        if _companion_toolchain(self.node):
             self.assertTrue(self.record["state_companion_digest"], self.record)
             for source in ("math-random", "atomics-add", "atomics-load"):
                 self.assertEqual(self.record["values"][source]["state_count"], 1, self.record)
@@ -129,7 +146,6 @@ console.log('VALUES', JSON.stringify({
             self.assertEqual(self.record["values"]["math-random"]["state_count"], 1, self.record)
             self.assertNotIn("input-value-setup-incomplete", self.record["reasons"])
 
-    @unittest.skipIf(os.name == "nt", "value-state assertions need the native state companion (stage 3 on Windows)")
     def test_atomic_coercion_and_thrown_identity_are_not_repeated_or_replaced(self):
         result = self.execute("""
 const assert = require('node:assert/strict');
@@ -154,8 +170,9 @@ console.log('SEMANTICS-PRESERVED');
         self.assertIn("input-coercion-state-incomplete", self.record["reasons"])
         self.assertNotIn("input-values-unavailable", self.record["reasons"])
 
-    @unittest.skipIf(os.name == "nt", "value-state assertions need the native state companion (stage 3 on Windows)")
     def test_vm_owner_field_is_not_deleted_or_treated_as_native_state(self):
+        if not self.companion:
+            self.skipTest("exact-ABI native state companion unavailable on this host")
         result = self.execute("""
 const vm = require('node:vm');
 for (const value of ['owner', {get randomState(){throw Error('owner getter invoked');}}]) {
@@ -350,7 +367,7 @@ class NodeDiagnosticHookTests(ClickGateTestCase):
         self.assertNotIn("[Click framework observer]", run.stdout)
 
 
-@unittest.skipUnless(sys.platform == "linux" and shutil.which("node") and shutil.which("c++"), "native state reader requires Linux toolchain")
+@unittest.skipUnless(shutil.which("node"), "native state reader needs Node")
 class NativeNodeStateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
