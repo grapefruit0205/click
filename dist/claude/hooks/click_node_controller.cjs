@@ -49,7 +49,10 @@ function consumeValues(session, contextId, value) {
   if (dropped) failure('input-value-limit');
   if (intact !== null && typeof intact !== 'boolean') throw new Error('invalid values');
   if (intact === false) failure('input-source-replaced');
-  if (intact !== null) session.valueClosed.add(contextId);
+  if (intact !== null) {
+    session.valueClosed.add(contextId);
+    if (contextId === session.defaultContext) session.closeRealmProbes();
+  }
   for (let index = 0; index < count; index++) {
     const row = rows[index];
     if (!row || Object.keys(row).sort().join(',') !== 'memory,outcome,sequence,source,state,value' ||
@@ -98,6 +101,22 @@ function consumeValues(session, contextId, value) {
 }
 
 function failure(reason) { reasons.add(reason); }
+
+// WeakRef and FinalizationRegistry are native-escape primitives because a
+// program can observe garbage-collection timing through them. Node's own
+// modules also construct them for bookkeeping (diagnostics channels keep a
+// WeakRefMap), on some hosts only after the session attached. A construction
+// whose every frame is a `node:` module is the runtime's, not an input the
+// check consumed; one frame of user code keeps it a hit.
+const GC_HANDLE_PRIMITIVES = new Set(['WeakRef', 'FinalizationRegistry']);
+function internalOnlyGcHandle(session, breakpointId, params) {
+  if (!GC_HANDLE_PRIMITIVES.has(session.breakpointNames.get(breakpointId))) return false;
+  const frames = params.callFrames || [];
+  return frames.length > 0 && frames.every(frame => {
+    const url = frame.url || session.scripts.get(frame.location?.scriptId)?.url || '';
+    return url.startsWith('node:');
+  });
+}
 function sendLine(value) { process.stdout.write(JSON.stringify(value) + '\n'); }
 
 // Each expression resolves an original function in this execution context.
@@ -131,7 +150,7 @@ const modules = {
 class Session {
   constructor(send, socket, parent = null, workerId = null) {
     this.sendRaw = send; this.socket = socket; this.parent = parent; this.workerId = workerId;
-    this.pending = new Map(); this.nextId = 0; this.breakpoints = new Map(); this.children = new Map();
+    this.pending = new Map(); this.nextId = 0; this.breakpoints = new Map(); this.breakpointNames = new Map(); this.children = new Map();
     this.contextIds = new Set(); this.scripts = new Map(); this.ready = false; this.finished = false;
     this.queue = Promise.resolve(); this.probing = 0;
     this.ordinal = sessions.size + 1;
@@ -165,6 +184,7 @@ class Session {
     }
     else if (value.method === 'Runtime.executionContextCreated') {
       this.contextIds.add(params.context.id);
+      if (params.context.auxData?.isDefault) this.defaultContext = params.context.id;
       if (debugPath && debug.contexts.length < 64) debug.contexts.push({ id: params.context.id, name: params.context.name, origin: params.context.origin, auxData: params.context.auxData });
       if (this.ready && !this.realmBreakpoint) failure('context-start-unobserved');
     }
@@ -234,7 +254,7 @@ class Session {
       if (!array.result?.objectId || array.exceptionDetails) throw new Error('primitive resolution failed');
       const properties = await this.request('Runtime.getProperties', { objectId: array.result.objectId, ownProperties: true });
       const values = new Map(properties.result.map(property => [property.name, property.value]));
-      await Promise.all(entries.map(async ([category, , required], index) => {
+      await Promise.all(entries.map(async ([category, name, required], index) => {
         if (counts[category]) return; // Presence is sticky; further calls add no reuse information.
         const value = values.get(String(index));
         if (value?.type !== 'function') {
@@ -244,6 +264,7 @@ class Session {
         try {
           const result = await this.request('Debugger.setBreakpointOnFunctionCall', { objectId: value.objectId });
           this.breakpoints.set(result.breakpointId, category);
+          this.breakpointNames.set(result.breakpointId, name);
         } catch (error) {
           // Aliases and functions sharing V8 code trigger an existing breakpoint.
           if (error.message !== 'Breakpoint at specified location already exists.') throw error;
@@ -320,7 +341,7 @@ class Session {
     if (this.probing && script?.url === sourceFile) { this.request('Debugger.resume').catch(() => {}); return; }
     for (const id of params.hitBreakpoints || []) {
       const category = this.breakpoints.get(id);
-      if (categories.includes(category) && !this.probing) counts[category] = 1;
+      if (categories.includes(category) && !this.probing && !internalOnlyGcHandle(this, id, params)) counts[category] = 1;
       if (debugPath && category && debug.hits.length < 256) {
         debug.hits.push({ category, probing: this.probing > 0, frames: (params.callFrames || []).slice(0, 12).map(frame =>
           `${frame.functionName || '(anonymous)'}@${frame.url || this.scripts.get(frame.location?.scriptId)?.url || '?'}:${frame.location?.lineNumber ?? '?'}`) });
@@ -351,9 +372,29 @@ class Session {
     this.finished = true; completed++;
     if (!this.ready) failure('session-setup-incomplete');
   }
+  closeRealmProbes() {
+    // A plain VM realm has no process lifecycle, so its probe flushes every
+    // batch as it happens and cannot report its final wrapper state by
+    // itself. The default context's exit is the last moment the isolate
+    // still runs JS: ask each open realm probe directly, while paused here.
+    for (const [contextId, objectId] of this.valueProbes) {
+      if (contextId === this.defaultContext || this.valueClosed.has(contextId)) continue;
+      this.queue = this.queue.then(async () => {
+        const closed = await this.request('Runtime.callFunctionOn', { objectId,
+          functionDeclaration: 'function(){return this.finish()}', returnByValue: true });
+        const result = closed.result?.value;
+        if (result && typeof result.intact === 'boolean' && Number.isSafeInteger(result.sequence)
+            && result.sequence === (this.valueSequences.get(contextId) || 0)) {
+          if (!result.intact) failure('input-source-replaced');
+          this.valueClosed.add(contextId);
+        }
+      }).catch(() => {});
+    }
+  }
   async finishValues() {
     // At NodeRuntime.waitingForDisconnect the isolate no longer admits normal
     // JS calls. The private exit probes must have flushed before that boundary.
+    try { await this.queue; } catch {}
     const unclosed = [...this.valueProbes.keys()].filter(id => !this.valueClosed.has(id));
     if (debugPath) debug.unclosed.push(...unclosed.map(id => ({ context: id, session: this.ordinal })));
     if (unclosed.length) failure('input-values-unavailable');
