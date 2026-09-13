@@ -1233,6 +1233,13 @@ def _run_verification_impl(
             (result_state.get("evidence_state") or {}).get("sources"),
         )
         if message:
+            # The line carries localized text and "·"; a console code page such
+            # as cp1252 would encode it differently from the UTF-8 the host
+            # decodes (or drop Korean entirely), so it is written as UTF-8 like
+            # the `click-gate status` summary.
+            reconfigure = getattr(sys.stdout, "reconfigure", None)
+            if callable(reconfigure):
+                reconfigure(encoding="utf-8", errors="replace")
             print(message, flush=True)
     except (OSError, ValueError, TypeError):
         pass  # A display failure cannot change the observed verification result.

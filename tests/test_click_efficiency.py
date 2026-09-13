@@ -541,7 +541,10 @@ class VerificationEfficiencyTests(unittest.TestCase):
         self.assertIsNone(failed["full_sequential_test_execution_estimate_ms"])
         self.assertIn("request-not-passed", failed["reason_codes"])
         self.assertIn("scope-incomplete", failed["reason_codes"])
-        self.assertIn("2개 샤드 요청 미완료", metrics.host_summary(failed_state))
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            self.assertIn("2개 샤드 요청 미완료", metrics.host_summary(failed_state))
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            self.assertIn("2 shards, request incomplete", metrics.host_summary(failed_state))
 
     def test_revalidation_savings_keeps_retries_and_parent_plan_out_of_batch(self):
         parent = metrics.build_plan(
