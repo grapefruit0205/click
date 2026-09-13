@@ -340,7 +340,7 @@ class ConditionalHookTests(support.ClickGateTestCase):
             self.assertIn("updatedInput",payload["hookSpecificOutput"],payload)
             result=self.run_rewritten(payload)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-            state=json.loads(next((self.plugin_data/'gate-state').glob('session-contract-*.json')).read_text())
+            state=json.loads(next((self.plugin_data/'gate-state').glob('session-contract-*.json')).read_text(encoding='utf-8'))
             return state,result
         run('learn-1')
         state,result=run('learn-2')
@@ -406,7 +406,7 @@ class ConditionalHookTests(support.ClickGateTestCase):
             payload = self.verify_gate(commands, turn, evidence_ids=['ALPHA', 'BETA'])
             result = self.run_rewritten(payload)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            state = json.loads(next((self.plugin_data / 'gate-state').glob('session-contract-*.json')).read_text())
+            state = json.loads(next((self.plugin_data / 'gate-state').glob('session-contract-*.json')).read_text(encoding='utf-8'))
             return state, result
 
         def replace_source(before, after, turn):
