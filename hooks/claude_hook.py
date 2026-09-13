@@ -26,6 +26,50 @@ from pathlib import Path
 import shlex
 import sys
 
+REQUIRED_PYTHON = (3, 10)
+# Keep in step with the no-interpreter text in hooks/claude_hook.sh.
+UNSUPPORTED_INTERPRETER = (
+    "Click: Python 3.10 or newer is required; this session's hooks run "
+    "Python {found}. Install a current Python from https://www.python.org/downloads/ "
+    "(Windows: tick 'Add python.exe to PATH', or `winget install Python.Python.3.12`; "
+    "macOS: `brew install python`), then start a new Claude Code session. "
+    "Until then Click records nothing and checks run unmanaged."
+)
+UNSUPPORTED_INTERPRETER_CONTEXT = (
+    "Click is installed but inactive: it needs Python 3.10 or newer and the "
+    "interpreter its hooks found is Python {found}. Tell the user, once, to "
+    "install Python 3.10+ (https://www.python.org/downloads/; Windows: tick "
+    "'Add python.exe to PATH' or `winget install Python.Python.3.12`; macOS: "
+    "`brew install python`) and start a new Claude Code session. Until then do "
+    "not use `click-gate`: run test and check commands directly, as Click "
+    "records nothing."
+)
+
+
+def unsupported_interpreter_output(mode, version):
+    """What an interpreter below REQUIRED_PYTHON prints for one hook event.
+
+    The prompt hook tells the user (``systemMessage``) and the model
+    (``additionalContext``) what to install; every other hook prints nothing,
+    so no tool call is blocked or littered with errors. Runs on any Python 3.
+    """
+    if mode != "prompt-submit":
+        return ""
+    found = "%d.%d" % (version[0], version[1])
+    payload = {
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": UNSUPPORTED_INTERPRETER_CONTEXT.format(found=found),
+        },
+        "systemMessage": UNSUPPORTED_INTERPRETER.format(found=found),
+    }
+    return json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+
+
+if sys.version_info[:2] < REQUIRED_PYTHON:  # pragma: no cover - exercised by hand
+    sys.stdout.write(unsupported_interpreter_output(sys.argv[1] if len(sys.argv) == 2 else "", sys.version_info))
+    sys.exit(0)
+
 if __package__:
     from . import click_import_bootstrap
 else:  # Executed directly from the bundled hooks directory.

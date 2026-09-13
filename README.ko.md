@@ -407,7 +407,7 @@ python3 --version
 
 이후 새 작업에서 작은 실제 검증을 실행하고 `click-gate status`를 확인합니다. 플러그인 활성화 표시만으로 Hook 실행까지 확인된 것은 아닙니다. Windows CI와 OS별 Observer 검증 범위는 [릴리스 노트](RELEASE_NOTES.md)에 있으며, 사용자에게 설치된 호스트와 설정도 별도로 확인해야 합니다.
 
-Claude Code에서는 `claude plugin list`로 설치된 플러그인을, `/hooks`에서 `[plugin:click]` Hook 정의를 확인합니다. 소스 빌드는 `claude plugin validate ./dist/claude --strict`로 검사할 수 있습니다. Hook 명령은 `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`이며 Claude Code가 Linux·macOS에서는 `sh -c`, Windows에서는 Git Bash로 실행합니다. 실행기는 Linux·macOS에서 `python3`를, Windows에서는 `py -3`, `python`, `python3` 순으로 실행하고, Python 설치만 권하는 Microsoft Store 별칭은 건너뜁니다. Windows에는 Git for Windows가 있어야 합니다. 없으면 Claude Code가 PowerShell 도구만 제공하는데, Click은 아직 그 도구를 다시 쓰지 않습니다. Hook 출력과 오류는 대화 기록에 `click hook error` 줄로 표시됩니다.
+Claude Code에서는 `claude plugin list`로 설치된 플러그인을, `/hooks`에서 `[plugin:click]` Hook 정의를 확인합니다. 소스 빌드는 `claude plugin validate ./dist/claude --strict`로 검사할 수 있습니다. Hook 명령은 `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`이며 Claude Code가 Linux·macOS에서는 `sh -c`, Windows에서는 Git Bash로 실행합니다. 실행기는 Linux·macOS에서 `python3`를, Windows에서는 `py -3`, `python`, `python3` 순으로 실행하고, Python 설치만 권하는 Microsoft Store 별칭과 명령줄 도구 설치만 권하는 macOS 스텁은 건너뜁니다. Click에는 Python 3.10 이상이 필요합니다. 쓸 수 있는 인터프리터가 없으면 프롬프트 Hook이 설치 안내를 표시하고 모델에게 새 세션 전까지 검사를 직접 실행하라고 알리며, 도구 호출은 막지 않습니다. Windows에는 Git for Windows가 있어야 합니다. 없으면 Claude Code가 PowerShell 도구만 제공하는데, Click은 아직 그 도구를 다시 쓰지 않습니다. Hook 출력과 오류는 대화 기록에 `click hook error` 줄로 표시됩니다.
 
 ## Antigravity
 

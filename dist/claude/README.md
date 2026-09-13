@@ -84,8 +84,13 @@ receipts never cross hosts.
   macOS and through Git Bash on Windows. The POSIX launcher runs `python3`
   (then `python`) on Linux and macOS and `py -3`, `python`, `python3` in that
   order on Windows, skips the Microsoft Store alias that only offers to
-  install Python, and starts the adapter in UTF-8 mode so a Korean prompt or
-  the localized result-line label survives a legacy console code page.
+  install Python and the macOS stub that only offers the command line tools,
+  and starts the adapter in UTF-8 mode so a Korean prompt or the localized
+  result-line label survives a legacy console code page. Click needs Python
+  3.10 or newer. Without a usable interpreter, or with an older one, the
+  prompt hook tells the user what to install (`systemMessage`) and tells the
+  model not to use `click-gate` until a new session; tool hooks stay silent so
+  no work is blocked and no error line repeats.
 - Windows needs Git for Windows: Claude Code's Bash tool and its shell-form
   Hooks run there. Rewritten `click-gate` commands are rendered for Git Bash
   (forward-slash interpreter and script paths plus the bounded encoded
