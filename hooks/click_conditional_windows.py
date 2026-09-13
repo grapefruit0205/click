@@ -43,6 +43,36 @@ def _canonical(value: str, device_paths) -> str:
     return windows._canonical_windows_path(value, device_paths=device_paths)
 
 
+_long_names: dict[str, str] = {}
+
+
+def long_name(path: str) -> str:
+    """Expand an 8.3 short name (``RUNNER~1``) to the name every event agrees on.
+
+    The file provider records the path an open used, short names included,
+    while name and query events carry the full name; one spelling per file
+    keeps the collector directory filter and the input rows consistent.
+    """
+    if os.name != "nt" or "~" not in path:
+        return path
+    cached = _long_names.get(path)
+    if cached is not None:
+        return cached
+    expanded = path
+    try:
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(32_768)
+        length = int(ctypes.windll.kernel32.GetLongPathNameW(path, buffer, len(buffer)))
+        if 0 < length < len(buffer):
+            expanded = buffer.value
+    except (AttributeError, OSError, TypeError, ValueError):
+        pass
+    if len(_long_names) < 4096:
+        _long_names[path] = expanded
+    return expanded
+
+
 def inspect_tree(documents, *, root_pid, truncated: bool = False) -> processes.ProcessTree:
     """Lifecycle facts for the root process and its descendants.
 
@@ -123,8 +153,8 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
         # Resolve the real project on the host; a synthetic Windows path in a
         # test on another OS is taken as spelled.
         project_text = str(Path(project).resolve()) if os.name == "nt" else str(project)
-        root = _canonical(project_text, mappings)
-        collector = ntpath.normcase(_canonical(str(directory), mappings))
+        root = long_name(_canonical(project_text, mappings))
+        collector = ntpath.normcase(long_name(_canonical(str(directory), mappings)))
     except (OSError, RuntimeError, ValueError):
         report["error"] = "project-or-collector-path"
         return None
@@ -151,7 +181,7 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
                 if len(state["unmapped"]) < 16:
                     state["unmapped"].append(raw_path[:160])
             return False
-        case = ntpath.normcase(canonical)
+        case = ntpath.normcase(long_name(canonical))
         if case == started_marker:
             state["started"] = True
             return False
@@ -175,7 +205,7 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
     parsed = windows.parse_windows_etw(
         tuple(documents), workspace=Path(root), root_pid=root_pid, truncated=truncated,
         root_execution_bound=True, process_scope_complete=True, device_paths=mappings,
-        allow_workspace_root=True, event_filter=admit,
+        allow_workspace_root=True, event_filter=admit, normalize_path=long_name,
     )
     report.update({
         "started": state["started"], "dynamic": state["dynamic"], "unmapped": list(state["unmapped"]),

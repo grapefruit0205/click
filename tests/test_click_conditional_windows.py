@@ -259,7 +259,8 @@ class RealWindowsConditionalTests(unittest.TestCase):
 
             # First, the raw capture: the same collector and backend the
             # framework observer uses, with the documents kept for diagnosis.
-            collector = node.Collector(argv, environment, root)
+            debug_path = Path(temporary) / "observer-debug.json"
+            collector = node.Collector(argv, {**environment, "CLICK_NODE_OBSERVER_DEBUG": str(debug_path)}, root)
             self.assertIsNotNone(collector.child, collector.record)
             directory = collector.location.name
             captured = {}
@@ -289,9 +290,14 @@ class RealWindowsConditionalTests(unittest.TestCase):
                 root_pid=captured["options"].get("root_pid", -1), device_paths=captured["options"].get("device_paths"),
                 truncated=bool(captured["options"].get("truncated", False)), diagnostics=diagnostics,
             )
+            try:
+                observer_debug = json.loads(debug_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                observer_debug = None
             summary = {"shadow": {k: shadow.record.get(k) for k in ("status", "ineligibility_reasons", "unresolved_event_count", "process_tree_complete", "child_process_count")},
-                       "runtime": {k: runtime.get(k) for k in ("status", "reasons", "capture_complete", "sessions", "installed", "completed", "workers")},
-                       "diagnostics": diagnostics, "projection": projection}
+                       "runtime": {k: runtime.get(k) for k in ("status", "reasons", "capture_complete", "sessions", "contexts", "installed", "completed", "workers", "counts")},
+                       "values": {k: v["count"] for k, v in runtime.get("values", {}).items() if v.get("count")},
+                       "observer_debug": observer_debug, "diagnostics": diagnostics, "projection": projection}
             print("CLICK-WINDOWS-CONDITIONAL " + json.dumps(summary, ensure_ascii=True)[:12000])
             lost = set(diagnostics.get("tree", {}).get("reasons", [])) & {"event-loss", "process-tree-incomplete"}
             if lost:

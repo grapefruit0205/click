@@ -9,6 +9,12 @@ const crypto = require('node:crypto');
 const valueProbeSource = fs.readFileSync(path.join(__dirname, 'click_node_value_probe.js'), 'utf8');
 const directory = process.argv[2];
 const nativeStatePath = process.argv[3] || '';
+// Diagnostics only: when CLICK_NODE_OBSERVER_DEBUG names a file, the
+// controller writes what it saw (category hits with their call sites, the
+// contexts it created and which probes never closed) there at stop. Nothing
+// here changes counts, reasons or reuse.
+const debugPath = process.env.CLICK_NODE_OBSERVER_DEBUG || '';
+const debug = { hits: [], contexts: [], unclosed: [] };
 const MAX_SESSIONS = 128;
 const MAX_EVENTS = 200000;
 const categories = ['clock', 'random', 'shared-memory', 'native-escape', 'inspector-access'];
@@ -156,6 +162,7 @@ class Session {
     if (value.method === 'Debugger.scriptParsed') this.scripts.set(params.scriptId, params);
     else if (value.method === 'Runtime.executionContextCreated') {
       this.contextIds.add(params.context.id);
+      if (debugPath && debug.contexts.length < 64) debug.contexts.push({ id: params.context.id, name: params.context.name, origin: params.context.origin, auxData: params.context.auxData });
       if (this.ready && !this.realmBreakpoint) failure('context-start-unobserved');
     }
     else if (value.method === 'Debugger.paused') this.onPause(params);
@@ -311,6 +318,10 @@ class Session {
     for (const id of params.hitBreakpoints || []) {
       const category = this.breakpoints.get(id);
       if (categories.includes(category) && !this.probing) counts[category] = 1;
+      if (debugPath && category && debug.hits.length < 256) {
+        debug.hits.push({ category, probing: this.probing > 0, frames: (params.callFrames || []).slice(0, 4).map(frame =>
+          `${frame.functionName || '(anonymous)'}@${frame.url || this.scripts.get(frame.location?.scriptId)?.url || '?'}:${frame.location?.lineNumber ?? '?'}`) });
+      }
     }
     // Serialize new-realm setup while leaving protocol responses unblocked.
     this.queue = this.queue.then(async () => {
@@ -340,7 +351,9 @@ class Session {
   async finishValues() {
     // At NodeRuntime.waitingForDisconnect the isolate no longer admits normal
     // JS calls. The private exit probes must have flushed before that boundary.
-    if ([...this.valueProbes.keys()].some(id => !this.valueClosed.has(id))) failure('input-values-unavailable');
+    const unclosed = [...this.valueProbes.keys()].filter(id => !this.valueClosed.has(id));
+    if (debugPath) debug.unclosed.push(...unclosed.map(id => ({ context: id, session: this.ordinal })));
+    if (unclosed.length) failure('input-values-unavailable');
   }
   async release() {
     if (this.released) return;
@@ -422,6 +435,7 @@ async function stop() {
   if (!sessions.size) failure('no-runtime-session');
   if ([...sessions].some(session => !session.finished)) failure('session-completion-unobserved');
   await Promise.allSettled([...sessions].map(session => session.release()));
+  if (debugPath) { try { fs.writeFileSync(debugPath, JSON.stringify(debug)); } catch {} }
   sendLine({ kind: 'result', counts, sessions: sessions.size, contexts, installed, completed,
     workers: workerCount, process_ids: [...processIds].sort((a,b) => a-b), values: valueRecords,
     reasons: [...reasons].sort() });

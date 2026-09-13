@@ -374,6 +374,7 @@ def parse_windows_etw(
     transparent_child_images: Sequence[str] = (),
     allow_workspace_root: bool = False,
     event_filter: Callable[[int, int | None, str, str | None, str | None], bool] | None = None,
+    normalize_path: Callable[[str], str] | None = None,
 ) -> ParsedTrace:
     """Normalize bounded ETW XML into content-free repository inputs.
 
@@ -382,6 +383,9 @@ def parse_windows_etw(
     for ids the parser ignores) and returns False to set that event aside.
     The conditional projection uses it to separate the collector's own
     transport and the runtime's bootstrap probes from the check's inputs.
+    ``normalize_path`` rewrites each canonical path before it is recorded (the
+    projection expands 8.3 short names, which the file provider reports for
+    an open that used them while later events name the same file in full).
     """
 
     documents = (raw,) if isinstance(raw, bytes) else tuple(raw)
@@ -486,6 +490,8 @@ def parse_windows_etw(
             normalized = _canonical_windows_path(
                 path_text, device_paths=mappings
             )
+            if normalize_path is not None:
+                normalized = ntpath.normpath(str(normalize_path(normalized)))
         except ValueError:
             unresolved = _bounded_add(unresolved, 1)
             return
