@@ -42,6 +42,22 @@ class NodeObservationBoundaryTests(unittest.TestCase):
                     collector.close()
 
 
+def _companion_toolchain(node) -> bool:
+    """The host has what the state reader compiles against, so it must build.
+
+    Linux needs `c++`; Windows needs the MSVC tools on PATH (a developer
+    command prompt) and this Node version's headers (MSI install or node-gyp
+    cache). Without them the reader is legitimately absent.
+    """
+    state = observer.click_node_state
+    if observer.digest_file(Path(node)) != state.NODE_DIGEST:
+        return False
+    if os.name == "nt":
+        return (all(shutil.which(tool) for tool in state.WINDOWS_TOOLS)
+                and state._windows_headers(Path(node).resolve(), dict(os.environ)) is not None)
+    return bool(shutil.which("c++"))
+
+
 @unittest.skipUnless(sys.platform in observer.PROFILES and shutil.which("node"), "native Node inspector profile for this host")
 class RealNodeObservationTests(unittest.TestCase):
     @classmethod
@@ -115,7 +131,7 @@ console.log('VALUES', JSON.stringify({
             self.assertEqual(observed["last_value_digest"], expected, (source, observed))
         self.assertEqual(consumed["atomics-add"], "0")
         self.assertEqual(consumed["atomics-load"], "7")
-        if shutil.which("c++") and observer.digest_file(Path(self.node)) == observer.click_node_state.NODE_DIGEST:
+        if _companion_toolchain(self.node):
             self.assertTrue(self.record["state_companion_digest"], self.record)
             for source in ("math-random", "atomics-add", "atomics-load"):
                 self.assertEqual(self.record["values"][source]["state_count"], 1, self.record)
