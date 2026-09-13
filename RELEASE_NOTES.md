@@ -1,6 +1,8 @@
 # Release notes
 
-## Unreleased v1.3 candidate
+## v1.3.0 — 2026-09-13 — Conditional JS reuse on Windows
+
+Both marketplaces pin `v1.3.0`; updating v1.2.0 installs it.
 
 - A missing or too-old Python asks for an install instead of failing every
   event. Click needs Python 3.10 or newer. When the Claude Code launcher finds
