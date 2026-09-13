@@ -1,6 +1,8 @@
 # Release notes
 
-## Unreleased v1.2 candidate
+## v1.1.1 — 2026-09-13 — English by default
+
+Patch release. Both marketplaces pin `v1.1.1`; updating v1.1.0 installs it.
 
 - English is the default language. The runner's result line, the reuse notice
   and the Evidence directive's reference to it were Korean on every host; they
@@ -11,8 +13,10 @@
   (estimate); ...`). `click-gate status` follows the same rule, and the
   dashboard opens in the browser language (Korean or Simplified Chinese when
   that is what the browser reports, English otherwise) until a language is
-  chosen. Host output is no longer cut at the summary-line value limit, and
-  the `token_ab` benchmark accepts the result line in every language.
+  chosen. Host output is no longer cut at the summary-line value limit, the
+  runner writes it as UTF-8 so a Windows console code page neither alters
+  the `·` separator nor drops the line, and the `token_ab` benchmark accepts
+  the result line in every language.
 - Plugin listing metadata: the Codex manifest declares a logo, a screenshot
   taken from a recorded session, and HTTPS privacy and terms links; a new
   `docs/privacy.md` states what Click stores, where, and that it opens no
