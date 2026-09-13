@@ -231,7 +231,10 @@ class ClaudePlatformManifestTests(unittest.TestCase):
         self.assertEqual(marketplace["name"], "click")
         self.assertEqual(entry["name"], "click")
         self.assertEqual(entry["source"]["source"], "git-subdir")
-        self.assertEqual(entry["source"]["path"], "dist/claude")
+        # The `./` form is what the plugin scanner accepts as a relative
+        # component path; Claude Code installs it the same as `dist/claude`.
+        self.assertEqual(entry["source"]["path"], "./dist/claude")
+        self.assertIs(marketplace["strict"], True)
         self.assertEqual(entry["source"]["ref"], f"v{codex['version']}")
 
 
