@@ -22,9 +22,13 @@ The current host adapters still call a small, explicit set of gate symbols:
 - `hooks/claude_hook.py`: `main`
 - `hooks/antigravity_gate.py`: public `host_router`
 
-`hooks/click_windows.py` and the Antigravity launcher-path check use the formal
-`click_runner_transport` boundary. They no longer reach through private gate
-symbols to configure or decode runner commands.
+`hooks/click_windows.py`, `hooks/claude_hook.py` and the Antigravity
+launcher-path check use the formal `click_runner_transport` boundary. They no
+longer reach through private gate symbols to configure or decode runner
+commands. Windows runner renderers are registered per host id
+(`register_host_renderer`); the resident worker activates the renderer of the
+host that sent each event, so one runtime serves Codex (PowerShell or cmd.exe)
+and Claude Code (Git Bash).
 
 The named `click_host_router` and `click_runner_transport` interfaces now own
 adapter routing and runner transport. The remaining `click_gate.main` and

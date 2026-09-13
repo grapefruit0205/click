@@ -21,8 +21,10 @@ else:  # Executed directly from the bundled hooks directory.
     import click_import_bootstrap
 
 
-(click_hook_transport,) = click_import_bootstrap.load_siblings(
-    __package__, "click_hook_transport"
+(click_hook_transport, click_host_coverage, click_runner_transport) = (
+    click_import_bootstrap.load_siblings(
+        __package__, "click_hook_transport", "click_host_coverage", "click_runner_transport"
+    )
 )
 
 
@@ -48,15 +50,21 @@ class _BoundedText(io.StringIO):
         return len(value)
 
 
+# Host adapters register their Windows runner renderer when imported: Codex
+# rewrites into PowerShell or cmd.exe, Claude Code into Git Bash. Each package
+# bundles only its own adapter, so a missing sibling is expected; the renderer
+# for the host that sent each event is activated per request.
+_HOST_RENDERER_MODULES = ("click_windows", "claude_hook")
+
+
 def _load_gate() -> Any:
     (click_gate,) = click_import_bootstrap.load_siblings(__package__, "click_gate")
     if os.name == "nt":
-        (click_windows, click_runner_transport) = click_import_bootstrap.load_siblings(
-            __package__, "click_windows", "click_runner_transport"
-        )
-        click_runner_transport.install_runner_shell_renderer(
-            click_windows._runner_shell_command
-        )
+        for name in _HOST_RENDERER_MODULES:
+            try:
+                click_import_bootstrap.load_siblings(__package__, name)
+            except ImportError:
+                continue
     return click_gate
 
 
@@ -103,6 +111,10 @@ def _run_gate(click_gate: Any, request: dict[str, Any]) -> dict[str, Any]:
     if not target_cwd.is_dir():
         return _response(request_id, 1, "", "click hook error: invalid resident worker cwd\n")
 
+    if os.name == "nt":
+        click_runner_transport.activate_host_renderer(
+            click_host_coverage.host_id_from_event(event)
+        )
     input_text = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
     output = _BoundedText()
     errors = _BoundedText()

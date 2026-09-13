@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" prompt-submit",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh\" prompt-submit",
             "timeout": 7
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" pre-tool",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh\" pre-tool",
             "timeout": 7
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" post-tool",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh\" post-tool",
             "timeout": 7
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\" session-end",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh\" session-end",
             "timeout": 3
           }
         ]

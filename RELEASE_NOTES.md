@@ -1,5 +1,23 @@
 # Release notes
 
+## Unreleased v1.2 candidate
+
+- Claude Code on Windows. The Claude Code package's Hook command is now
+  `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`, a POSIX launcher that
+  Claude Code runs through `sh -c` on Linux and macOS and through Git Bash on
+  Windows; it selects `py -3`, `python` or `python3` (skipping the Microsoft
+  Store alias stub and the py launcher's exit 103), runs the adapter in UTF-8
+  mode, and normalizes the backslash plugin root Claude Code substitutes. On
+  Windows the adapter renders rewritten `click-gate` commands for Git Bash
+  (forward-slash interpreter and script paths, bounded encoded transport),
+  reads and writes the host's JSON as UTF-8, and the resident worker no longer
+  requires the Codex Windows bridge: runner renderers are registered per host
+  and activated per event. `.gitattributes` keeps the launcher LF under
+  `core.autocrlf`. Windows CI drives the packaged hooks and rewritten commands
+  through Git Bash with a default-install PATH; interpreter selection is
+  covered on every OS with fake interpreters. Python checks are the Windows
+  scope; conditional JS reuse stays Linux-only.
+
 ## v1.1.1 — 2026-09-13 — English by default
 
 Patch release. Both marketplaces pin `v1.1.1`; updating v1.1.0 installs it.

@@ -78,9 +78,23 @@ receipts never cross hosts.
 - The `plugin://click@click` autocomplete mention is a Codex surface. On Claude
   Code, bypass and cancel use the plain first-line `@Click bypass` and
   `@Click cancel` forms.
-- The Hook command invokes `python3`; Linux and macOS are the supported hosts.
-  The Windows launcher bundled with the Codex plugin is not part of this
-  package.
+- The Hook command is `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`, a
+  shell-form hook on purpose: exec form has no shell and so no way to fall
+  back between interpreters. Claude Code runs it through `sh -c` on Linux and
+  macOS and through Git Bash on Windows. The POSIX launcher runs `python3`
+  (then `python`) on Linux and macOS and `py -3`, `python`, `python3` in that
+  order on Windows, skips the Microsoft Store alias that only offers to
+  install Python, and starts the adapter in UTF-8 mode so a Korean prompt or
+  the localized result-line label survives a legacy console code page.
+- Windows needs Git for Windows: Claude Code's Bash tool and its shell-form
+  Hooks run there. Rewritten `click-gate` commands are rendered for Git Bash
+  (forward-slash interpreter and script paths plus the bounded encoded
+  transport). Without Git Bash, Claude Code offers only its PowerShell tool,
+  which this package does not rewrite yet. The Codex Windows batch bridge is
+  not part of this package.
+- Python checks are the Windows scope: the resident worker, receipts, sharding
+  and the inbox ETW observer follow the shared runtime. Conditional JS reuse
+  (the Node observer) is Linux-only on every host.
 - Automatic input observation keeps its documented platform prerequisites; the
   host does not change which observer backends are available.
 

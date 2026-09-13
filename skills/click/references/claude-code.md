@@ -6,7 +6,8 @@ Claude Code dispatches Click through the same Bash rewrite path as Codex:
 every `click-gate` action in the shared instructions is run as an ordinary
 `Bash` command, and the installed `PreToolUse` Hook rewrites it onto Click's
 trusted runner. Do not look for a `click-gate` executable on `PATH`, prefix it
-with `python3`, or reconstruct the runner path yourself.
+with `python3`, or reconstruct the runner path yourself. On Windows the Bash
+tool is Git Bash and the rewritten command is already shaped for it.
 
 ```text
 click-gate status

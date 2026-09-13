@@ -32,8 +32,9 @@ PLATFORM = ROOT / "platforms" / "claude"
 DESTINATION = ROOT / "dist" / "claude"
 
 # Claude Code keeps the resident Hook worker that Antigravity omits and drops
-# the Antigravity launcher plus the Windows batch bridge, which the Claude Code
-# Hook command does not invoke.
+# the Antigravity launcher plus the Codex Windows batch bridge: Claude Code
+# runs its Hook command through sh (Git Bash on Windows), so the package ships
+# the POSIX launcher `claude_hook.sh` instead.
 CLAUDE_HOOK_EXCLUDES = frozenset(
     {
         "antigravity_gate.py",
@@ -42,6 +43,7 @@ CLAUDE_HOOK_EXCLUDES = frozenset(
 )
 CLAUDE_ONLY_HOOK_FILES = (
     "claude_hook.py",
+    "claude_hook.sh",
     "click_hook.py",
     "click_hook_transport.py",
     "click_hook_worker.py",
@@ -51,7 +53,7 @@ HOOK_FILES = tuple(
         (set(SHARED_HOOK_FILES) - CLAUDE_HOOK_EXCLUDES) | set(CLAUDE_ONLY_HOOK_FILES)
     )
 )
-EXTRA_HOOK_SOURCES = ANTIGRAVITY_EXTRA_HOOK_SOURCES
+EXTRA_HOOK_SOURCES = ANTIGRAVITY_EXTRA_HOOK_SOURCES | {"claude_hook.sh"}
 CLICK_REFERENCE_FILES = tuple(
     name for name in SHARED_REFERENCE_FILES if name != "antigravity.md"
 ) + ("claude-code.md",)

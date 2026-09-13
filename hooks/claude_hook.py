@@ -23,6 +23,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 
 if __package__:
@@ -31,8 +32,10 @@ else:  # Executed directly from the bundled hooks directory.
     import click_import_bootstrap
 
 
-(click_hook_transport, click_host_coverage) = click_import_bootstrap.load_siblings(
-    __package__, "click_hook_transport", "click_host_coverage"
+(click_hook_transport, click_host_coverage, click_runner_transport) = (
+    click_import_bootstrap.load_siblings(
+        __package__, "click_hook_transport", "click_host_coverage", "click_runner_transport"
+    )
 )
 
 
@@ -41,6 +44,59 @@ CLAUDE_TOOL_MAP = click_host_coverage.CLAUDE_TOOL_MAP
 CLAUDE_MUTATION_TOOLS = click_host_coverage.CLAUDE_MUTATION_TOOL_NAMES
 CLAUDE_PLAN_TOOLS = click_host_coverage.CLAUDE_PLAN_TOOL_NAMES
 TOOL_EVENT_MODES = frozenset({"pre-tool", "post-tool"})
+
+
+def configure_streams() -> None:
+    """Read and write the host's JSON as UTF-8 whatever the console code page.
+
+    Claude Code sends and reads UTF-8. On Windows a pipe defaults to the
+    legacy code page, which can neither decode a Korean prompt nor encode the
+    result-line label in the Evidence context; the launcher passes ``-X utf8``
+    and this covers a direct ``python claude_hook.py`` call.
+    """
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
+def runner_shell_command(arguments: list[str]) -> str:
+    """Render the rewritten runner for Claude Code's Bash tool.
+
+    The tool is Git Bash on Windows, so the command is POSIX-quoted there as on
+    every other host; the interpreter and script paths use forward slashes,
+    which Git Bash executes and Windows accepts, and everything after them
+    travels in the bounded encoded transport so no argument depends on the
+    MSYS path conversion or the console code page.
+    """
+    if os.name != "nt":
+        return click_runner_transport.default_runner_shell_command(arguments)
+    if len(arguments) < 3:
+        return "exit 2"
+    try:
+        interpreter = Path(arguments[0]).resolve(strict=True)
+        script_path = Path(arguments[1]).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return "exit 2"
+    if not interpreter.is_file() or not script_path.is_file():
+        return "exit 2"
+    command = shlex.join(
+        [
+            str(interpreter).replace("\\", "/"),
+            str(script_path).replace("\\", "/"),
+            "--encoded-runner",
+            click_runner_transport.encode_runner_transport(arguments[2:]),
+        ]
+    )
+    if len(command) > click_runner_transport.WINDOWS_COMMAND_LINE_LIMIT:
+        return "exit 2"
+    return command
+
+
+click_runner_transport.register_host_renderer(HOST_ID, runner_shell_command)
 
 
 def configure_storage() -> None:
@@ -101,7 +157,10 @@ def merge_updated_input(
 
 
 def main() -> int:
+    configure_streams()
     configure_storage()
+    if os.name == "nt":
+        click_runner_transport.install_runner_shell_renderer(runner_shell_command)
     mode = sys.argv[1] if len(sys.argv) == 2 else ""
     if mode not in click_hook_transport.HOOK_MODES:
         (click_gate,) = click_import_bootstrap.load_siblings(__package__, "click_gate")

@@ -19,26 +19,28 @@ PROMPT_ID = "550e8400-e29b-41d4-a716-446655440000"
 LATER_PROMPT_ID = "550e8400-e29b-41d4-a716-446655440001"
 
 
-def _runner_tail(command: str) -> list[str]:
-    """Return the runner arguments after the interpreter on either host OS.
+def _runner_argv(command: str) -> list[str]:
+    """Return the rewritten runner's argv on either host OS.
 
-    POSIX renders ``<python> -c <script> <payload>``; Windows renders the bare
-    ``py -3`` launcher with an encoded transport for everything after it.
+    Claude Code's Bash tool is Git Bash on Windows, so the adapter renders a
+    POSIX-quoted command everywhere. POSIX keeps ``<python> -c <script>
+    <payload>`` inline; Windows renders forward-slash interpreter and script
+    paths with the bounded encoded transport for everything after them.
     """
+    argv = shlex.split(command)
     if os.name == "nt":
-        from hooks import antigravity_gate
-
-        argv = antigravity_gate._command_argv(command)
-        if argv[:2] != ["py", "-3"] or argv[3] != "--encoded-runner":
+        interpreter = str(Path(sys.executable).resolve()).replace("\\", "/")
+        if argv[0] != interpreter or "\\" in argv[0] + argv[1]:
             raise AssertionError(command)
-        decoded, error = click_runner_transport.decode_runner_transport(argv[4])
+        if argv[2] != "--encoded-runner" or len(argv) != 4:
+            raise AssertionError(command)
+        decoded, error = click_runner_transport.decode_runner_transport(argv[3])
         if error or decoded is None:
             raise AssertionError(error or command)
-        return [argv[2], *decoded]
-    argv = shlex.split(command)
+        return [sys.executable, argv[1], *decoded]
     if argv[0] != sys.executable:
         raise AssertionError(command)
-    return argv[1:]
+    return argv
 
 
 def _matcher_names(config: dict, event_name: str) -> set[str]:
@@ -212,7 +214,17 @@ class ClaudePlatformManifestTests(unittest.TestCase):
                 for hook in entry["hooks"]:
                     with self.subTest(event=event_name):
                         self.assertEqual(hook["type"], "command")
-                        self.assertIn('"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py"', hook["command"])
+                        # Shell form on purpose: Claude Code runs it through
+                        # `sh -c` on macOS and Linux and Git Bash on Windows,
+                        # where the POSIX launcher picks the interpreter. Exec
+                        # form (`args`) has no shell and so no fallback between
+                        # `py`, `python` and `python3`.
+                        self.assertRegex(
+                            hook["command"],
+                            r'^sh "\$\{CLAUDE_PLUGIN_ROOT\}/hooks/claude_hook\.sh" (prompt-submit|pre-tool|post-tool|session-end)$',
+                        )
+                        self.assertNotIn("args", hook)
+                        self.assertNotIn("shell", hook)
                         self.assertLessEqual(hook["timeout"], 7)
                         self.assertNotIn("commandWindows", hook)
 
@@ -286,6 +298,21 @@ class ClaudeHookProcessTests(unittest.TestCase):
         payload = json.loads(result.stdout) if result.stdout else {}
         return result.returncode, payload, result.stderr
 
+    def run_rewritten(self, command: str) -> str:
+        """Execute a rewritten Bash-tool command the way the host shell would."""
+        argv = _runner_argv(command)
+        result = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=self.environment,
+            cwd=str(self.workspace),
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
     def test_evidence_context_and_rewritten_commands_keep_claude_input_fields(self) -> None:
         code, payload, stderr = self.hook(
             "prompt-submit", self.event("UserPromptSubmit", prompt="Run the tests.")
@@ -319,9 +346,8 @@ class ClaudeHookProcessTests(unittest.TestCase):
         self.assertEqual(specific["updatedInput"]["description"], "Show Click status")
         self.assertEqual(specific["updatedInput"]["timeout"], 120000)
         self.assertNotEqual(specific["updatedInput"]["command"], "click-gate status --json")
-        tail = _runner_tail(specific["updatedInput"]["command"])
-        self.assertEqual(tail[0], "-c")
-        self.assertEqual(json.loads(tail[-1])["task"]["runtime_mode"], "evidence")
+        report = json.loads(self.run_rewritten(specific["updatedInput"]["command"]))
+        self.assertEqual(report["task"]["runtime_mode"], "evidence")
 
         # The default form is a short localized summary, not the JSON report.
         self.environment["CLICK_LANGUAGE"] = "en"
@@ -335,10 +361,9 @@ class ClaudeHookProcessTests(unittest.TestCase):
             ),
         )
         self.assertEqual((code, stderr), (0, ""))
-        summary = _runner_tail(payload["hookSpecificOutput"]["updatedInput"]["command"])
-        self.assertEqual(summary[0], "-c")
+        summary = self.run_rewritten(payload["hookSpecificOutput"]["updatedInput"]["command"])
         self.assertEqual(
-            summary[2:],
+            summary.splitlines(),
             [
                 "Executed 0 · Reused 0",
                 "Evidence mode · Revision 0 · No registered checks",
@@ -384,7 +409,7 @@ class ClaudeHookProcessTests(unittest.TestCase):
             self.event("PreToolUse", tool_name="Bash", tool_input={"command": "click-gate status --json"}, tool_use_id="s"),
         )
         self.assertEqual(code, 0)
-        status = json.loads(_runner_tail(payload["hookSpecificOutput"]["updatedInput"]["command"])[-1])
+        status = json.loads(self.run_rewritten(payload["hookSpecificOutput"]["updatedInput"]["command"]))
         self.assertEqual(status["task"]["mutation_revision"], 3)
         self.assertEqual(status["task"]["runtime_mode"], "evidence")
 

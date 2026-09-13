@@ -63,6 +63,9 @@ def _runner_shell_command(arguments: list[str]) -> str:
     return command
 
 
+click_runner_transport.register_host_renderer("codex", _runner_shell_command)
+
+
 def main() -> int:
     if os.name == "nt":
         click_runner_transport.install_runner_shell_renderer(_runner_shell_command)

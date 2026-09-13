@@ -259,8 +259,11 @@ def _validate_claude(root: Path, errors: list[str], release_version: str) -> Non
             "PreToolUse, PostToolUse, and SessionEnd"
         )
     serialized = json.dumps(hook_config, sort_keys=True)
+    # Shell form on purpose: exec form cannot fall back between `py`, `python`
+    # and `python3`, and Claude Code runs shell-form hooks through Git Bash on
+    # Windows, where the POSIX launcher selects the interpreter.
     for marker in (
-        "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py",
+        'sh \\"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh\\"',
         "MultiEdit",
         "NotebookEdit",
         "TodoWrite",
@@ -268,9 +271,20 @@ def _validate_claude(root: Path, errors: list[str], release_version: str) -> Non
     ):
         if marker not in serialized:
             errors.append(f"Claude Code hooks.json is missing `{marker}`")
-    for forbidden in ("commandWindows", "additionalContextLimit", "${PLUGIN_ROOT}"):
+    for forbidden in ("commandWindows", "additionalContextLimit", "${PLUGIN_ROOT}", '"args"', "claude_hook.py"):
         if forbidden in serialized:
             errors.append(f"Claude Code hooks.json must not use `{forbidden}`")
+    launcher = root / "hooks" / "claude_hook.sh"
+    if not launcher.is_file():
+        errors.append("Claude Code launcher hooks/claude_hook.sh is missing")
+    else:
+        launcher_text = launcher.read_text(encoding="utf-8")
+        if not launcher_text.startswith("#!/bin/sh\n"):
+            errors.append("Claude Code launcher must be POSIX sh")
+        if "\r" in launcher_text:
+            errors.append("Claude Code launcher must use LF line endings")
+        if "python3" not in launcher_text or "py" not in launcher_text:
+            errors.append("Claude Code launcher must try the py launcher and python3")
 
     marketplace = _json(root / ".claude-plugin" / "marketplace.json", errors, root)
     try:
