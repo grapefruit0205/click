@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 import re
@@ -55,7 +56,7 @@ class StatusSummaryLocaleTests(unittest.TestCase):
     def test_unknown_or_missing_locale_uses_the_dashboard_default(self) -> None:
         for environ in ({}, {"LANG": "C.UTF-8"}, {"LANG": "POSIX"}, {"LANG": "de_DE.UTF-8"}, {"CLICK_LANGUAGE": "xx"}):
             with self.subTest(environ=environ):
-                self.assertEqual(click_status_summary.resolve_locale(environ), "ko")
+                self.assertEqual(click_status_summary.resolve_locale(environ), "en")
         for value in ("zh-Hans", "zh_TW", "ZH", "en-GB", "ko", 3, None):
             with self.subTest(value=value):
                 normalized = click_status_summary.normalize_locale(value)
@@ -66,8 +67,22 @@ class StatusSummaryLocaleTests(unittest.TestCase):
             name: json.loads((LOCALE_ROOT / f"{name}.json").read_text(encoding="utf-8"))
             for name in click_status_summary.LOCALES
         }
-        source = (Path(click_status_summary.__file__)).read_text(encoding="utf-8")
-        keys = set(re.findall(r'message\(\s*"([^"]+)"', source))
+        # The runner's host summary, the reuse notice and the Evidence directive
+        # render through the same tables, so their keys must be translated too.
+        hooks = Path(click_status_summary.__file__).parent
+        source = "\n".join(
+            (hooks / name).read_text(encoding="utf-8")
+            for name in (
+                "click_status_summary.py",
+                "click_incremental.py",
+                "click_verification_prepare.py",
+                "click_lifecycle.py",
+            )
+        )
+        keys = {
+            ast.literal_eval(f'"{key}"')
+            for key in re.findall(r'\b(?:message|msg)\(\s*"((?:[^"\\]|\\.)+)"', source)
+        }
         self.assertGreater(len(keys), 10)
         for key in keys:
             for name, table in locales.items():

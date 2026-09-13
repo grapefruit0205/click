@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from unittest import mock
 
@@ -104,9 +105,14 @@ class ClickIncrementalPlanTests(unittest.TestCase):
         self.assertFalse(click_incremental.avoided_output_is_valid({**complete, "status": "partial"}))
         verification = {}
         click_incremental.store_batch(verification, batch)
-        line = click_incremental.host_summary(verification, sources)
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            line = click_incremental.host_summary(verification, sources)
+            without_sources = click_incremental.host_summary(verification)
         self.assertIn("재사용으로 다시 읽지 않은 출력: 이상 4.4 KB (약 1,127 토큰, 추정)", line)
-        self.assertNotIn("다시 읽지 않은 출력", click_incremental.host_summary(verification))
+        self.assertNotIn("다시 읽지 않은 출력", without_sources)
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            english = click_incremental.host_summary(verification, sources)
+        self.assertIn("output not read again thanks to reuse: at least 4.4 KB (about 1,127 tokens, estimate)", english)
 
     def test_history_projection_uses_one_retention_window_without_sharing_state(self) -> None:
         plan = click_incremental.build_plan([

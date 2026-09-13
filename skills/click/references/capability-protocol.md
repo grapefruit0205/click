@@ -193,7 +193,7 @@ click-gate status
 click-gate status --json
 ```
 
-`click-gate status` prints at most three short lines in the dashboard language selected by `CLICK_LANGUAGE`, then `LC_ALL`, `LC_MESSAGES`, or `LANG` (Korean by default): executed and reused counts with the estimated avoided time when a reuse has timing evidence, the runtime mode with the mutation revision and verification completion, and the next action. `click-gate status --json` (alias `status detail`) returns the full read-only progress report: task, summary counts, batch timing, per-check decisions with reason codes, the readiness projection, and the actionable report with bounded failure details. Both forms read ledger facts only; they never execute a check, change evidence status, or grant reuse.
+`click-gate status` prints at most three short lines in the dashboard language selected by `CLICK_LANGUAGE`, then `LC_ALL`, `LC_MESSAGES`, or `LANG` (English unless the locale is Korean or Simplified Chinese; the runner's `[Click result]` line and the reuse notice follow the same choice): executed and reused counts with the estimated avoided time when a reuse has timing evidence, the runtime mode with the mutation revision and verification completion, and the next action. `click-gate status --json` (alias `status detail`) returns the full read-only progress report: task, summary counts, batch timing, per-check decisions with reason codes, the readiness projection, and the actionable report with bounded failure details. Both forms read ledger facts only; they never execute a check, change evidence status, or grant reuse.
 
 ## Completion receipt export and offline integrity verification
 

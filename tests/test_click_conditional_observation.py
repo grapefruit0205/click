@@ -329,7 +329,7 @@ class ConditionalHookTests(support.ClickGateTestCase):
         self.assertTrue(all(row['authority_source']=='conditional-js-observation' for row in decisions),decisions)
         self.assertNotIn('ran-alpha',result.stdout)
         self.assertNotIn('ran-beta',result.stdout)
-        self.assertIn('입력 완전성 미보증',result.stdout)
+        self.assertIn('completeness unproven',result.stdout)
         # Git is unchanged; the ignored input's content change must still
         # invalidate only alpha. An equal-content rewrite would not: identity
         # is content, membership and mode, never timestamps or inodes.

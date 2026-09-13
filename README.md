@@ -343,7 +343,7 @@ click-gate dashboard stop
 
 Open the local URL reported by the control. The first screen separates command, auto-inventory, exact-reuse, committed-policy, and observation readiness and shows the next action. It also shows the current task, verification-group states, reuse reasons, and work history. Each completed group is persisted while later groups run. A viewer can remain connected across successive Evidence tasks in the same host session and workspace.
 
-The **top-right language selector** offers **한국어 · English · 简体中文**. Korean is the default; the browser remembers the preference for the same origin when local storage is available. Reports follow the selected language, while user-authored task and check names retain their original text.
+The **top-right language selector** offers **한국어 · English · 简体中文**. The browser language selects Korean or Simplified Chinese and everything else reads English; the browser remembers an explicit choice for the same origin when local storage is available. Reports follow the selected language, while user-authored task and check names retain their original text.
 
 The first cards show **net task time** and **token savings rate**. They remain unmeasured until a suitable whole-task comparison is imported. The separate **test execution savings** row estimates avoided reruns from actually reused groups and eligible previous successful durations.
 
@@ -366,7 +366,7 @@ Sharing supports a copied summary, public JSON, and standalone HTML. The public 
 
 ## Verification status and failure feedback
 
-`click-gate status` prints a short read-only summary: executed and reused counts with the estimated avoided time, the mode and mutation revision, and the next action, in the dashboard language selected by `CLICK_LANGUAGE` or the POSIX locale (Korean by default). `click-gate status --json` returns the full report of checks that ran, were reused, did not run, or remain unrequested, including invalidation after mutations, per-check reason codes, and actionable failure details. Both report registered evidence, not whole-task correctness, and neither grants reuse.
+`click-gate status` prints a short read-only summary: executed and reused counts with the estimated avoided time, the mode and mutation revision, and the next action, in the language selected by `CLICK_LANGUAGE` or the POSIX locale (English unless the locale is Korean or Simplified Chinese). The runner's `[Click result]` line and the reuse notice use the same language. `click-gate status --json` returns the full report of checks that ran, were reused, did not run, or remain unrequested, including invalidation after mutations, per-check reason codes, and actionable failure details. Both report registered evidence, not whole-task correctness, and neither grants reuse.
 
 Raw output and source-order fail-fast are the defaults. Opt-in actionable reporting for supported unittest/pytest output summarizes failed tests with bounded local details. Optional bounded failure collection continues only across explicitly submitted, caller-declared independent sources within stated limits; automatic shards are not assumed independent. Setup errors, cancellation, drift, and unknown output stop collection. See [reporting and failure collection](skills/click/references/verification-efficiency.md).
 

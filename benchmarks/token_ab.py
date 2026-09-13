@@ -62,7 +62,7 @@ DEFAULT_BUDGET_USD = 6.0
 DEFAULT_ROUNDS = 60000
 DEFAULT_SESSION_TIMEOUT = 1800
 _LIMIT = re.compile(r"^LIMIT = (\d+)$", re.MULTILINE)
-_CLICK_RESULT = re.compile(r"\[Click 결과\][^\n]*")
+_CLICK_RESULT = re.compile(r"\[Click (?:결과|result|结果)\][^\n]*")
 _TEST_COMMAND = re.compile(r"(?:python3?|py)\s+-m\s+(?:unittest|pytest)\b|\bpytest\b")
 
 

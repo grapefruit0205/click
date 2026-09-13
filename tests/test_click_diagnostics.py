@@ -451,7 +451,7 @@ class ClickDiagnosticRunnerIntegrationTests(ClickGateTestCase):
         )
         assert second is not None
         advisory = second["hookSpecificOutput"].get("additionalContext", "")
-        self.assertIn("재사용으로 다시 읽지 않은 출력:", advisory)
+        self.assertIn("output not read again thanks to reuse:", advisory)
         status = self.pre_tool("Bash", "click-gate status --json", "turn-1", submit_prompt=False, tool_use_id="output-status")
         assert status is not None
         report = json.loads(self.run_rewritten(status).stdout)
