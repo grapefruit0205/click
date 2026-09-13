@@ -58,19 +58,28 @@ def long_name(path: str) -> str:
     cached = _long_names.get(path)
     if cached is not None:
         return cached
-    expanded = path
+    expanded = _query_long_name(path)
+    if expanded is None:
+        # The leaf may already be gone (the controller consumes announcement
+        # files); expand the longest existing prefix and keep the rest.
+        parent, leaf = ntpath.split(path)
+        expanded = ntpath.join(long_name(parent), leaf) if parent and parent != path else path
+    if len(_long_names) < 4096:
+        _long_names[path] = expanded
+    return expanded
+
+
+def _query_long_name(path: str) -> str | None:
     try:
         import ctypes
 
         buffer = ctypes.create_unicode_buffer(32_768)
         length = int(ctypes.windll.kernel32.GetLongPathNameW(path, buffer, len(buffer)))
         if 0 < length < len(buffer):
-            expanded = buffer.value
+            return buffer.value
     except (AttributeError, OSError, TypeError, ValueError):
         pass
-    if len(_long_names) < 4096:
-        _long_names[path] = expanded
-    return expanded
+    return None
 
 
 def inspect_tree(documents, *, root_pid, truncated: bool = False) -> processes.ProcessTree:

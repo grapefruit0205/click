@@ -196,7 +196,9 @@ def external_snapshot(rows):
     for row in rows:
         path = Path(row["path"])
         if os.name == "nt":
-            if EXTERNAL_WINDOWS.match(row["path"]) is None or not path.is_absolute():
+            # Either spelling of an absolute drive path is snapshotted (the
+            # receipt itself carries the `C:/` form); device namespaces are not.
+            if not path.is_absolute() or not path.drive or path.drive.startswith("\\\\"):
                 raise ValueError("external-input-unsupported")
         elif not path.is_absolute() or path.parts[1:2] in [("proc",), ("sys",), ("dev",)]:
             raise ValueError("external-input-unsupported")

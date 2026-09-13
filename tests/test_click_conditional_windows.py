@@ -307,9 +307,13 @@ class RealWindowsConditionalTests(unittest.TestCase):
                 self.skipTest(f"native backend lost events on this host: {sorted(lost)}")
             self.assertTrue(runtime["capture_complete"], json.dumps(runtime))
             self.assertIsNotNone(projection, json.dumps(summary)[:6000])
-            self.assertIn({"path": "input.txt", "kind": "file", "operations": ["read"]}, projection["inputs"])
-            self.assertIn({"path": "check.cjs", "kind": "file", "operations": ["read"]}, projection["inputs"])
+            rows = {row["path"]: row for row in projection["inputs"]}
+            for name in ("input.txt", "check.cjs"):
+                self.assertIn(name, rows, projection["inputs"])
+                self.assertEqual(rows[name]["kind"], "file")
+                self.assertIn("read", rows[name]["operations"])
             self.assertTrue(all(conditional.external_row_valid(row) for row in projection["external"]), projection["external"])
+            self.assertFalse([row for row in projection["external"] if "click-node-inputs" in row["path"]], projection["external"])
 
             # Then the framework observer end to end: learn, bind, invalidate.
             def run(previous=None, context=None):
