@@ -103,29 +103,34 @@ def external_row_path(path: str) -> str:
 
 
 def project_capture(documents, *, project, cwd, directory, root_pid, device_paths=None,
-                    truncated: bool = False):
+                    truncated: bool = False, diagnostics: dict | None = None):
     """Conditional projection of one observed process's ETW file events.
 
     Returns ``{"inputs": [...], "external": [...]}`` in the same shape as the
     strace projection (project-relative rows and absolute rows, the latter
     spelled ``C:/...``), or ``None`` when the capture cannot be explained.
+    ``diagnostics``, when given, receives why (names of dynamic objects and
+    counts only; never file contents).
     """
     del cwd  # ETW paths are absolute; the working directory is bound separately.
+    report = diagnostics if diagnostics is not None else {}
     tree = inspect_tree(documents, root_pid=root_pid, truncated=truncated)
+    report["tree"] = {"complete": tree.complete, "reasons": list(tree.reasons), "process_ids": list(tree.process_ids)}
     if not tree.complete or len(tree.process_ids) != 1 or not directory:
         return None
     mappings = dict(device_paths or {})
     try:
         # Resolve the real project on the host; a synthetic Windows path in a
         # test on another OS is taken as spelled.
-        project_text = str(Path(project).resolve(strict=True)) if os.name == "nt" else str(project)
+        project_text = str(Path(project).resolve()) if os.name == "nt" else str(project)
         root = _canonical(project_text, mappings)
         collector = ntpath.normcase(_canonical(str(directory), mappings))
     except (OSError, RuntimeError, ValueError):
+        report["error"] = "project-or-collector-path"
         return None
     started_marker = ntpath.normcase(ntpath.join(collector, f"started-{root_pid}"))
     root_case = ntpath.normcase(root).rstrip("\\")
-    state = {"started": False, "dynamic": False, "created": set()}
+    state = {"started": False, "dynamic": False, "created": set(), "unmapped": []}
 
     def admit(pid, event_id, raw_path, kind, operation) -> bool:
         if pid != root_pid:
@@ -143,6 +148,8 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
             # own; afterwards it is an input the projection cannot bind.
             if state["started"]:
                 state["dynamic"] = True
+                if len(state["unmapped"]) < 16:
+                    state["unmapped"].append(raw_path[:160])
             return False
         case = ntpath.normcase(canonical)
         if case == started_marker:
@@ -170,6 +177,12 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
         root_execution_bound=True, process_scope_complete=True, device_paths=mappings,
         allow_workspace_root=True, event_filter=admit,
     )
+    report.update({
+        "started": state["started"], "dynamic": state["dynamic"], "unmapped": list(state["unmapped"]),
+        "created": len(state["created"]), "unresolved": parsed.unresolved_event_count,
+        "process_tree_complete": parsed.process_tree_complete, "root_exec_observed": parsed.root_exec_observed,
+        "inputs": len(parsed.inputs), "absolute_inputs": len(parsed.absolute_inputs),
+    })
     if not state["started"] or state["dynamic"]:
         return None
     if parsed.unresolved_event_count or not parsed.process_tree_complete or not parsed.root_exec_observed:

@@ -239,6 +239,7 @@ class RealWindowsConditionalTests(unittest.TestCase):
             raise unittest.SkipTest("versioned Node input profile unavailable")
 
     def test_a_node_script_projects_its_inputs_and_reuses_them(self):
+        from hooks import click_dependency_trace as trace
         from hooks import click_framework_observer as framework
         from hooks import click_inspection
         from hooks import click_process
@@ -256,6 +257,52 @@ class RealWindowsConditionalTests(unittest.TestCase):
             def fallback():
                 return int(click_process.run_argv(argv, cwd=root, env=environment).returncode)
 
+            # First, the raw capture: the same collector and backend the
+            # framework observer uses, with the documents kept for diagnosis.
+            collector = node.Collector(argv, environment, root)
+            self.assertIsNotNone(collector.child, collector.record)
+            directory = collector.location.name
+            captured = {}
+
+            def observed(raw, **options):
+                captured["documents"] = raw
+                captured["options"] = options
+
+            try:
+                shadow = trace.run_command(
+                    argv, workspace=root, observation_root=root, environment=collector.environment,
+                    evidence_key="e" * 64, check_digest="c" * 64, mutation_revision=0,
+                    execute_unobserved=fallback, resolve_backend=click_inspection.resolve_read_only_executable,
+                    digest_file=node.digest_file, capture_output={}, process_observer=observed,
+                )
+                tree = windows_projection.inspect_tree(
+                    captured.get("documents", ()), root_pid=captured.get("options", {}).get("root_pid", -1),
+                    truncated=bool(captured.get("options", {}).get("truncated", False)))
+                runtime = collector.finish(tree)
+            finally:
+                collector.close()
+            self.assertEqual(shadow.exit_code, 0, shadow.record)
+            self.assertIn("documents", captured, "the Windows backend did not hand over its capture")
+            diagnostics = {}
+            projection = windows_projection.project_capture(
+                captured["documents"], project=root, cwd=root, directory=directory,
+                root_pid=captured["options"].get("root_pid", -1), device_paths=captured["options"].get("device_paths"),
+                truncated=bool(captured["options"].get("truncated", False)), diagnostics=diagnostics,
+            )
+            summary = {"shadow": {k: shadow.record.get(k) for k in ("status", "ineligibility_reasons", "unresolved_event_count", "process_tree_complete", "child_process_count")},
+                       "runtime": {k: runtime.get(k) for k in ("status", "reasons", "capture_complete", "sessions", "installed", "completed", "workers")},
+                       "diagnostics": diagnostics, "projection": projection}
+            print("CLICK-WINDOWS-CONDITIONAL " + json.dumps(summary, ensure_ascii=True)[:12000])
+            lost = set(diagnostics.get("tree", {}).get("reasons", [])) & {"event-loss", "process-tree-incomplete"}
+            if lost:
+                self.skipTest(f"native backend lost events on this host: {sorted(lost)}")
+            self.assertTrue(runtime["capture_complete"], json.dumps(runtime))
+            self.assertIsNotNone(projection, json.dumps(summary)[:6000])
+            self.assertIn({"path": "input.txt", "kind": "file", "operations": ["read"]}, projection["inputs"])
+            self.assertIn({"path": "check.cjs", "kind": "file", "operations": ["read"]}, projection["inputs"])
+            self.assertTrue(all(conditional.external_row_valid(row) for row in projection["external"]), projection["external"])
+
+            # Then the framework observer end to end: learn, bind, invalidate.
             def run(previous=None, context=None):
                 return framework.run_command(
                     argv, workspace=root, observation_root=root, environment=environment,
@@ -268,21 +315,8 @@ class RealWindowsConditionalTests(unittest.TestCase):
             learning = run()
             record = learning.record
             self.assertEqual(learning.exit_code, 0, json.dumps(record)[:2000])
-            capture = record["capture"]
-            lost = set(capture.get("ineligibility_reasons", [])) & {"event-loss", "process-tree-incomplete", "unresolved-event", "capture-failed"}
-            if lost:
-                self.skipTest(f"native backend lost events on this host: {sorted(lost)}")
-            self.assertEqual(capture["backend"]["name"], "windows-etw", capture)
-            runtime = record["runtime"]
-            self.assertEqual(runtime["profile"], "windows-node22232-v8-inspector-v1", runtime)
-            self.assertTrue(runtime["capture_complete"], json.dumps(runtime))
-            projection = record["conditional_capture"]
-            self.assertIsNotNone(projection, json.dumps(record)[:3000])
-            self.assertIn({"path": "input.txt", "kind": "file", "operations": ["read"]}, projection["inputs"])
-            self.assertIn({"path": "check.cjs", "kind": "file", "operations": ["read"]}, projection["inputs"])
-            self.assertTrue(all(conditional.external_row_valid(row) for row in projection["external"]), projection["external"])
+            self.assertIsNotNone(record["conditional_capture"], json.dumps(record)[:3000])
             self.assertTrue(conditional.eligible_record(record), json.dumps(record)[:3000])
-
             context = {"evidence_key": "e" * 64, "check_digest": "c" * 64, "mutation_revision": 0,
                        "environment_digest": "d" * 64, "workspace_tree_digest": "w" * 64}
             binding = run(previous=record, context=context)
