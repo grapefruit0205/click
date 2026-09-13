@@ -100,9 +100,9 @@ claude plugin marketplace update click
 claude plugin update click@click
 ```
 
-Current release: **v1.1.1**. Restart and start a new task after updating.
+Current release: **v1.2.0**. Restart and start a new task after updating.
 
-v1.0.0 published what `main` carried as the v0.97 candidate: automatic input observation with signed receipts, conditional JS reuse, recovery after capture loss, automatic sharding in Evidence mode, concurrent shard execution and receipts that survive a new host session. v1.0.1 keeps receipts valid when Claude Code offers other installed plugins' commands on the search path. v1.1.0 accepts the plain `click-gate verify -- <check argv>` form and directs the agent to it, which in two further measured sessions brought the Click-on cost to the Click-off level. v1.1.1 makes English the default language of the result line, the reuse notice, `click-gate status` and the dashboard, with Korean and Simplified Chinese selected by the locale. Both marketplaces pin `v1.1.1`. See [release notes](RELEASE_NOTES.md).
+v1.0.0 published what `main` carried as the v0.97 candidate: automatic input observation with signed receipts, conditional JS reuse, recovery after capture loss, automatic sharding in Evidence mode, concurrent shard execution and receipts that survive a new host session. v1.0.1 keeps receipts valid when Claude Code offers other installed plugins' commands on the search path. v1.1.0 accepts the plain `click-gate verify -- <check argv>` form and directs the agent to it, which in two further measured sessions brought the Click-on cost to the Click-off level. v1.1.1 makes English the default language of the result line, the reuse notice, `click-gate status` and the dashboard, with Korean and Simplified Chinese selected by the locale. v1.2.0 adds Claude Code on Windows through Git Bash: a POSIX Hook launcher, Git Bash rendering of rewritten commands, and one spelling for Windows search-path entries in the environment fingerprint so receipts are reused. Both marketplaces pin `v1.2.0`. See [release notes](RELEASE_NOTES.md).
 
 ## Try it on your next change
 
