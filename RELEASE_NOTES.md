@@ -1,5 +1,17 @@
 # Release notes
 
+## Unreleased v1.2 candidate
+
+- Plugin listing metadata: the Codex manifest declares a logo, a screenshot
+  taken from a recorded session, and HTTPS privacy and terms links; a new
+  `docs/privacy.md` states what Click stores, where, and that it opens no
+  connection beyond loopback; a `.codexignore` excludes tests, docs and other
+  hosts' distributions from the Codex package; the Claude Code marketplace
+  declares `strict: true` and the `./dist/claude` path form. The plugin
+  scanner used in CI scores 94/100 (A) instead of 86; the remaining deduction
+  is its preference for a `local` Codex marketplace source, which Click keeps
+  as an immutable release tag on purpose.
+
 ## v1.1.0 — 2026-09-13 — plain `click-gate verify -- <check argv>`
 
 Both marketplaces pin `v1.1.0`; updating v1.0.1 installs it.

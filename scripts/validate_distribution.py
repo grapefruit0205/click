@@ -283,8 +283,10 @@ def _validate_claude(root: Path, errors: list[str], release_version: str) -> Non
             errors.append("Claude Code marketplace name must be `click`")
         if entry.get("name") != "click":
             errors.append("Claude Code marketplace plugin name must be `click`")
-        if source.get("source") != "git-subdir" or source.get("path") != "dist/claude":
-            errors.append("Claude Code marketplace must install the generated dist/claude package")
+        if source.get("source") != "git-subdir" or source.get("path") != "./dist/claude":
+            errors.append("Claude Code marketplace must install the generated ./dist/claude package")
+        if marketplace.get("strict") is not True:
+            errors.append("Claude Code marketplace must declare strict mode explicitly")
         if source.get("url") != "https://github.com/grapefruit0205/click.git":
             errors.append("Claude Code marketplace must use Click's canonical Git URL")
         if source.get("ref") != f"v{release_version}":

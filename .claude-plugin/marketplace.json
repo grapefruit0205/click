@@ -5,6 +5,7 @@
     "url": "https://github.com/grapefruit0205"
   },
   "description": "Incremental verification for coding agents: rerun affected checks and reuse authoritative passing evidence.",
+  "strict": true,
   "plugins": [
     {
       "name": "click",
@@ -14,7 +15,7 @@
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/grapefruit0205/click.git",
-        "path": "dist/claude",
+        "path": "./dist/claude",
         "ref": "v1.1.0"
       }
     }
