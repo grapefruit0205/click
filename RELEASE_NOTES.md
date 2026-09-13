@@ -11,6 +11,14 @@
   not to use `click-gate` until a new session; tool hooks stay silent, so no
   tool call is blocked or littered with error lines. The Codex Windows batch
   launcher prints the same install instructions.
+- The JS runtime observer's endpoint transport is portable. Each observed Node
+  process announces its inspector endpoint in an `endpoint-<pid>.json` file
+  that the controller polls for, instead of writing into a FIFO the runner had
+  to `mkfifo` and hold open; the acknowledgement file and worker markers are
+  unchanged. The conditional projection treats the announcement as the
+  collector's own directory write it already ignored. Nothing else about the
+  Linux profile changes; this is the first step toward the same observer on
+  Windows.
 
 ## v1.2.0 — 2026-09-13 — Claude Code on Windows
 

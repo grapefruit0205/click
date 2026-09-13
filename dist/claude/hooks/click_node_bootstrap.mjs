@@ -18,10 +18,12 @@ if (directory && ownedOptions && isMainThread && !testRunner && !priorPreload) {
     if (!inspector.url()) {
       inspector.open(0, '127.0.0.1', false);
       owned = true;
-      const descriptor = fs.openSync(path.join(directory, 'endpoints.pipe'), 'w');
-      try {
-        fs.writeSync(descriptor, JSON.stringify({ pid: process.pid, url: inspector.url() }) + '\n');
-      } finally { fs.closeSync(descriptor); }
+      // One announcement file per process: a plain create-and-write that
+      // every host supports, which the collector polls for. A FIFO would
+      // need a POSIX-only mkfifo and a rename would be an extra file event
+      // for the projection to explain.
+      fs.writeFileSync(path.join(directory, `endpoint-${process.pid}.json`),
+        JSON.stringify({ pid: process.pid, url: inspector.url() }) + '\n', { mode: 0o600 });
       const acknowledgement = path.join(directory, `ready-${process.pid}`);
       const attached = await new Promise(resolve => {
         let attempts = 0;
