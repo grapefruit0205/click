@@ -237,10 +237,10 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
     created = state["created"]
     inputs = []
     for row in parsed.inputs:
-        absolute = ntpath.normcase(ntpath.join(root, row["path"].rstrip("/").replace("/", "\\")))
-        if absolute in created:
+        native = ntpath.join(root, row["path"].rstrip("/").replace("/", "\\"))
+        if ntpath.normcase(native) in created:
             continue
-        inputs.append(dict(row))
+        inputs.append(_with_presence(dict(row), native))
     external = []
     for row in parsed.absolute_inputs:
         case = ntpath.normcase(row["path"])
@@ -251,10 +251,26 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
             # baseline, not a claim about directory timestamps (the file
             # provider does not say the queried path is a directory).
             continue
-        external.append({"path": external_row_path(row["path"]), "kind": row["kind"],
-                         "operations": list(row["operations"])})
+        external.append(_with_presence(
+            {"path": external_row_path(row["path"]), "kind": row["kind"], "operations": list(row["operations"])},
+            row["path"]))
     external.sort(key=lambda row: row["path"])
     return {"inputs": inputs, "external": external}
+
+
+def _with_presence(row: dict, native_path: str) -> dict:
+    """Bind a probed-but-absent path as ``missing``.
+
+    The file provider logs a Create for every open attempt, including the
+    loader probing an application directory for a DLL that is not there. The
+    outcome is not in the session, so presence is read from the host right
+    after the run: an absent path binds as one that must stay absent (the
+    strace projection's ENOENT rows), and a path that appears later changes
+    the receipt.
+    """
+    if os.name == "nt" and not os.path.lexists(native_path):
+        return {**row, "kind": "missing"}
+    return row
 
 
 def _ancestors(path: str) -> list[str]:
