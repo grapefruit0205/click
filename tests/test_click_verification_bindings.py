@@ -277,6 +277,18 @@ class VerificationBindingStageTests(unittest.TestCase):
         _, drifted, _ = bindings.verification_environment_from_binding(binding, "t" * 32, missing_bound)
         self.assertTrue(drifted)
 
+        # The drift report names what moved, never the values.
+        drift: dict[str, object] = {}
+        bindings.verification_environment_from_binding(binding, "t" * 32, changed_noise, drift=drift)
+        self.assertEqual(drift, {"changed": [], "absent": 0})
+        bindings.verification_environment_from_binding(
+            binding, "t" * 32, {**changed_bound, "LANG": "C.UTF-8"}, drift=drift
+        )
+        self.assertEqual(drift, {"changed": ["LANG", "TZ"], "absent": 0})
+        bindings.verification_environment_from_binding(binding, "t" * 32, missing_bound, drift=drift)
+        self.assertEqual(drift, {"changed": [], "absent": 1})
+        self.assertNotIn("Etc/GMT+7", repr(drift))
+
     def test_executable_payload_uses_content_instead_of_volatile_mtime(self):
         baseline = {
             "name": "npx.cmd",

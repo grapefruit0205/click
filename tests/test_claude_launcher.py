@@ -386,6 +386,9 @@ class GitBashIntegrationTests(unittest.TestCase):
                 workspace = self.base / f"{root_name} workspace"
                 workspace.mkdir()
                 subprocess.run(["git", "init", "-q", str(workspace)], check=True)
+                # A real project ignores bytecode; Click reports any untracked
+                # path a check leaves behind, and unittest writes __pycache__.
+                (workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
                 (workspace / "calc.py").write_text("VALUE = 1\n", encoding="utf-8")
                 (workspace / "test_calc.py").write_text(
                     "import unittest\nimport calc\n\n\nclass CalcTests(unittest.TestCase):\n"
@@ -462,6 +465,20 @@ class GitBashIntegrationTests(unittest.TestCase):
                 )
                 self.assertEqual(executed.returncode, 0, executed.stderr)
                 self.assertTrue(executed.stdout.startswith("Executed 1 "), executed.stdout)
+
+                # The same check resubmitted with nothing changed is reused:
+                # the Hook-side and runner-side environment fingerprints agree
+                # under Git Bash, so the receipt is current.
+                again = hook(
+                    "pre-tool",
+                    event("PreToolUse", tool_name="Bash", tool_use_id="toolu_verify_again",
+                          tool_input={"command": f"click-gate verify -- {check}"}),
+                )
+                rewritten = again["hookSpecificOutput"]["updatedInput"]["command"]
+                executed = self.bash_run(rewritten, stdin="", cwd=workspace, environment=environment)
+                self.assertEqual(executed.returncode, 0, f"{executed.stderr}\n{executed.stdout}")
+                self.assertIn("Click reused 1 current", executed.stdout, f"{executed.stderr}\n{executed.stdout}")
+                self.assertNotIn("Ran 1 test", executed.stdout + executed.stderr)
                 hook("session-end", event("SessionEnd", reason="other"))
 
 
