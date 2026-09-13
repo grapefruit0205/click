@@ -18,6 +18,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 from hooks import claude_hook, click_runner_transport
@@ -378,6 +379,53 @@ class GitBashIntegrationTests(unittest.TestCase):
             timeout=120,
         )
 
+    def stop_session(self, workspace: Path, environment: dict[str, str], spelled_root: str, root_name: str) -> None:
+        command = hook_command("session-end").replace("${CLAUDE_PLUGIN_ROOT}", spelled_root)
+        event = json.dumps(
+            {
+                "session_id": f"claude-windows-{root_name}".replace(" ", "-"),
+                "transcript_path": str(self.base / "transcript.jsonl"),
+                "cwd": str(workspace),
+                "permission_mode": "default",
+                "hook_event_name": "SessionEnd",
+                "prompt_id": PROMPT_ID,
+                "reason": "other",
+            }
+        )
+        try:
+            self.bash_run(command, stdin=event, cwd=workspace, environment=environment)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                shutil.rmtree(workspace)
+                return
+            except OSError:
+                time.sleep(0.25)
+
+    def test_git_bash_environment_diagnostics(self) -> None:
+        """Temporary: print the PATH each launch flow hands to Python."""
+        plugin_root = write_package(self.base / "diag")
+        environment = self.environment(plugin_root, self.base / "diag data", "0")
+        probe = "import json, os, sys; print(json.dumps({'PATH': os.environ.get('PATH'), 'executable': sys.executable, 'keys': sorted(os.environ)}))"
+        # The launcher chain itself, with the adapter replaced by the probe.
+        (plugin_root / "hooks" / "claude_hook.py").write_text(probe + "\n", encoding="utf-8")
+        flows = {
+            "bash-python": f"python -c \"{probe}\"",
+            "bash-sh-python": f"sh -c 'python -c \"{probe}\"'",
+            "bash-sh-py": f"sh -c 'py -3 -c \"{probe}\"'",
+            "bash-launcher": hook_command("pre-tool").replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root)),
+        }
+        results: dict[str, object] = {}
+        for name, command in flows.items():
+            result = self.bash_run(command, stdin="", cwd=self.base, environment=environment)
+            try:
+                results[name] = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                results[name] = {"stdout": result.stdout[:2000], "stderr": result.stderr[:2000], "rc": result.returncode}
+        print("CLAUDE-GIT-BASH-DIAGNOSTICS " + json.dumps(results, ensure_ascii=True))
+
     def test_hooks_and_rewritten_commands_run_through_git_bash(self) -> None:
         for root_name, worker in (("click", "1"), ("Click Plugin Root With Spaces", "0")):
             with self.subTest(plugin_root=root_name, worker=worker):
@@ -400,6 +448,10 @@ class GitBashIntegrationTests(unittest.TestCase):
                 # (backslash) path before Git Bash sees the command.
                 spelled_root = str(plugin_root)
                 self.assertIn("\\", spelled_root)
+                # The resident worker keeps the workspace as its cwd until the
+                # session ends; stop it even when an assertion fails so the
+                # temporary directory can be removed.
+                self.addCleanup(self.stop_session, workspace, environment, spelled_root, root_name)
 
                 def hook(mode: str, event: dict[str, object]) -> dict[str, object]:
                     command = hook_command(mode).replace("${CLAUDE_PLUGIN_ROOT}", spelled_root)
@@ -449,8 +501,11 @@ class GitBashIntegrationTests(unittest.TestCase):
                 self.assertIn("--encoded-runner", rewritten)
                 executed = self.bash_run(rewritten, stdin="", cwd=workspace, environment=environment)
                 self.assertEqual(executed.returncode, 0, f"{executed.stderr}\n{executed.stdout}")
-                self.assertIn("Ran 1 test", executed.stdout + executed.stderr)
+                # Actionable reporting summarizes a passing check instead of
+                # relaying its output; the diagnostic line is the evidence.
                 self.assertIn("[Click verification 1/1:", executed.stdout + executed.stderr)
+                self.assertIn("passed.", executed.stdout)
+                self.assertNotIn("environment changed after preparation", executed.stdout)
                 hook("post-tool", event("PostToolUse", tool_name="Bash", tool_use_id="toolu_verify",
                                         tool_input={"command": f"click-gate verify -- {check}"},
                                         tool_response={"stdout": executed.stdout, "stderr": executed.stderr}))
@@ -478,8 +533,7 @@ class GitBashIntegrationTests(unittest.TestCase):
                 executed = self.bash_run(rewritten, stdin="", cwd=workspace, environment=environment)
                 self.assertEqual(executed.returncode, 0, f"{executed.stderr}\n{executed.stdout}")
                 self.assertIn("Click reused 1 current", executed.stdout, f"{executed.stderr}\n{executed.stdout}")
-                self.assertNotIn("Ran 1 test", executed.stdout + executed.stderr)
-                hook("session-end", event("SessionEnd", reason="other"))
+                self.assertNotIn("[Click verification 1/1:", executed.stdout + executed.stderr)
 
 
 if __name__ == "__main__":
