@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 import ctypes
 from dataclasses import dataclass
 import hashlib
+import io
 import ntpath
 import os
 from pathlib import Path
@@ -46,14 +47,17 @@ FILE_PROVIDER = "Microsoft-Windows-Kernel-File"
 PROCESS_PROVIDER_GUID = "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716"
 FILE_PROVIDER_GUID = "edd08927-9cc4-4e65-b970-c2560fb5c289"
 PROCESS_KEYWORDS = "0x10"
-# Filename, FileIO, OpenD, Create, and Read.  Write/delete-only keywords are
-# deliberately excluded because Observer records inputs, not generated output.
-FILE_KEYWORDS = "0x1f0"
+# Filename, FileIO, Create, Read and CreateNewFile. Write/delete-only keywords
+# are deliberately excluded because Observer records inputs, not generated
+# output; OperationEnd is excluded because the parser never reads it and it
+# would double the volume of a system-wide session. CreateNewFile tells the
+# conditional projection which files the check itself created.
+FILE_KEYWORDS = "0x11b0"
 TRACE_LEVEL = "0xff"
-MAX_ETL_MIB = 8
-MAX_RAW_TRACE_BYTES = 16 * 1024 * 1024
+MAX_ETL_MIB = 64
+MAX_RAW_TRACE_BYTES = 96 * 1024 * 1024
 MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
-MAX_XML_EVENTS = 200_000
+MAX_XML_EVENTS = 2_000_000
 CONTROL_TIMEOUT_SECONDS = 30.0
 TARGET_WAIT_POLL_SECONDS = 0.1
 # ``logman start -ets`` returns after admitting the session, but the kernel
@@ -336,29 +340,46 @@ def _event_pid(fields: Mapping[str, str]) -> int | None:
     return _first_integer(fields, (*_PID_FIELDS, "execution.processid", "pid"))
 
 
-def _iter_events(raw_documents: Sequence[bytes]) -> tuple[list[ElementTree.Element], int]:
-    events: list[ElementTree.Element] = []
+ExtractedEvent = tuple[str, int | None, dict[str, str]]
+
+
+def _iter_events(
+    raw_documents: Sequence[bytes],
+    keep: Callable[[str, int | None, dict[str, str]], bool] | None = None,
+) -> tuple[list[ExtractedEvent], int]:
+    """Stream bounded XML into ``(provider, event_id, fields)`` tuples.
+
+    The file session is system-wide, so a document can hold hundreds of
+    thousands of events from unrelated processes. Each element is reduced to
+    its fields and cleared as it is parsed, and ``keep`` drops an event before
+    it is retained, so memory follows the events that matter, not the XML.
+    """
+    events: list[ExtractedEvent] = []
     unresolved = 0
     for raw in raw_documents:
         if not isinstance(raw, bytes) or not raw:
             unresolved = _bounded_add(unresolved, 1)
             continue
+        seen = 0
         try:
-            root = ElementTree.fromstring(raw)
+            for _, element in ElementTree.iterparse(io.BytesIO(raw), events=("end",)):
+                name = _local_name(element.tag)
+                if name == "event":
+                    seen += 1
+                    if seen > MAX_XML_EVENTS:
+                        unresolved = _bounded_add(unresolved, 1)
+                        break
+                    extracted = _event_fields(element)
+                    if keep is None or keep(*extracted):
+                        events.append(extracted)
+                    element.clear()
+                elif name in {"eventslost", "bufferslost", "logbufferslost"}:
+                    lost = _parse_integer(element.text)
+                    if lost:
+                        unresolved = _bounded_add(unresolved, lost)
         except (ElementTree.ParseError, ValueError):
             unresolved = _bounded_add(unresolved, 1)
             continue
-        for element in root.iter():
-            name = _local_name(element.tag)
-            if name == "event":
-                if len(events) >= MAX_XML_EVENTS:
-                    unresolved = _bounded_add(unresolved, 1)
-                    break
-                events.append(element)
-            elif name in {"eventslost", "bufferslost", "logbufferslost"}:
-                lost = _parse_integer(element.text)
-                if lost:
-                    unresolved = _bounded_add(unresolved, lost)
     return events, unresolved
 
 
@@ -389,7 +410,39 @@ def parse_windows_etw(
     """
 
     documents = (raw,) if isinstance(raw, bytes) else tuple(raw)
-    events, unresolved = _iter_events(documents)
+    # Process starts precede the file session's events in the collector's
+    # document order, so the root's descendants are known before a file event
+    # is retained. Events of unrelated processes are dropped as they stream
+    # by; keyless path bindings still need every descendant event.
+    scope: dict[str, Any] = {"parents": {}, "descendants": None}
+
+    def keep(provider: str, event_id: int | None, fields: dict[str, str]) -> bool:
+        if provider in _PROCESS_NAMES:
+            if event_id == 1:
+                pid = _first_integer(fields, _PID_FIELDS)
+                parent = _first_integer(fields, _PARENT_PID_FIELDS)
+                if pid is not None and parent is not None:
+                    scope["parents"][pid] = parent
+            return True
+        if provider not in _FILE_NAMES:
+            return False
+        pid = _event_pid(fields)
+        if pid is None:
+            return True  # accounted as unresolved when it names a workspace path
+        if scope["descendants"] is None or scope.get("parent_count") != len(scope["parents"]):
+            descendants = {root_pid}
+            changed = True
+            while changed:
+                changed = False
+                for child, parent in scope["parents"].items():
+                    if parent in descendants and child not in descendants:
+                        descendants.add(child)
+                        changed = True
+            scope["descendants"] = descendants
+            scope["parent_count"] = len(scope["parents"])
+        return pid in scope["descendants"]
+
+    events, unresolved = _iter_events(documents, keep)
     if truncated:
         unresolved = _bounded_add(unresolved, 1)
     if not isinstance(root_pid, int) or isinstance(root_pid, bool) or root_pid <= 0:
@@ -419,8 +472,7 @@ def parse_windows_etw(
     file_events: list[tuple[int | None, int | None, dict[str, str], str]] = []
     file_keys: dict[str, str] = {}
 
-    for event in events:
-        provider, event_id, fields = _event_fields(event)
+    for provider, event_id, fields in events:
         if provider in _PROCESS_NAMES:
             if event_id != 1:
                 continue

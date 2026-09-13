@@ -90,7 +90,8 @@ def inspect_tree(documents, *, root_pid, truncated: bool = False) -> processes.P
     Thread lifecycles are not enabled on this backend; Worker isolates are
     counted by the collector's own markers instead.
     """
-    events, lost = windows._iter_events(tuple(documents))
+    events, lost = windows._iter_events(
+        tuple(documents), lambda provider, _event_id, _fields: provider in windows._PROCESS_NAMES)
     reasons: set[str] = set()
     if truncated or lost:
         reasons.add("event-loss")
@@ -98,8 +99,7 @@ def inspect_tree(documents, *, root_pid, truncated: bool = False) -> processes.P
         return processes.ProcessTree(b"", 0, 0, 0, False, ("root-execution-unbound",))
     parents: dict[int, int] = {}
     stopped: set[int] = set()
-    for event in events:
-        provider, event_id, fields = windows._event_fields(event)
+    for provider, event_id, fields in events:
         if provider not in windows._PROCESS_NAMES:
             continue
         pid = windows._first_integer(fields, windows._PID_FIELDS)
