@@ -227,7 +227,7 @@ class CIWorkflowGateTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         jobs = dict(re.findall(r"(?ms)^  ([a-z-]+):\n(.*?)(?=^  [a-z-]+:|\Z)", workflow.split("jobs:\n", 1)[1]))
         matrix_jobs = set(jobs) - {"changes", "repository-checks", "deterministic-tests"}
-        self.assertEqual(len(matrix_jobs), 11)
+        self.assertEqual(len(matrix_jobs), 12)
         self.assertIn("framework-observation", matrix_jobs)
         for name in matrix_jobs:
             self.assertIn("needs: changes", jobs[name])

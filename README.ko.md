@@ -88,9 +88,9 @@ claude plugin install click@click
 러너로 다시 씁니다. Evidence 상태는 `~/.claude/plugins/data/click-click/`에
 저장됩니다. Linux·macOS·Windows를 지원합니다. Windows에서는 Claude Code의
 Bash 도구와 Hook이 Git for Windows에서 실행되며, Hook 실행기가 `py -3`,
-`python`, `python3` 순으로 인터프리터를 고릅니다. JS 조건부 재사용은 Linux
-전용입니다. 호스트별 제한은 [Click for Claude Code](platforms/claude/README.md)를
-참고하세요.
+`python`, `python3` 순으로 인터프리터를 고릅니다. JS 조건부 재사용은 Linux와,
+관리자 세션의 Windows에서 동작합니다. 호스트별 제한은
+[Click for Claude Code](platforms/claude/README.md)를 참고하세요.
 
 업데이트 명령은 다음과 같습니다.
 
@@ -146,7 +146,7 @@ click-gate dashboard start
 | 프로젝트 | 현재 가능한 범위 |
 | --- | --- |
 | Python 백엔드·라이브러리 | 지원되는 unittest·pytest 명령의 분할과 재사용. 자동 입력 관찰은 제한된 CPython 3.12 프로필입니다. |
-| JS/TS 프런트엔드·Node 프로젝트 | 지원되는 Vitest·Jest 테스트를 나누고 자식별로 재판정합니다. 관찰만으로 조건부 재사용하는 경로는 Linux Node 22.23.2의 제한된 실행 대상입니다. |
+| JS/TS 프런트엔드·Node 프로젝트 | 지원되는 Vitest·Jest 테스트를 나누고 자식별로 재판정합니다. 관찰만으로 조건부 재사용하는 경로는 Linux·Windows의 Node 22.23.2 실행 중 조건을 충족하는 경우로 제한됩니다. |
 | Go 서비스 | `go test` 실행과 조건을 충족한 결과 재사용을 지원합니다. 자동 테스트 분할은 제공하지 않습니다. |
 | 여러 언어를 함께 쓰는 저장소 | 등록한 검증 명령별로 실행·재사용을 판단합니다. 언어 간 의존성을 모두 자동으로 발견하지는 않습니다. |
 
@@ -177,7 +177,7 @@ JS 조건부 재사용은 조건에 맞는 정상 요청 두 번에서 입력을
 | 검증 기록 | 기본 Evidence 모드에서 호스트 권한으로 기록합니다. |
 | 테스트 분할 | 지원되는 unittest·pytest·Vitest·Jest 프로필에서 설정 후 사용합니다. |
 | Python 입력 관찰 | 플랫폼 준비 조건을 갖춘 제한된 CPython 3.12 및 unittest·pytest 프로필입니다. |
-| JS 조건부 재사용 | 지원되는 Linux Node 22.23.2 실행의 관찰 입력을 재확인하며, 수집의 한계를 표시합니다. |
+| JS 조건부 재사용 | Linux(strace)·Windows(기본 ETW, 관리자 세션)의 Node 22.23.2 실행에서 관찰 입력을 재확인하며, 수집의 한계를 표시합니다. |
 | 기존 저장소 정책 | 선언한 재사용 정책의 규칙을 유지합니다. Observer를 꺼도 사용할 수 있습니다. |
 
 지원되는 프로필에서는 설정 파일·동적 import·무시된 파일도 추적할 수 있습니다.
@@ -297,7 +297,7 @@ click-gate observer off
 
 로그·실패 진단과 입력 관찰은 같은 한 번의 실행에서 수집합니다. pytest 입력 프로필은 8.4.2와 9.1.1을 대상으로 하며 캐시 쓰기, 캡처 파일, 시간에 의존하는 플러그인, worker 때문에 재사용 근거가 불완전할 수 있습니다. 기존 실행 옵션과 결과는 유지합니다. Node/Vitest/Jest는 자동 모드에서 파일·worker **후보 정보**를 제한된 횟수로 수집하며, 조건부 대상인 입력은 다음 요청된 실행에서 대조합니다. 원시 후보만으로 재사용을 허용하지 않습니다. 별도로 서명하고 재검증한 조건부 영수증은 입력 완전성이 미입증임을 표시하며 재사용할 수 있습니다. 자세한 범위는 [프레임워크 확장과 제한](docs/architecture/automatic-observation.md)에 있습니다.
 
-기본 `auto` 검증은 각 검사의 첫 실제 실행에서 Linux Node 22.23.2의 시간·난수·공유 메모리 호출을 worker·VM 실행 공간까지 수집합니다. 일부 API는 실제 소비한 값의 해시를 기록하며, 일치하는 네이티브 수집기가 있으면 실행 공간별 난수 상태와 공유 버퍼 바이트 표본도 기록합니다. 이 표본만으로 모든 JavaScript 입력의 완전성을 증명하지는 않습니다. 검증된 실행 영수증과 커밋된 저장소 입력 정책에 따른 자동 재사용은 허용하며, 진단 정보만으로 JavaScript 재사용 권한을 만들지는 않습니다. `observer runtime`은 수집을 명시적으로 다시 시도할 때 사용합니다. [기본 수집·조건부 재사용과 제한](docs/architecture/node-runtime-observation.md)을 참고하세요.
+기본 `auto` 검증은 각 검사의 첫 실제 실행에서 Linux·Windows Node 22.23.2의 시간·난수·공유 메모리 호출을 worker·VM 실행 공간까지 수집합니다. 일부 API는 실제 소비한 값의 해시를 기록하며, 일치하는 네이티브 수집기가 있으면 실행 공간별 난수 상태와 공유 버퍼 바이트 표본도 기록합니다. 이 표본만으로 모든 JavaScript 입력의 완전성을 증명하지는 않습니다. 검증된 실행 영수증과 커밋된 저장소 입력 정책에 따른 자동 재사용은 허용하며, 진단 정보만으로 JavaScript 재사용 권한을 만들지는 않습니다. `observer runtime`은 수집을 명시적으로 다시 시도할 때 사용합니다. [기본 수집·조건부 재사용과 제한](docs/architecture/node-runtime-observation.md)을 참고하세요.
 
 자동 관찰은 검증 묶음별로 판단합니다. Git이 무시한 데이터 파일도 관측했다면 재사용 전에 다시 확인합니다. 모든 언어·worker·외부 DB 입력을 완전히 발견한다는 의미는 아닙니다. 상위 명령 분할에는 기존 자동 샤딩 절차를 사용하며, 관측 기능을 위해 검사를 추가 실행하지 않습니다.
 
@@ -305,7 +305,7 @@ click-gate observer off
 
 Linux strace 6.8, macOS의 권한이 필요한 `fs_usage`, Windows 기본 ETW 프로필은 해당 OS에서의 검증 기록이 있습니다. 자동 샤딩 E2E 기록의 범위는 Linux입니다. Click이 필요한 도구를 설치하거나 권한을 높이지는 않습니다. 관찰이 불완전해도 테스트의 실제 결과는 유지하지만, 이후 재사용 권한을 만들지는 못합니다. [플랫폼 요구 사항과 검증 범위](skills/click/references/authoritative-observer-v2.md)를 참고하세요.
 
-지원되는 Linux Node 22.23.2 프로필의 기본 JavaScript 관찰은 별도 JSON 없이
+지원되는 Node 22.23.2 프로필(Linux, 그리고 관리자 세션의 Windows)의 기본 JavaScript 관찰은 별도 JSON 없이
 **조건부 재사용** 근거도 만들 수 있습니다. 조건을 충족하는 정상 요청 두 번에서
 관찰 입력을 학습·대조하고, 이후 요청마다 다시 확인합니다. 설정 파일·동적 import·
 무시된 파일도 수집된 경우 확인합니다. 환경 변수는 보수적으로 묶어 확인하므로

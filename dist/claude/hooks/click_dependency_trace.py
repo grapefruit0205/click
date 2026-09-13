@@ -203,6 +203,7 @@ def _run_command(
             terminate_group=terminate_group,
             system_name=system,
             capture_limit=capture_limit,
+            process_observer=process_observer,
         )
     return run_unobserved(
         execute_unobserved,

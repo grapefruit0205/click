@@ -26,6 +26,11 @@ def digest(path: Path) -> str:
 
 
 def prepare(node: Path, workspace: Path, environment: dict) -> tuple[Path, str] | None:
+    if os.name == "nt":
+        # The companion is built against the Linux binary's exact layout with a
+        # POSIX toolchain; without it, consumed random state stays unavailable
+        # and the runtime record says so (`input-native-state-unavailable`).
+        return None
     try:
         if digest(node) != NODE_DIGEST:
             return None

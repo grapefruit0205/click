@@ -42,7 +42,7 @@ class NodeObservationBoundaryTests(unittest.TestCase):
                     collector.close()
 
 
-@unittest.skipUnless(sys.platform == "linux" and shutil.which("node"), "native Node inspector requires Linux")
+@unittest.skipUnless(sys.platform in observer.PROFILES and shutil.which("node"), "native Node inspector profile for this host")
 class RealNodeObservationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,6 +129,7 @@ console.log('VALUES', JSON.stringify({
             self.assertEqual(self.record["values"]["math-random"]["state_count"], 1, self.record)
             self.assertNotIn("input-value-setup-incomplete", self.record["reasons"])
 
+    @unittest.skipIf(os.name == "nt", "value-state assertions need the native state companion (stage 3 on Windows)")
     def test_atomic_coercion_and_thrown_identity_are_not_repeated_or_replaced(self):
         result = self.execute("""
 const assert = require('node:assert/strict');
@@ -153,6 +154,7 @@ console.log('SEMANTICS-PRESERVED');
         self.assertIn("input-coercion-state-incomplete", self.record["reasons"])
         self.assertNotIn("input-values-unavailable", self.record["reasons"])
 
+    @unittest.skipIf(os.name == "nt", "value-state assertions need the native state companion (stage 3 on Windows)")
     def test_vm_owner_field_is_not_deleted_or_treated_as_native_state(self):
         result = self.execute("""
 const vm = require('node:vm');

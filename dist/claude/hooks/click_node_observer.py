@@ -27,7 +27,10 @@ else:
     import click_process
     import click_node_state
 
-PROFILE = "linux-node22232-v8-inspector-v1"
+# One inspector profile per host backend: the V8 call coverage is the same,
+# the file capture it is paired with is not (strace on Linux, ETW on Windows).
+PROFILES = {"linux": "linux-node22232-v8-inspector-v1", "win32": "windows-node22232-v8-inspector-v1"}
+PROFILE = PROFILES.get(sys.platform, "linux-node22232-v8-inspector-v1")
 VERSION = "v22.23.2"
 MAX_COUNT = 200000
 CATEGORIES = frozenset({"clock", "random", "shared-memory", "native-escape", "inspector-access"})
@@ -129,7 +132,7 @@ class Collector:
         self.process_ids = set()
         self.runtime_path = None
         self.state_companion = None
-        if sys.platform != "linux" or not argv:
+        if sys.platform not in PROFILES or not argv:
             return
         # Node's test runner reduces concurrency when an inspector is active.
         # Preserve that command's scheduler and retain its ordinary OS capture.

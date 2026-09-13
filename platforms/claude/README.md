@@ -99,7 +99,11 @@ receipts never cross hosts.
   not part of this package.
 - Python checks are the Windows scope: the resident worker, receipts, sharding
   and the inbox ETW observer follow the shared runtime. Conditional JS reuse
-  (the Node observer) is Linux-only on every host.
+  (the Node inspector observer with an ETW projection) works on Windows from
+  an elevated session, since the inbox `logman` sessions need it; without
+  elevation checks run and same-state receipts still reuse. The native
+  random-state reader is Linux-only for now, so a Windows check that consumes
+  `Math.random` stays ineligible until it is ported.
 - Automatic input observation keeps its documented platform prerequisites; the
   host does not change which observer backends are available.
 

@@ -79,8 +79,9 @@ claude plugin install click@click
 命令都是普通的 Bash 命令，由已安装的 `PreToolUse` Hook 改写到 Click 运行器；
 Evidence 状态保存在 `~/.claude/plugins/data/click-click/`。支持 Linux、macOS
 和 Windows：在 Windows 上，Claude Code 的 Bash 工具和 Hook 运行于 Git for
-Windows，Hook 启动器依次选择 `py -3`、`python`、`python3`。JS 条件复用仍仅限
-Linux。宿主限制详见 [Click for Claude Code](platforms/claude/README.md)。
+Windows，Hook 启动器依次选择 `py -3`、`python`、`python3`。JS 条件复用在
+Linux 上可用，在 Windows 上需要提升权限的会话。宿主限制详见
+[Click for Claude Code](platforms/claude/README.md)。
 
 更新命令：
 
@@ -132,7 +133,7 @@ click-gate dashboard start
 | 项目 | 当前范围 |
 | --- | --- |
 | Python 后端与库 | 支持的 unittest/pytest 命令可以分片和复用。自动输入观测限于受支持的 CPython 3.12 配置。 |
-| JS/TS 前端与 Node 项目 | 支持的 Vitest/Jest 套件可拆分并逐项重新判定。仅凭观测进行条件复用限于符合条件的 Linux Node 22.23.2 执行。 |
+| JS/TS 前端与 Node 项目 | 支持的 Vitest/Jest 套件可拆分并逐项重新判定。仅凭观测进行条件复用限于 Linux 和 Windows 上符合条件的 Node 22.23.2 执行。 |
 | Go 服务 | `go test` 执行及符合条件的结果复用，不提供自动测试分片。 |
 | 多语言仓库 | 按注册的检查分别决定执行与复用，不声称自动发现所有跨语言依赖。 |
 
@@ -162,7 +163,7 @@ Rust、Java、.NET、C/C++ 等命令配置及工具 CI 范围见下方详细支�
 | 记录验证 | 默认 Evidence 模式，在宿主权限下运行。 |
 | 拆分测试 | 支持的 unittest、pytest、Vitest、Jest 配置，需先设置。 |
 | Python 输入观测 | 满足平台前置条件的受限 CPython 3.12 与 unittest/pytest 配置。 |
-| JS 条件复用 | 符合条件的 Linux Node 22.23.2 执行，重新核对观测输入并披露采集限制。 |
+| JS 条件复用 | Linux（strace）和 Windows（内置 ETW，需提升权限的会话）上符合条件的 Node 22.23.2 执行，重新核对观测输入并披露采集限制。 |
 | 现有仓库策略 | 保留已声明策略的复用规则，Observer 可以关闭。 |
 
 支持的配置可以追踪设置文件、动态 import 与忽略文件，worker 和动态输入仍有
@@ -280,7 +281,7 @@ click-gate observer off
 
 输出、失败诊断与输入观测来自同一次执行。pytest 输入配置覆盖 8.4.2 和 9.1.1；缓存写入、输出捕获文件、依赖时间的插件或 worker 可能导致观测不完整。原有参数和结果保持不变。自动模式下，Node/Vitest/Jest 以有界诊断采集文件与 worker **候选信息**；符合条件的输入会在后续正常请求的执行中继续核对。原始候选不能授权复用；单独签署并重新核验的条件凭据可以允许复用，同时明确披露输入完整性尚未得到证明。参见[框架扩展与限制](docs/architecture/automatic-observation.md)。
 
-默认 `auto` 验证会在每项检查首次实际执行时采集 Linux Node 22.23.2 的时间、随机数及共享内存调用诊断，包括 worker 和 VM 上下文。部分 API 会记录实际消费值的摘要；匹配的原生采集器还会记录各上下文的随机数状态及共享缓冲区字节样本。这些样本不代表所有 JavaScript 输入已被完整捕获。经过验证的执行凭据及已提交的仓库输入策略仍可允许自动复用；诊断信息本身不能授权 JavaScript 复用。`observer runtime` 可显式重试采集。参见[默认采集、条件复用与限制](docs/architecture/node-runtime-observation.md)。
+默认 `auto` 验证会在每项检查首次实际执行时采集 Linux 和 Windows 上 Node 22.23.2 的时间、随机数及共享内存调用诊断，包括 worker 和 VM 上下文。部分 API 会记录实际消费值的摘要；匹配的原生采集器还会记录各上下文的随机数状态及共享缓冲区字节样本。这些样本不代表所有 JavaScript 输入已被完整捕获。经过验证的执行凭据及已提交的仓库输入策略仍可允许自动复用；诊断信息本身不能授权 JavaScript 复用。`observer runtime` 可显式重试采集。参见[默认采集、条件复用与限制](docs/architecture/node-runtime-observation.md)。
 
 自动观测按检查逐项判断；即使 Git 树相同，也会重新核对已观测的忽略文件。这不代表能完整发现所有语言、worker 或外部数据库输入。父命令拆分仍使用现有自动分片流程，采集不会额外重跑检查。
 
@@ -288,7 +289,7 @@ click-gate observer off
 
 Linux strace 6.8、macOS 特权 `fs_usage` 和 Windows 内置 ETW 配置均有原生主机验证记录。自动分片端到端记录的范围是 Linux。Click 不会安装前置工具或提升权限。观测不完整时保留测试的实际结果，但不能据此建立未来复用的权威依据。详见[平台要求与验证范围](skills/click/references/authoritative-observer-v2.md)。
 
-在受支持的 Linux Node 22.23.2 配置下，默认 JavaScript 观测可在无需所有者
+在受支持的 Node 22.23.2 配置（Linux，以及提升权限会话中的 Windows）下，默认 JavaScript 观测可在无需所有者
 JSON 的情况下生成**条件复用**凭据。两次符合条件的正常请求执行学习并核对
 观测输入，后续请求再次检查。配置文件、动态 import 和忽略文件在被采集后也
 会核对。环境绑定采用保守范围，一个变量变化可能使多个子检查重跑。

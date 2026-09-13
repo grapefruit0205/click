@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 import ctypes
 from dataclasses import dataclass
 import hashlib
+import io
 import ntpath
 import os
 from pathlib import Path
@@ -46,14 +47,17 @@ FILE_PROVIDER = "Microsoft-Windows-Kernel-File"
 PROCESS_PROVIDER_GUID = "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716"
 FILE_PROVIDER_GUID = "edd08927-9cc4-4e65-b970-c2560fb5c289"
 PROCESS_KEYWORDS = "0x10"
-# Filename, FileIO, OpenD, Create, and Read.  Write/delete-only keywords are
-# deliberately excluded because Observer records inputs, not generated output.
-FILE_KEYWORDS = "0x1f0"
+# Filename, FileIO, Create, Read and CreateNewFile. Write/delete-only keywords
+# are deliberately excluded because Observer records inputs, not generated
+# output; OperationEnd is excluded because the parser never reads it and it
+# would double the volume of a system-wide session. CreateNewFile tells the
+# conditional projection which files the check itself created.
+FILE_KEYWORDS = "0x11b0"
 TRACE_LEVEL = "0xff"
-MAX_ETL_MIB = 8
-MAX_RAW_TRACE_BYTES = 16 * 1024 * 1024
+MAX_ETL_MIB = 32
+MAX_RAW_TRACE_BYTES = 96 * 1024 * 1024
 MAX_TRANSIENT_INPUTS = click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS
-MAX_XML_EVENTS = 200_000
+MAX_XML_EVENTS = 2_000_000
 CONTROL_TIMEOUT_SECONDS = 30.0
 TARGET_WAIT_POLL_SECONDS = 0.1
 # ``logman start -ets`` returns after admitting the session, but the kernel
@@ -122,7 +126,9 @@ class ParsedTrace:
 @dataclass(frozen=True, slots=True)
 class CollectedExecution:
     exit_code: int
-    raw: tuple[bytes, ...]
+    # Converted XML documents as bytes, or documents already streamed into
+    # scoped ``{"events": [...], "lost": n}`` records by the collector.
+    raw: tuple[Any, ...]
     truncated: bool
     failed: bool
     target_started: bool
@@ -336,29 +342,55 @@ def _event_pid(fields: Mapping[str, str]) -> int | None:
     return _first_integer(fields, (*_PID_FIELDS, "execution.processid", "pid"))
 
 
-def _iter_events(raw_documents: Sequence[bytes]) -> tuple[list[ElementTree.Element], int]:
-    events: list[ElementTree.Element] = []
+ExtractedEvent = tuple[str, int | None, dict[str, str]]
+
+
+def _iter_events(
+    raw_documents: Sequence[bytes],
+    keep: Callable[[str, int | None, dict[str, str]], bool] | None = None,
+) -> tuple[list[ExtractedEvent], int]:
+    """Stream bounded XML into ``(provider, event_id, fields)`` tuples.
+
+    The file session is system-wide, so a document can hold hundreds of
+    thousands of events from unrelated processes. Each element is reduced to
+    its fields and cleared as it is parsed, and ``keep`` drops an event before
+    it is retained, so memory follows the events that matter, not the XML.
+    """
+    events: list[ExtractedEvent] = []
     unresolved = 0
     for raw in raw_documents:
+        if isinstance(raw, dict) and isinstance(raw.get("events"), list):
+            # Already extracted by the collector while the XML streamed from disk.
+            lost = raw.get("lost", 0)
+            if isinstance(lost, int) and not isinstance(lost, bool) and lost > 0:
+                unresolved = _bounded_add(unresolved, lost)
+            for extracted in raw["events"]:
+                if keep is None or keep(*extracted):
+                    events.append(extracted)
+            continue
         if not isinstance(raw, bytes) or not raw:
             unresolved = _bounded_add(unresolved, 1)
             continue
+        seen = 0
         try:
-            root = ElementTree.fromstring(raw)
+            for _, element in ElementTree.iterparse(io.BytesIO(raw), events=("end",)):
+                name = _local_name(element.tag)
+                if name == "event":
+                    seen += 1
+                    if seen > MAX_XML_EVENTS:
+                        unresolved = _bounded_add(unresolved, 1)
+                        break
+                    extracted = _event_fields(element)
+                    if keep is None or keep(*extracted):
+                        events.append(extracted)
+                    element.clear()
+                elif name in {"eventslost", "bufferslost", "logbufferslost"}:
+                    lost = _parse_integer(element.text)
+                    if lost:
+                        unresolved = _bounded_add(unresolved, lost)
         except (ElementTree.ParseError, ValueError):
             unresolved = _bounded_add(unresolved, 1)
             continue
-        for element in root.iter():
-            name = _local_name(element.tag)
-            if name == "event":
-                if len(events) >= MAX_XML_EVENTS:
-                    unresolved = _bounded_add(unresolved, 1)
-                    break
-                events.append(element)
-            elif name in {"eventslost", "bufferslost", "logbufferslost"}:
-                lost = _parse_integer(element.text)
-                if lost:
-                    unresolved = _bounded_add(unresolved, lost)
     return events, unresolved
 
 
@@ -373,15 +405,37 @@ def parse_windows_etw(
     device_paths: Mapping[str, str] | None = None,
     transparent_child_images: Sequence[str] = (),
     allow_workspace_root: bool = False,
+    event_filter: Callable[[int, int | None, str, str | None, str | None], bool] | None = None,
+    normalize_path: Callable[[str], str] | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> ParsedTrace:
-    """Normalize bounded ETW XML into content-free repository inputs."""
+    """Normalize bounded ETW XML into content-free repository inputs.
+
+    ``event_filter`` sees every scoped file event in capture order as
+    ``(pid, event_id, path, kind, operation)`` (kind and operation are None
+    for ids the parser ignores, path is "" for an object the session never
+    saw opened) and returns False to set that event aside.
+    The conditional projection uses it to separate the collector's own
+    transport and the runtime's bootstrap probes from the check's inputs.
+    ``normalize_path`` rewrites each canonical path before it is recorded (the
+    projection expands 8.3 short names, which the file provider reports for
+    an open that used them while later events name the same file in full).
+    """
 
     documents = (raw,) if isinstance(raw, bytes) else tuple(raw)
-    events, unresolved = _iter_events(documents)
+    if not isinstance(root_pid, int) or isinstance(root_pid, bool):
+        root_pid = -1
+    unresolved_reasons: dict[str, int] = {}
+
+    def _note(reason: str) -> None:
+        # Counts only, for the caller's diagnostics; never paths or contents.
+        unresolved_reasons[reason] = unresolved_reasons.get(reason, 0) + 1
+
+    events, unresolved = _iter_events(documents, scoped_keep(root_pid))
     if truncated:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("truncated")
     if not isinstance(root_pid, int) or isinstance(root_pid, bool) or root_pid <= 0:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("root-pid")
         root_pid = -1
     mappings = dict(device_paths or {})
     transparent_images: set[str] = set()
@@ -393,7 +447,7 @@ def parse_windows_etw(
                 )
             )
         except (TypeError, ValueError):
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("transparent-image")
     root_text = str(workspace)
     try:
         root = _canonical_windows_path(root_text, device_paths=mappings)
@@ -407,15 +461,14 @@ def parse_windows_etw(
     file_events: list[tuple[int | None, int | None, dict[str, str], str]] = []
     file_keys: dict[str, str] = {}
 
-    for event in events:
-        provider, event_id, fields = _event_fields(event)
+    for provider, event_id, fields in events:
         if provider in _PROCESS_NAMES:
             if event_id != 1:
                 continue
             pid = _first_integer(fields, _PID_FIELDS)
             parent = _first_integer(fields, _PARENT_PID_FIELDS)
             if pid is None or parent is None or pid <= 0 or parent < 0:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("process-event")
                 continue
             parent_by_pid[pid] = parent
             image = _first_text(fields, _IMAGE_FIELDS)
@@ -478,8 +531,10 @@ def parse_windows_etw(
             normalized = _canonical_windows_path(
                 path_text, device_paths=mappings
             )
+            if normalize_path is not None:
+                normalized = ntpath.normpath(str(normalize_path(normalized)))
         except ValueError:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("path-canonical")
             return
         normalized_case = ntpath.normcase(normalized)
         absolute = absolute_inputs.get(normalized_case)
@@ -490,7 +545,7 @@ def parse_windows_etw(
                 absolute_conflicts.add(normalized_case)
         elif absolute is None:
             if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("path-limit")
             else:
                 absolute = {
                     "path": normalized,
@@ -503,36 +558,36 @@ def parse_windows_etw(
         prefix = root_case + "\\"
         if normalized_case == root_case:
             if not allow_workspace_root:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("workspace-root")
             return
         if not normalized_case.startswith(prefix):
             try:
                 digest = hashlib.sha256(normalized_case.encode("utf-8")).hexdigest()
             except UnicodeEncodeError:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("external-encoding")
                 return
             if digest not in external_digests:
                 if len(external_digests) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
-                    unresolved = _bounded_add(unresolved, 1)
+                    unresolved = _bounded_add(unresolved, 1); _note("external-limit")
                 else:
                     external_digests.add(digest)
             return
         relative = normalized[len(root.rstrip("\\")) + 1 :].replace("\\", "/")
         if not relative or relative in {".", ".."} or relative.startswith("../"):
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("relative-shape")
             return
         relative_key = relative.rstrip("/")
         try:
             encoded = relative.encode("utf-8")
         except UnicodeEncodeError:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("relative-encoding")
             return
         if (
             len(encoded) > click_dependency_cache.MAX_SHADOW_OBSERVER_PATH_BYTES
             or "\\" in relative
             or any(ord(character) < 32 or ord(character) == 127 for character in relative)
         ):
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("relative-chars")
             return
         existing = inputs.get(relative_key)
         if existing is not None and existing["kind"] != kind:
@@ -544,7 +599,7 @@ def parse_windows_etw(
                 return
         if existing is None:
             if len(inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("inputs-limit")
                 return
             existing = {
                 "path": relative_key + "/" if kind == "directory" else relative_key,
@@ -567,7 +622,7 @@ def parse_windows_etw(
                 else:
                     candidate_case = ntpath.normcase(candidate)
                     if candidate_case.startswith(root_case + "\\"):
-                        unresolved = _bounded_add(unresolved, 1)
+                        unresolved = _bounded_add(unresolved, 1); _note("orphan-event")
             continue
         if pid not in descendants:
             continue
@@ -575,6 +630,8 @@ def parse_windows_etw(
         if not path:
             key = _first_text(fields, _FILE_KEY_FIELDS).lower()
             path = file_keys.get(key, "")
+        operation: str | None
+        kind: str | None
         if event_id in _DIRECTORY_EVENT_IDS:
             operation, kind = "enumerate", "directory"
         elif event_id in _READ_EVENT_IDS:
@@ -582,25 +639,29 @@ def parse_windows_etw(
         elif event_id in _METADATA_EVENT_IDS:
             operation, kind = "metadata", "file"
         elif event_id in _IGNORED_FILE_EVENT_IDS:
-            continue
+            operation, kind = None, None
         else:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("unknown-event-id")
+            continue
+        if event_filter is not None and not event_filter(pid, event_id, path, kind, operation):
+            continue
+        if kind is None or operation is None:
             continue
         if not path:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("missing-path")
             continue
         add_path(path, kind=kind, operation=operation)
 
     for relative in conflicts:
         inputs.pop(relative, None)
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("kind-conflict")
     for absolute in absolute_conflicts:
         absolute_inputs.pop(absolute, None)
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("absolute-conflict")
     if not root_exec_observed:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("root-exec")
     if root_execution_bound and not process_root_observed:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("root-start")
     normalized_inputs = tuple(
         {
             "path": item["path"],
@@ -616,6 +677,8 @@ def parse_windows_etw(
         and not truncated
         and process_scope_complete
     )
+    if diagnostics is not None:
+        diagnostics["unresolved_reasons"] = dict(unresolved_reasons)
     return ParsedTrace(
         inputs=normalized_inputs,
         external_input_count=len(external_digests),
@@ -669,6 +732,78 @@ def _read_bounded(path: Path, limit: int) -> tuple[bytes, bool]:
     return raw[:limit], bool(size > limit or len(raw) > limit)
 
 
+def scoped_keep(root_pid: int) -> Callable[[str, int | None, dict[str, str]], bool]:
+    """Keep process events and the file events of the root's descendants.
+
+    Process starts precede the file session's events in the collector's
+    document order, so the descendant set is complete before a file event is
+    judged; events of unrelated processes are dropped as they stream by.
+    """
+    parents: dict[int, int] = {}
+    scope: dict[str, Any] = {"descendants": None, "count": -1}
+
+    def keep(provider: str, event_id: int | None, fields: dict[str, str]) -> bool:
+        if provider in _PROCESS_NAMES:
+            if event_id == 1:
+                pid = _first_integer(fields, _PID_FIELDS)
+                parent = _first_integer(fields, _PARENT_PID_FIELDS)
+                if pid is not None and parent is not None:
+                    parents[pid] = parent
+            return True
+        if provider not in _FILE_NAMES:
+            return False
+        pid = _event_pid(fields)
+        if pid is None:
+            return True  # accounted as unresolved when it names a workspace path
+        if scope["count"] != len(parents):
+            descendants = {root_pid}
+            changed = True
+            while changed:
+                changed = False
+                for child, parent in parents.items():
+                    if parent in descendants and child not in descendants:
+                        descendants.add(child)
+                        changed = True
+            scope["descendants"] = descendants
+            scope["count"] = len(parents)
+        return pid in scope["descendants"]
+
+    return keep
+
+
+def _extract_document(
+    path: Path, keep: Callable[[str, int | None, dict[str, str]], bool]
+) -> tuple[dict[str, Any], bool]:
+    """Stream one converted XML file into scoped events; never hold the XML.
+
+    Returns the document and whether the parse was cut short (a malformed
+    file or more events than the bound), which the caller treats as loss.
+    """
+    events: list[ExtractedEvent] = []
+    lost = 0
+    seen = 0
+    cut = False
+    try:
+        for _, element in ElementTree.iterparse(str(path), events=("end",)):
+            name = _local_name(element.tag)
+            if name == "event":
+                seen += 1
+                if seen > MAX_XML_EVENTS:
+                    cut = True
+                    break
+                extracted = _event_fields(element)
+                if keep(*extracted):
+                    events.append(extracted)
+                element.clear()
+            elif name in {"eventslost", "bufferslost", "logbufferslost"}:
+                counted = _parse_integer(element.text)
+                if counted:
+                    lost = _bounded_add(lost, counted)
+    except (ElementTree.ParseError, ValueError, OSError):
+        cut = True
+    return {"events": events, "lost": lost, "seen": seen}, cut
+
+
 def _wait_for_target(target: subprocess.Popen[Any]) -> int:
     """Wait in bounded intervals so Windows can deliver KeyboardInterrupt."""
     while True:
@@ -694,13 +829,7 @@ def collect_command(
     """Collect process and file ETW while executing the target at most once."""
 
     started = time.monotonic()
-    bounded_limit = (
-        capture_limit
-        if isinstance(capture_limit, int)
-        and not isinstance(capture_limit, bool)
-        and capture_limit > 0
-        else MAX_RAW_TRACE_BYTES
-    )
+    del capture_limit  # events are streamed and scoped; the XML size bounds nothing
     target: subprocess.Popen[Any] | None = None
     target_started = False
     root_pid: int | None = None
@@ -708,7 +837,7 @@ def collect_command(
     failed = False
     failure_codes: set[str] = set()
     truncated = False
-    raw_documents: list[bytes] = []
+    raw_documents: list[Any] = []
     sessions: list[str] = []
     preparation_ms = 0
     cleanup_ms = 0
@@ -854,13 +983,24 @@ def collect_command(
                         failure_codes.add("conversion-failed")
                         failed = True
                         continue
-                    raw, was_truncated = _read_bounded(xml_path, bounded_limit)
-                    if not raw:
+                    try:
+                        size = xml_path.stat().st_size
+                    except OSError:
+                        size = 0
+                    if size <= 0:
                         failure_codes.add("xml-unavailable")
                         failed = True
+                        raw_documents.append({"events": [], "lost": 0, "seen": 0})
+                        continue
+                    # The session is system-wide; only the process tree's
+                    # events are kept, streamed from disk, so the size of the
+                    # XML bounds nothing but the conversion time.
+                    document, was_truncated = _extract_document(
+                        xml_path, scoped_keep(int(root_pid or -1))
+                    )
                     if was_truncated:
                         failure_codes.add("xml-truncated")
-                    raw_documents.append(raw)
+                    raw_documents.append(document)
                     truncated = bool(truncated or was_truncated)
     except KeyboardInterrupt:
         failure_codes.add("interrupted")
@@ -933,8 +1073,15 @@ def run_command(
     terminate_group: TerminateGroup = click_process.terminate_process_group,
     system_name: str | None = None,
     capture_limit: int = MAX_RAW_TRACE_BYTES,
+    process_observer: Callable[..., None] | None = None,
 ) -> ShadowExecution:
-    """Execute one target and attach best-effort native Windows telemetry."""
+    """Execute one target and attach best-effort native Windows telemetry.
+
+    ``process_observer`` receives the bounded ETW documents once the target
+    has run, with the root pid, the device map and the loss flags, so a caller
+    can derive lifecycle facts and a conditional projection from the same
+    capture that produced the shadow record.
+    """
 
     try:
         system = platform.system() if system_name is None else system_name
@@ -1029,6 +1176,17 @@ def run_command(
     raw_documents = collected.raw
     try:
         mappings = device_map_provider()
+        if process_observer is not None:
+            try:
+                process_observer(
+                    raw_documents,
+                    root_pid=int(collected.root_pid or -1),
+                    device_paths=mappings,
+                    truncated=collected.truncated or collected.failed,
+                    process_scope_complete=collected.process_scope_complete,
+                )
+            except Exception:
+                pass  # Candidate analysis cannot change or repeat target execution.
         parsed = parse_windows_etw(
             raw_documents,
             workspace=observation_root or workspace,
