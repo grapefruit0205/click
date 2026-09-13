@@ -42,8 +42,18 @@
   backend, and a `framework-observation-windows` CI job runs the real
   inspector, ETW and projection tests with Node 22.23.2. The inbox sessions
   need an elevated session; without elevation checks run and same-state
-  receipts still reuse. The native random-state reader stays Linux-only for
-  now, so a Windows check that consumes `Math.random` is not yet eligible.
+  receipts still reuse.
+- The native random-state reader builds on Windows. The reader that samples
+  V8's per-realm PRNG state and shared-buffer bytes now compiles with the
+  MSVC toolchain on PATH (a developer prompt, as the Python companion already
+  requires) against the headers a Node MSI install or a node-gyp cache
+  provides, and links through an import library generated from node.exe's
+  own export table, so nothing is downloaded. SHA-256 is computed in the
+  reader itself (the Windows build does not export OpenSSL to addons) and the
+  source uses standard atomics and portable formats. The official win-x64
+  Node 22.23.2 binary is the pinned identity. Without the toolchain or the
+  headers a Windows check that consumes `Math.random` or shared memory stays
+  ineligible, as before.
 
 ## v1.2.0 — 2026-09-13 — Claude Code on Windows
 

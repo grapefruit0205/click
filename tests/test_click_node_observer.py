@@ -49,6 +49,7 @@ class RealNodeObservationTests(unittest.TestCase):
         cls.node = shutil.which("node")
         if subprocess.check_output([cls.node, "--version"]).strip().decode() != observer.VERSION:
             raise unittest.SkipTest("versioned Node input profile unavailable")
+        cls.companion = observer.click_node_state.prepare(Path(cls.node).resolve(), Path.cwd(), dict(os.environ))
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="click-node-case-")
@@ -129,7 +130,6 @@ console.log('VALUES', JSON.stringify({
             self.assertEqual(self.record["values"]["math-random"]["state_count"], 1, self.record)
             self.assertNotIn("input-value-setup-incomplete", self.record["reasons"])
 
-    @unittest.skipIf(os.name == "nt", "value-state assertions need the native state companion (stage 3 on Windows)")
     def test_atomic_coercion_and_thrown_identity_are_not_repeated_or_replaced(self):
         result = self.execute("""
 const assert = require('node:assert/strict');
@@ -154,8 +154,9 @@ console.log('SEMANTICS-PRESERVED');
         self.assertIn("input-coercion-state-incomplete", self.record["reasons"])
         self.assertNotIn("input-values-unavailable", self.record["reasons"])
 
-    @unittest.skipIf(os.name == "nt", "value-state assertions need the native state companion (stage 3 on Windows)")
     def test_vm_owner_field_is_not_deleted_or_treated_as_native_state(self):
+        if not self.companion:
+            self.skipTest("exact-ABI native state companion unavailable on this host")
         result = self.execute("""
 const vm = require('node:vm');
 for (const value of ['owner', {get randomState(){throw Error('owner getter invoked');}}]) {

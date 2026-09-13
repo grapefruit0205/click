@@ -102,8 +102,9 @@ receipts never cross hosts.
   (the Node inspector observer with an ETW projection) works on Windows from
   an elevated session, since the inbox `logman` sessions need it; without
   elevation checks run and same-state receipts still reuse. The native
-  random-state reader is Linux-only for now, so a Windows check that consumes
-  `Math.random` stays ineligible until it is ported.
+  random-state reader needs the MSVC toolchain on PATH and the Node headers
+  (MSI install or node-gyp cache); without them a Windows check that consumes
+  `Math.random` or shared memory stays ineligible.
 - Automatic input observation keeps its documented platform prerequisites; the
   host does not change which observer backends are available.
 

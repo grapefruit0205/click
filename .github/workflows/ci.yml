@@ -283,8 +283,18 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.23.2'
-      - name: Check the Windows inspector profile, ETW lifecycle and conditional projection
-        run: python -B -m unittest tests.test_click_conditional_windows tests.test_click_node_observer tests.test_click_observer_windows.WindowsNativeSmokeTests -v
+      - name: Cache the Node headers the native state reader compiles against
+        # The MSI ships them; the runner's zip does not. node-gyp fetches the
+        # same headers into its cache, which the reader looks in. Click itself
+        # never downloads anything.
+        run: npm exec --yes -- node-gyp@11 install 22.23.2
+      - name: Check the Windows inspector profile, ETW lifecycle, conditional projection and native state reader
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VS_INSTALL=%%I"
+          if not defined VS_INSTALL exit /b 1
+          call "%VS_INSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x64
+          python -B -m unittest tests.test_click_conditional_windows tests.test_click_node_observer tests.test_click_observer_windows.WindowsNativeSmokeTests -v
 
   python-runtime-compatibility:
     needs: changes

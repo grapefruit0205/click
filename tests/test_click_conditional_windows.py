@@ -392,5 +392,44 @@ class RealWindowsConditionalTests(unittest.TestCase):
             self.assertFalse(conditional.current(root, observation["inputs"]))
 
 
+@unittest.skipUnless(sys.platform == "win32" and shutil.which("node"), "native Windows Node observation")
+class RealWindowsRandomStateTests(unittest.TestCase):
+    """With the native state reader built on Windows, consumed random state binds."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.node = shutil.which("node")
+        if subprocess.check_output([cls.node, "--version"]).strip().decode() != node.VERSION:
+            raise unittest.SkipTest("versioned Node input profile unavailable")
+        cls.companion = node.click_node_state.prepare(Path(cls.node).resolve(), Path.cwd(), dict(os.environ))
+        if not cls.companion:
+            raise unittest.SkipTest("exact-ABI native state companion unavailable (MSVC developer prompt and Node headers required)")
+
+    def test_math_random_state_is_recorded_and_the_run_stays_eligible(self):
+        with tempfile.TemporaryDirectory(prefix="click-win-random-") as temporary:
+            root = Path(temporary).resolve()
+            (root / "check.cjs").write_text(
+                "const view=new Int32Array(new SharedArrayBuffer(4));"
+                "const r=Math.random();Atomics.add(view,0,7);"
+                "console.log('RANDOM', r>=0 && r<1, Atomics.load(view,0));\n", encoding="utf-8")
+            argv = [self.node, str(root / "check.cjs")]
+            collector = node.Collector(argv, dict(os.environ), root)
+            self.assertIsNotNone(collector.child, collector.record)
+            self.assertIsNotNone(collector.state_companion, "companion not attached")
+            try:
+                result = subprocess.run(argv, cwd=root, env=collector.environment, capture_output=True, timeout=60)
+                record = collector.finish()
+            finally:
+                collector.close()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(b"RANDOM true 7", result.stdout)
+            self.assertTrue(record["state_companion_digest"], record)
+            self.assertEqual(record["values"]["math-random"]["count"], 1, record)
+            self.assertEqual(record["values"]["math-random"]["state_count"], 1, record)
+            self.assertEqual(record["values"]["atomics-add"]["state_count"], 1, record)
+            self.assertNotIn("input-native-state-unavailable", record["reasons"])
+            self.assertNotIn("input-values-unavailable", record["reasons"])
+
+
 if __name__ == "__main__":
     unittest.main()
