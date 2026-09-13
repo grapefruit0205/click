@@ -75,7 +75,7 @@ class LauncherScriptTests(unittest.TestCase):
         self.assertTrue(raw.startswith(b"#!/bin/sh\n"))
         self.assertNotIn(b"\r", raw)
         text = raw.decode("utf-8")
-        for name in ("py", "python", "python3", "-X utf8", "WindowsApps", "103"):
+        for name in ("py", "python", "python3", "-X utf8", "WindowsApps", "103", "xcode-select -p"):
             self.assertIn(name, text)
         self.assertIn("claude_hook.sh", build_claude_distribution.HOOK_FILES)
         self.assertIn(
@@ -87,6 +87,27 @@ class LauncherScriptTests(unittest.TestCase):
             self.assertEqual(
                 hook_command(mode), f'sh "${{CLAUDE_PLUGIN_ROOT}}/hooks/claude_hook.sh" {mode}'
             )
+
+    def test_old_interpreter_asks_for_an_install_and_blocks_nothing(self) -> None:
+        self.assertEqual(claude_hook.REQUIRED_PYTHON, (3, 10))
+        for mode in ("pre-tool", "post-tool", "session-end", ""):
+            self.assertEqual(claude_hook.unsupported_interpreter_output(mode, (3, 9, 2)), "")
+        payload = json.loads(claude_hook.unsupported_interpreter_output("prompt-submit", (3, 9, 2)))
+        self.assertEqual(payload["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit")
+        self.assertIn("Python 3.9", payload["systemMessage"])
+        self.assertIn("do not use `click-gate`", payload["hookSpecificOutput"]["additionalContext"])
+        # The gate runs before any sibling import and must parse on the
+        # interpreters it rejects.
+        import ast
+
+        source = (ROOT / "hooks" / "claude_hook.py").read_text(encoding="utf-8")
+        ast.parse(source, feature_version=(3, 7))
+        self.assertLess(source.index("REQUIRED_PYTHON = "), source.index("click_import_bootstrap"))
+        # Both messages point at the same installers.
+        launcher = LAUNCHER.read_text(encoding="utf-8")
+        for text in ("Python 3.10", "python.org/downloads", "winget install Python.Python.3.12", "brew install python", "new Claude Code session", "do not use `click-gate`"):
+            self.assertIn(text, launcher)
+            self.assertIn(text, claude_hook.UNSUPPORTED_INTERPRETER + claude_hook.UNSUPPORTED_INTERPRETER_CONTEXT)
 
     @unittest.skipIf(os.name == "nt", "POSIX sh syntax check")
     def test_launcher_parses_under_sh(self) -> None:
@@ -169,7 +190,7 @@ class LauncherInterpreterSelectionTests(unittest.TestCase):
     def recorder(self, label: str) -> str:
         return f'printf \'%s\\n\' "{label}" "$@" > "{self.record}"\ncat > /dev/null\nexit 0\n'
 
-    def run_launcher(self, *directories: Path, uname: str | None = None) -> subprocess.CompletedProcess[str]:
+    def run_launcher(self, *directories: Path, uname: str | None = None, mode: str = "pre-tool") -> subprocess.CompletedProcess[str]:
         path_entries = [str(directory) for directory in directories]
         if uname is not None:
             fake_uname = self.base / "uname-override"
@@ -177,7 +198,7 @@ class LauncherInterpreterSelectionTests(unittest.TestCase):
             path_entries.insert(0, str(fake_uname))
         path_entries.append(str(self.tools))
         return subprocess.run(
-            [SH, str(self.plugin / "hooks" / "claude_hook.sh"), "pre-tool"],
+            [SH, str(self.plugin / "hooks" / "claude_hook.sh"), mode],
             input='{"hook_event_name":"PreToolUse"}',
             capture_output=True,
             text=True,
@@ -233,12 +254,42 @@ class LauncherInterpreterSelectionTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stderr), (0, ""))
         self.assertEqual(self.recorded()[0], "python3-store")
 
-    def test_missing_interpreter_is_reported_without_running_anything(self) -> None:
-        result = self.run_launcher(self.base / "empty")
-        self.assertEqual(result.returncode, 127)
-        self.assertIn("click hook error: Click requires Python 3", result.stderr)
-        self.assertEqual(result.stdout, "")
+    def test_missing_interpreter_asks_for_an_install_and_blocks_nothing(self) -> None:
+        # The prompt hook tells the user (systemMessage) and the model
+        # (additionalContext, which withdraws `click-gate`) what to install.
+        result = self.run_launcher(self.base / "empty", mode="prompt-submit")
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit")
+        for text in (payload["systemMessage"], payload["hookSpecificOutput"]["additionalContext"]):
+            self.assertIn("Python 3.10", text)
+            self.assertIn("python.org/downloads", text)
+            self.assertIn("winget install Python.Python.3.12", text)
+            self.assertIn("new Claude Code session", text)
+        self.assertIn("do not use `click-gate`", payload["hookSpecificOutput"]["additionalContext"])
         self.assertFalse(self.record.exists())
+        # Tool hooks stay silent: nothing is blocked and no error is shown.
+        for mode in ("pre-tool", "post-tool", "session-end"):
+            with self.subTest(mode=mode):
+                result = self.run_launcher(self.base / "empty", mode=mode)
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_macos_command_line_tools_stub_is_skipped_without_probing_it(self) -> None:
+        # Apple's /usr/bin/python3 only opens the installer dialog until the
+        # Command Line Tools exist; the launcher asks xcode-select instead of
+        # running the stub, and a Homebrew python earlier on PATH wins anyway.
+        stub_bin = self.base / "usr" / "bin"
+        self.fake(stub_bin, "python3", self.recorder("apple-stub"))
+        tools = self.base / "darwin-tools"
+        self.fake(tools, "xcode-select", "exit 2\n")
+        result = self.run_launcher(tools, stub_bin, uname="Darwin", mode="prompt-submit")
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        self.assertIn("systemMessage", json.loads(result.stdout))
+        self.assertFalse(self.record.exists())
+        self.fake(tools, "xcode-select", "printf '%s\\n' /Library/Developer/CommandLineTools\n")
+        result = self.run_launcher(tools, stub_bin, uname="Darwin")
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        self.assertEqual(self.recorded()[0], "apple-stub")
 
     def test_launcher_normalizes_a_backslash_plugin_root(self) -> None:
         # Claude Code substitutes ${CLAUDE_PLUGIN_ROOT} with backslashes on

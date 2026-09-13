@@ -21,5 +21,6 @@ if errorlevel 1 goto no_python
 exit /b %errorlevel%
 
 :no_python
->&2 echo Click requires Python 3. The Windows launcher could not find py, python, or python3.
+>&2 echo Click requires Python 3.10 or newer; the Windows launcher found none of py, python, or python3.
+>&2 echo Install it from https://www.python.org/downloads/windows/ (tick "Add python.exe to PATH") or run: winget install Python.Python.3.12
 exit /b 9009

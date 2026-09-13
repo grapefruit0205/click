@@ -1,5 +1,17 @@
 # Release notes
 
+## Unreleased v1.3 candidate
+
+- A missing or too-old Python asks for an install instead of failing every
+  event. Click needs Python 3.10 or newer. When the Claude Code launcher finds
+  no usable interpreter (it also skips the macOS stub that only offers the
+  command line tools, checked with `xcode-select -p` so the installer dialog
+  never opens on a hook), or the interpreter it found is older, the prompt
+  hook shows the user what to install (`systemMessage`) and tells the model
+  not to use `click-gate` until a new session; tool hooks stay silent, so no
+  tool call is blocked or littered with error lines. The Codex Windows batch
+  launcher prints the same install instructions.
+
 ## v1.2.0 — 2026-09-13 — Claude Code on Windows
 
 Both marketplaces pin `v1.2.0`; updating v1.1.1 installs it.
