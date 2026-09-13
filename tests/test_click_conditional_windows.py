@@ -279,17 +279,20 @@ class RealWindowsConditionalTests(unittest.TestCase):
                 tree = windows_projection.inspect_tree(
                     captured.get("documents", ()), root_pid=captured.get("options", {}).get("root_pid", -1),
                     truncated=bool(captured.get("options", {}).get("truncated", False)))
+                # Project while the collector directory still exists: its
+                # 8.3 spelling is expanded through the file system.
+                diagnostics = {}
+                projection = windows_projection.project_capture(
+                    captured.get("documents", ()), project=root, cwd=root, directory=directory,
+                    root_pid=captured.get("options", {}).get("root_pid", -1),
+                    device_paths=captured.get("options", {}).get("device_paths"),
+                    truncated=bool(captured.get("options", {}).get("truncated", False)), diagnostics=diagnostics,
+                ) if "documents" in captured else None
                 runtime = collector.finish(tree)
             finally:
                 collector.close()
             self.assertEqual(shadow.exit_code, 0, shadow.record)
             self.assertIn("documents", captured, "the Windows backend did not hand over its capture")
-            diagnostics = {}
-            projection = windows_projection.project_capture(
-                captured["documents"], project=root, cwd=root, directory=directory,
-                root_pid=captured["options"].get("root_pid", -1), device_paths=captured["options"].get("device_paths"),
-                truncated=bool(captured["options"].get("truncated", False)), diagnostics=diagnostics,
-            )
             try:
                 observer_debug = json.loads(debug_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
@@ -298,7 +301,7 @@ class RealWindowsConditionalTests(unittest.TestCase):
                        "runtime": {k: runtime.get(k) for k in ("status", "reasons", "capture_complete", "sessions", "contexts", "installed", "completed", "workers", "counts")},
                        "values": {k: v["count"] for k, v in runtime.get("values", {}).items() if v.get("count")},
                        "observer_debug": observer_debug, "diagnostics": diagnostics, "projection": projection}
-            print("CLICK-WINDOWS-CONDITIONAL " + json.dumps(summary, ensure_ascii=True)[:12000])
+            print("CLICK-WINDOWS-CONDITIONAL " + json.dumps(summary, ensure_ascii=True)[:20000])
             lost = set(diagnostics.get("tree", {}).get("reasons", [])) & {"event-loss", "process-tree-incomplete"}
             if lost:
                 self.skipTest(f"native backend lost events on this host: {sorted(lost)}")

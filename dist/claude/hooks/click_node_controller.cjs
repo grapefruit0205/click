@@ -14,7 +14,7 @@ const nativeStatePath = process.argv[3] || '';
 // contexts it created and which probes never closed) there at stop. Nothing
 // here changes counts, reasons or reuse.
 const debugPath = process.env.CLICK_NODE_OBSERVER_DEBUG || '';
-const debug = { hits: [], contexts: [], unclosed: [] };
+const debug = { hits: [], contexts: [], unclosed: [], scripts: [] };
 const MAX_SESSIONS = 128;
 const MAX_EVENTS = 200000;
 const categories = ['clock', 'random', 'shared-memory', 'native-escape', 'inspector-access'];
@@ -159,7 +159,10 @@ class Session {
       return;
     }
     const params = value.params || {};
-    if (value.method === 'Debugger.scriptParsed') this.scripts.set(params.scriptId, params);
+    if (value.method === 'Debugger.scriptParsed') {
+      this.scripts.set(params.scriptId, params);
+      if (debugPath && debug.scripts.length < 512) debug.scripts.push({ context: params.executionContextId, url: params.url, session: this.ordinal });
+    }
     else if (value.method === 'Runtime.executionContextCreated') {
       this.contextIds.add(params.context.id);
       if (debugPath && debug.contexts.length < 64) debug.contexts.push({ id: params.context.id, name: params.context.name, origin: params.context.origin, auxData: params.context.auxData });
@@ -319,7 +322,7 @@ class Session {
       const category = this.breakpoints.get(id);
       if (categories.includes(category) && !this.probing) counts[category] = 1;
       if (debugPath && category && debug.hits.length < 256) {
-        debug.hits.push({ category, probing: this.probing > 0, frames: (params.callFrames || []).slice(0, 4).map(frame =>
+        debug.hits.push({ category, probing: this.probing > 0, frames: (params.callFrames || []).slice(0, 12).map(frame =>
           `${frame.functionName || '(anonymous)'}@${frame.url || this.scripts.get(frame.location?.scriptId)?.url || '?'}:${frame.location?.lineNumber ?? '?'}`) });
       }
     }
