@@ -19,6 +19,31 @@
   collector's own directory write it already ignored. Nothing else about the
   Linux profile changes; this is the first step toward the same observer on
   Windows.
+- Conditional JS reuse on Windows. The Windows backend now hands the framework
+  observer the ETW events it captured, and a projection module answers from
+  them what the strace projection answers on Linux: every process started and
+  stopped inside the capture, and which files the observed process consumed
+  after the collector acknowledged its inspector session. The collector's own
+  transport, the null device, the runtime's pre-acknowledgement metadata
+  probes, files the check created and the runner's inherited standard handles
+  are set aside; every other read is bound by content, and a probed path that
+  is absent binds as one that must stay absent (a DLL that appears in node's
+  own directory later changes the receipt). Driveless objects after the
+  acknowledgement, lost events, children and a missing acknowledgement leave
+  no projection. The inspector collector runs on Windows with its own profile
+  id; Node's own WeakRef bookkeeping no longer counts as a native escape when
+  no user frame is on the stack, and a plain VM realm's probe (Node's internal
+  regex realm, or a user sandbox) is closed at the default context's exit
+  instead of leaving `input-values-unavailable`. The ETW collector streams
+  the converted XML from disk and keeps only the process tree's events, so a
+  busy host's system-wide session no longer counts as lost; OperationEnd
+  leaves the keywords and CreateNewFile joins them. External rows are spelled
+  `C:/dir/file`, the receipt binds the inbox `logman`/`tracerpt` pair as its
+  backend, and a `framework-observation-windows` CI job runs the real
+  inspector, ETW and projection tests with Node 22.23.2. The inbox sessions
+  need an elevated session; without elevation checks run and same-state
+  receipts still reuse. The native random-state reader stays Linux-only for
+  now, so a Windows check that consumes `Math.random` is not yet eligible.
 
 ## v1.2.0 — 2026-09-13 — Claude Code on Windows
 
