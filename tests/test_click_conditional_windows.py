@@ -192,6 +192,14 @@ class WindowsProjectionTests(unittest.TestCase):
             *events, process_events=(start(ROOT_PID, 4000), start(4200, ROOT_PID), stop(4200), stop(ROOT_PID))))
         self.assertIsNone(self.project(*events, root_pid=-1))
 
+    def test_an_object_the_session_never_saw_opened_is_the_stdio_transport(self):
+        # libuv queries the inherited stdout pipe; the session saw no Create
+        # for it, so the event carries no path. It is set aside, not counted.
+        unkeyed = _event(FILE, 22, ROOT_PID, {"FileObject": "0xFFFF0001"})
+        projection = self.project(*self.bootstrap(), unkeyed, read(ROOT_PID, device(PROJECT + "\\entry.cjs")))
+        self.assertIsNotNone(projection)
+        self.assertEqual([row["path"] for row in projection["inputs"]], ["entry.cjs"])
+
     def test_unmapped_volume_paths_after_the_boundary_are_unresolved(self):
         # A read from a volume the device map does not know cannot be bound.
         projection = self.project(*self.bootstrap(), read(ROOT_PID, "\\Device\\HarddiskVolume9\\data\\input.bin"))

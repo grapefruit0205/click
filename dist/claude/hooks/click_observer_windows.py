@@ -413,7 +413,8 @@ def parse_windows_etw(
 
     ``event_filter`` sees every scoped file event in capture order as
     ``(pid, event_id, path, kind, operation)`` (kind and operation are None
-    for ids the parser ignores) and returns False to set that event aside.
+    for ids the parser ignores, path is "" for an object the session never
+    saw opened) and returns False to set that event aside.
     The conditional projection uses it to separate the collector's own
     transport and the runtime's bootstrap probes from the check's inputs.
     ``normalize_path`` rewrites each canonical path before it is recorded (the
@@ -642,7 +643,7 @@ def parse_windows_etw(
         else:
             unresolved = _bounded_add(unresolved, 1); _note("unknown-event-id")
             continue
-        if event_filter is not None and path and not event_filter(pid, event_id, path, kind, operation):
+        if event_filter is not None and not event_filter(pid, event_id, path, kind, operation):
             continue
         if kind is None or operation is None:
             continue

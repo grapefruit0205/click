@@ -169,11 +169,19 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
         return None
     started_marker = ntpath.normcase(ntpath.join(collector, f"started-{root_pid}"))
     root_case = ntpath.normcase(root).rstrip("\\")
-    state = {"started": False, "dynamic": False, "created": set(), "unmapped": []}
+    state = {"started": False, "dynamic": False, "created": set(), "unmapped": [], "inherited": 0}
 
     def admit(pid, event_id, raw_path, kind, operation) -> bool:
         if pid != root_pid:
             return True  # unreachable once the tree holds one process; the parser scopes pids
+        if not raw_path:
+            # An object the session never saw opened. The process started
+            # after the session did and inherits nothing but its standard
+            # handles from the runner (no other handle is inheritable), so
+            # this is the runner's own stdio transport being queried, the
+            # counterpart of the pipe metadata the strace projection ignores.
+            state["inherited"] += 1
+            return False
         lowered = raw_path.strip().strip('"').replace("/", "\\").lower()
         if windows._DEVICE_PREFIX.sub("", lowered) in _NULL_DEVICES:
             return False  # the null device supplies no value on either side of the boundary
@@ -218,7 +226,7 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
     )
     report.update({
         "started": state["started"], "dynamic": state["dynamic"], "unmapped": list(state["unmapped"]),
-        "created": len(state["created"]), "unresolved": parsed.unresolved_event_count,
+        "created": len(state["created"]), "inherited": state["inherited"], "unresolved": parsed.unresolved_event_count,
         "process_tree_complete": parsed.process_tree_complete, "root_exec_observed": parsed.root_exec_observed,
         "inputs": len(parsed.inputs), "absolute_inputs": len(parsed.absolute_inputs),
     })
