@@ -20,6 +20,7 @@ else:
     import click_import_bootstrap
 
 (_common,) = click_import_bootstrap.load_siblings(__package__, "click_verification_common")
+(click_status_summary,) = click_import_bootstrap.load_siblings(__package__, "click_status_summary")
 CONTRACT_STATE_SCHEMA_VERSION = _common.CONTRACT_STATE_SCHEMA_VERSION
 VERIFICATION_PROTOCOL_VERSION = _common.VERIFICATION_PROTOCOL_VERSION
 VERIFY_RUNNING_TTL_SECONDS = _common.VERIFY_RUNNING_TTL_SECONDS
@@ -1552,8 +1553,9 @@ def _prepare_verification_impl(
                 sources[key].get("verified_dependency_observation")) for key in reused_keys
         )
         if conditional_count:
-            reuse_message += (f" - 조건부 재사용 {conditional_count}개"
-                              " - 관찰 범위 기반 / 입력 완전성 미보증")
+            locale = click_status_summary.resolve_locale()
+            reuse_message += click_status_summary.message(
+                " - 조건부 재사용 {0}개 - 관찰 범위 기반 / 입력 완전성 미보증", locale, conditional_count)
         return (
             f"echo {reuse_message}",
             "",

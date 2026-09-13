@@ -22,7 +22,9 @@ TOOLS = ["Bash", "Read", "Edit", "MultiEdit", "Write", "Glob", "Grep"]
 
 RAN = re.compile(r"Ran (\d+) tests? in ([0-9.]+)s")
 CLICK_EXEC = re.compile(r"\[Click verification (\d+)/(\d+):")
-CLICK_TIME = re.compile(r"이번 테스트 실행: ([0-9.]+)\s*(초|ms)")
+# Click renders its result line in the host locale; v1.1.1 made English the
+# default, so both spellings are accepted.
+CLICK_TIME = re.compile(r"(?:이번 테스트 실행|this run's test time): ([0-9.]+)\s*(초|s|ms)")
 CLICK_REUSED = re.compile(r"Click reused (\d+) current")
 FULL_DISCOVER = re.compile(r"python3? -m unittest discover -s tests(?!.*-p)")
 
@@ -69,9 +71,9 @@ def derive_metrics(calls):
             executions += executed
             for value, unit in CLICK_TIME.findall(out):
                 test_wall += float(value) / (1000.0 if unit == "ms" else 1.0)
-            if CLICK_REUSED.search(out) or executed == 0 and "재사용" in out:
+            if CLICK_REUSED.search(out) or executed == 0 and ("재사용" in out or "reused" in out):
                 click_reused_requests += 1
-            click_result_lines += [l for l in out.splitlines() if l.startswith("[Click 결과]") or l.startswith("Click reused")]
+            click_result_lines += [l for l in out.splitlines() if l.startswith(("[Click 결과]", "[Click result]", "Click reused"))]
             continue
         for tests, seconds in RAN.findall(out):
             test_wall += float(seconds)

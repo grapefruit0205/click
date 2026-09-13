@@ -108,8 +108,8 @@ class ParallelShardExecutionTests(ClickGateTestCase):
         headers = [output.index(f"[Click verification {index}/3:E1[{name}]:") for index, name in enumerate(names, start=1)]
         self.assertEqual(headers, sorted(headers), output)
         self.assertEqual(output.count("passed."), 3, output)
-        summary = next(line for line in output.splitlines() if "[Click 결과]" in line)
-        self.assertIn("병렬 실행 벽시계", summary)
+        summary = next(line for line in output.splitlines() if "[Click result]" in line)
+        self.assertIn("wall clock with parallel shards", summary)
         # The recorded receipts are as usable as sequential ones.
         again = self.run_parallel([parent], ["E1"], workers=3, turn="turn-2")
         self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
@@ -123,11 +123,11 @@ class ParallelShardExecutionTests(ClickGateTestCase):
         starts, ends = self.stamps(names, "start"), self.stamps(names, "end")
         ordered = sorted(names, key=starts.get)
         self.assertGreaterEqual(starts[ordered[1]], ends[ordered[0]], (starts, ends))
-        summary = next((line for line in (result.stdout + result.stderr).splitlines() if "[Click 결과]" in line), None)
+        summary = next((line for line in (result.stdout + result.stderr).splitlines() if "[Click result]" in line), None)
         if sys.platform == "linux":
             self.assertIsNotNone(summary, result.stdout + result.stderr)
         if summary is not None:
-            self.assertNotIn("병렬", summary)
+            self.assertNotIn("parallel", summary)
 
     @unittest.skipUnless(sys.platform == "linux", "concurrent shard execution is enabled on Linux hosts")
     def test_a_failing_child_lets_running_siblings_finish_and_stops_later_checks(self) -> None:

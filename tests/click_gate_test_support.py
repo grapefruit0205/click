@@ -119,6 +119,11 @@ class ClickGateTestCase(unittest.TestCase):
                 time.sleep(0.2)
 
     def setUp(self) -> None:
+        # Hook and runner output is rendered in the dashboard locale; pin it so
+        # assertions read the same text on a Korean desktop and a C.UTF-8 runner.
+        language = mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"})
+        language.start()
+        self.addCleanup(language.stop)
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self._remove_temporary)
         self.plugin_data = Path(self.temporary.name) / "plugin-data"

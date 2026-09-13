@@ -1264,31 +1264,48 @@ def avoided_output_is_valid(value: Any) -> bool:
     )
 
 
-def _host_output(value: dict[str, Any]) -> str:
+def _locale_messages():
+    """The host summary is read by the agent, so it is rendered in the
+    dashboard locale like `click-gate status`; Korean keys, translated tables."""
+    if __package__:
+        from . import click_status_summary as summary
+    else:
+        import click_status_summary as summary
+    locale = summary.resolve_locale()
+    # The host summary is one stdout line, not an argv item, so fragments are
+    # inserted whole instead of being cut at the summary-line value limit.
+    return lambda key, *values: summary.message(key, locale, *values, max_value_chars=None)
+
+
+def _host_output(value: dict[str, Any], msg) -> str:
     if value["status"] == "unmeasured":
         return ""
     kilobytes = value["bytes"] / 1024
     size = f"{kilobytes:.1f}".rstrip("0").rstrip(".") + " KB" if value["bytes"] >= 1024 else f"{value['bytes']} B"
-    qualifier = "이상 " if value["lower_bound"] else ""
-    partial = "" if value["status"] == "estimated" else f" · 표본 {value['measured_source_count']}/{value['reused_source_count']}"
-    return (
-        f"; 재사용으로 다시 읽지 않은 출력: {qualifier}{size} (약 {value['estimated_tokens']:,} 토큰, 추정{partial})"
-    )
+    # Inserted values are whitespace-trimmed, so the lower-bound qualifier
+    # wraps the size instead of being a bare prefix.
+    if value["lower_bound"]:
+        size = msg("이상 {0}", size)
+    tokens = f"{value['estimated_tokens']:,}"
+    if value["status"] == "estimated":
+        return msg("; 재사용으로 다시 읽지 않은 출력: {0} (약 {1} 토큰, 추정)", size, tokens)
+    return msg("; 재사용으로 다시 읽지 않은 출력: {0} (약 {1} 토큰, 추정 · 표본 {2}/{3})",
+               size, tokens, value["measured_source_count"], value["reused_source_count"])
 
 
-def _host_duration(value: Any, *, estimated: bool = False) -> str:
+def _host_duration(value: Any, msg, *, estimated: bool = False) -> str:
     if value is None or not is_duration(value):
-        return "측정 정보 없음"
+        return msg("측정 정보 없음")
     numeric = float(value)
     if numeric < 1000:
         rendered = f"{numeric:.2f}".rstrip("0").rstrip(".") + " ms"
     elif numeric < 60_000:
-        rendered = f"{numeric / 1000:.2f}".rstrip("0").rstrip(".") + "초"
+        rendered = msg("{0}초", f"{numeric / 1000:.2f}".rstrip("0").rstrip("."))
     else:
         rounded_seconds = round(numeric / 1000)
         minutes, seconds = divmod(rounded_seconds, 60)
-        rendered = f"{minutes}분 {seconds}초" if seconds else f"{minutes}분"
-    return f"약 {rendered}" if estimated else rendered
+        rendered = msg("{0}분 {1}초", minutes, seconds) if seconds else msg("{0}분", minutes)
+    return msg("약 {0}", rendered) if estimated else rendered
 
 
 def _concurrent_execution_wall_ms(batch: dict[str, Any]) -> float | None:
@@ -1321,7 +1338,8 @@ def host_summary(verification: Any, sources: Any = None) -> str:
     batch = current_batch(verification)
     if batch is None:
         return ""
-    output = _host_output(avoided_output(batch, sources)) if isinstance(sources, dict) else ""
+    msg = _locale_messages()
+    output = _host_output(avoided_output(batch, sources), msg) if isinstance(sources, dict) else ""
     summary = batch_summary(batch)
     savings = revalidation_savings(batch)
     prior = sum(item["status"] == "reused" and item.get("reuse_origin") is not None for item in batch["sources"])
@@ -1337,72 +1355,53 @@ def host_summary(verification: Any, sources: Any = None) -> str:
     actual_reused = savings["coverage"]["actual_reused_source_count"]
     complete = bool(batch["status"] == "passed" and savings["scope_complete"])
     if not complete:
-        headline = (
-            f"{requested}개 샤드 요청 미완료 · 실제 실행 {executed_count}개 · "
-            f"재사용 적용 {reused_count}개"
-        )
-        omitted_text = "요청 미완료"
+        headline = msg("{0}개 샤드 요청 미완료 · 실제 실행 {1}개 · 재사용 적용 {2}개",
+                       requested, executed_count, reused_count)
+        omitted_text = msg("요청 미완료")
     elif reused_count == 0:
-        headline = f"{requested}개 샤드 모두 실제 실행 · 실제 재사용 없음"
-        omitted_text = "0 ms · 실제 재사용 없음"
+        headline = msg("{0}개 샤드 모두 실제 실행 · 실제 재사용 없음", requested)
+        omitted_text = msg("0 ms · 실제 재사용 없음")
     elif savings["omitted_test_execution_status"] == "estimated":
-        omitted_text = _host_duration(omitted, estimated=True)
+        omitted_text = _host_duration(omitted, msg, estimated=True)
         # Say what the reused checks are, not what was skipped: their inputs are
         # unchanged since they last passed, so they are current now. The
         # reader otherwise re-verifies by hand what Click already verified.
         if executed_count == 0:
-            headline = (
-                f"{requested}개 모두 현재 유효 · 마지막 통과 이후 입력 불변으로 재실행 없음 · "
-                f"{omitted_text} 재실행 생략〔추정〕"
-            )
+            headline = msg("{0}개 모두 현재 유효 · 마지막 통과 이후 입력 불변으로 재실행 없음 · {1} 재실행 생략〔추정〕",
+                           requested, omitted_text)
         else:
-            headline = (
-                f"{requested}개 중 {executed_count}개 실행 · {reused_count}개는 마지막 통과 이후 "
-                f"입력 불변으로 현재 유효(재사용) · {omitted_text} 재실행 생략〔추정〕"
-            )
+            headline = msg("{0}개 중 {1}개 실행 · {2}개는 마지막 통과 이후 입력 불변으로 현재 유효(재사용) · {3} 재실행 생략〔추정〕",
+                           requested, executed_count, reused_count, omitted_text)
     elif savings["omitted_test_execution_status"] == "partial":
-        omitted_text = f"부분 추정 합계 약 {_host_duration(omitted)}〔추정〕"
-        headline = (
-            f"{requested}개 중 {executed_count}개 실행 · {reused_count}개 재사용 · "
-            f"시간 표본 {timed_reused}/{actual_reused}개 · {omitted_text}"
-        )
+        omitted_text = msg("부분 추정 합계 약 {0}〔추정〕", _host_duration(omitted, msg))
+        headline = msg("{0}개 중 {1}개 실행 · {2}개 재사용 · 시간 표본 {3}/{4}개 · {5}",
+                       requested, executed_count, reused_count, timed_reused, actual_reused, omitted_text)
     else:
-        omitted_text = "측정 정보 없음"
-        headline = (
-            f"{requested}개 중 {executed_count}개 실행 · {reused_count}개 재사용 · "
-            "생략 시간은 미측정"
-        )
+        omitted_text = msg("측정 정보 없음")
+        headline = msg("{0}개 중 {1}개 실행 · {2}개 재사용 · 생략 시간은 미측정",
+                       requested, executed_count, reused_count)
 
-    full_text = _host_duration(full, estimated=True)
-    executed_text = _host_duration(executed)
+    full_text = _host_duration(full, msg, estimated=True)
+    executed_text = _host_duration(executed, msg)
     concurrent_wall = _concurrent_execution_wall_ms(batch)
     if concurrent_wall is not None:
         # Shard children ran in parallel: the summed duration keeps the
         # sequential comparison honest, the wall clock is what the host waited.
-        executed_text += f" 합산 · 병렬 실행 벽시계 {_host_duration(concurrent_wall)}"
+        executed_text = msg("{0} 합산 · 병렬 실행 벽시계 {1}", executed_text, _host_duration(concurrent_wall, msg))
     reduction_text = (
-        "측정 정보 없음"
+        msg("측정 정보 없음")
         if ratio is None
-        else f"약 {100 * ratio:.2f}".rstrip("0").rstrip(".") + "%"
+        else msg("약 {0}", f"{100 * ratio:.2f}".rstrip("0").rstrip(".") + "%")
     )
     conditional_count = sum(item["status"] == "reused" and item.get("authority_source") in CONDITIONAL_AUTHORITY_SOURCES
                             for item in batch["sources"])
-    limitation = (f" 조건부 재사용 {conditional_count}개: 관찰 범위 기반 / 입력 완전성 미보증."
+    limitation = (msg(" 조건부 재사용 {0}개: 관찰 범위 기반 / 입력 완전성 미보증.", conditional_count)
                   if conditional_count else "")
     return (
-        f"[Click 결과] {headline}; "
-        f"재사용으로 생략한 테스트 실행시간: {omitted_text}; "
-        f"동일 샤드 전체 순차 실행 예상: {full_text}; "
-        f"이번 테스트 실행: {executed_text}; "
-        f"테스트 실행시간 감소: {reduction_text}; "
-        f"시간 근거 커버리지 {timed_reused}/{actual_reused} · "
-        f"이전 계약 재판정 {prior}개; "
-        "과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외."
+        msg("[Click 결과] {0}; 재사용으로 생략한 테스트 실행시간: {1}; 동일 샤드 전체 순차 실행 예상: {2}; 이번 테스트 실행: {3}; 테스트 실행시간 감소: {4}; 시간 근거 커버리지 {5}/{6} · 이전 계약 재판정 {7}개; 과거 성공 실행 기록 기반 추정 / 동일 샤드 순차 기준 / Click 관리비용 제외.",
+            headline, omitted_text, full_text, executed_text, reduction_text, timed_reused, actual_reused, prior)
         + limitation
     ) + output
-
-
-
 
 
 def build_plan(

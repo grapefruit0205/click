@@ -45,7 +45,7 @@ click-gate verify '{"version":2,"workdir":"/absolute/path/to/repository","checks
 
 ## Read status
 
-`click-gate status` prints at most three short lines in the dashboard language (`CLICK_LANGUAGE` or the POSIX locale; Korean by default): executed and reused counts with the estimated avoided time, the mode and revision, and the next action. Use `click-gate status --json` only when you need the full report with per-check decisions, reason codes, and actionable failure details.
+`click-gate status` prints at most three short lines in the dashboard language (`CLICK_LANGUAGE` or the POSIX locale; English unless the locale is Korean or Simplified Chinese): executed and reused counts with the estimated avoided time, the mode and revision, and the next action. Use `click-gate status --json` only when you need the full report with per-check decisions, reason codes, and actionable failure details.
 
 ## Reuse is decided by Click
 

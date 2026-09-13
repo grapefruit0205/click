@@ -34,6 +34,7 @@ if __package__:
         click_service,
         click_shadow_dashboard,
         click_state,
+        click_status_summary,
         click_verification,
     )
 else:  # Executed directly from the bundled hooks directory.
@@ -52,6 +53,7 @@ else:  # Executed directly from the bundled hooks directory.
     import click_service
     import click_shadow_dashboard
     import click_state
+    import click_status_summary
     import click_verification
 
 
@@ -729,6 +731,7 @@ def prompt_context(event: dict[str, Any]) -> str:
         # form replaced the JSON envelope after eight paired Opus 5 sessions
         # (docs/history/agent-ab-2026-09-12) showed the ~200-character JSON the
         # model typed for every cycle as the main output-token overhead.
+        result_label = click_status_summary.message("[Click \uacb0\uacfc]", click_status_summary.resolve_locale())
         context = (
             "Click Evidence mode is enabled. Run every test or check command through Click "
             "instead of directly, with the Bash tool: `click-gate verify -- <the exact check "
@@ -736,7 +739,7 @@ def prompt_context(event: dict[str, Any]) -> str:
             "`click-gate` is rewritten by the Click hook \u2014 do not look for it on PATH, "
             "prefix it, or test whether it exists. When you re-run a check after an edit, "
             "resubmit the exact same command; Click decides at execution time whether it "
-            "runs or is reused and says so in its `[Click \uacb0\uacfc]` line \u2014 do not re-verify a "
+            "runs or is reused and says so in its `" + result_label + "` line \u2014 do not re-verify a "
             "reused check by hand. Several checks in one request or an explicit evidence id "
             "use the JSON form from the Click skill. The host remains the execution authority: edits, reads and "
             "non-check commands need nothing from Click, no approval contract is involved, and "

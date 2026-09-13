@@ -20,7 +20,7 @@ from typing import Any
 
 
 LOCALES = ("ko", "en", "zh-CN")
-DEFAULT_LOCALE = "ko"
+DEFAULT_LOCALE = "en"
 # An explicit Click choice wins; otherwise follow the POSIX message locale.
 LANGUAGE_ENVIRONMENT_KEYS = ("CLICK_LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG")
 MAX_LINES = 3
@@ -72,12 +72,17 @@ def _messages() -> dict[str, dict[str, str]]:
     return loaded
 
 
-def message(key: str, locale: str, *values: object) -> str:
-    """Translate one Korean dashboard key like the dashboard's ``msg`` helper."""
+def message(key: str, locale: str, *values: object, max_value_chars: int | None = MAX_VALUE_CHARS) -> str:
+    """Translate one Korean dashboard key like the dashboard's ``msg`` helper.
+
+    ``max_value_chars`` bounds each inserted value; callers whose output is not
+    an argv item (the runner's host summary) pass ``None`` to keep whole
+    fragments.
+    """
     template = key if locale == "ko" else _messages().get(locale, {}).get(key, key)
     if not isinstance(template, str):
         template = key
-    rendered = [_clean(value) for value in values]
+    rendered = [_clean(value, max_value_chars) for value in values]
     # Values are inserted once, never reinterpreted as translation keys.
     return _PLACEHOLDER.sub(
         lambda match: (
@@ -89,12 +94,12 @@ def message(key: str, locale: str, *values: object) -> str:
     )
 
 
-def _clean(value: object) -> str:
+def _clean(value: object, max_value_chars: int | None = MAX_VALUE_CHARS) -> str:
     # Each summary line becomes one argv item of the rewritten command, so it
     # must stay free of control characters on every host shell.
     text = _CONTROL.sub(" ", str(value)).strip()
-    if len(text) > MAX_VALUE_CHARS:
-        text = text[: MAX_VALUE_CHARS - 1] + "…"
+    if max_value_chars is not None and len(text) > max_value_chars:
+        text = text[: max_value_chars - 1] + "…"
     return text
 
 

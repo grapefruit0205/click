@@ -2,6 +2,17 @@
 
 ## Unreleased v1.2 candidate
 
+- English is the default language. The runner's result line, the reuse notice
+  and the Evidence directive's reference to it were Korean on every host; they
+  now render through the dashboard's translation tables in the language
+  `CLICK_LANGUAGE` or the POSIX locale selects, and the fallback for any other
+  locale is English (`[Click result] 1 of 4 executed · 3 current (inputs
+  unchanged since their last pass, reused) · About 45s of reruns avoided
+  (estimate); ...`). `click-gate status` follows the same rule, and the
+  dashboard opens in the browser language (Korean or Simplified Chinese when
+  that is what the browser reports, English otherwise) until a language is
+  chosen. Host output is no longer cut at the summary-line value limit, and
+  the `token_ab` benchmark accepts the result line in every language.
 - Plugin listing metadata: the Codex manifest declares a logo, a screenshot
   taken from a recorded session, and HTTPS privacy and terms links; a new
   `docs/privacy.md` states what Click stores, where, and that it opens no

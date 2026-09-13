@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -42,6 +43,9 @@ const context={document:doc,location:{hash:'',pathname:'/'},history:{replaceStat
 const saved={value:null};
 const storage={getItem:()=>saved.value,setItem:(key,value)=>{assert.equal(key,'click.dashboard.language');saved.value=value;}};
 context.localStorage=storage;
+// The assertions below were written against Korean output; a Korean browser
+// language selects it without a stored preference.
+context.navigator={language:'ko-KR'};
 const staticNodes=(input.static_labels??[]).map(attributes=>{const node=new Node('span');Object.entries(attributes).forEach(([key,value])=>node.setAttribute(key,value));return node;});
 doc.querySelectorAll=selector=>selector.startsWith('[data-i18n')?staticNodes.filter(node=>selector.slice(1,-1) in node.attributes):[];
 function loadDashboard(target){
@@ -357,7 +361,9 @@ class VerificationEfficiencyTests(unittest.TestCase):
             },
         )
         self.assertEqual(savings["reason_codes"], [])
-        host = metrics.host_summary(state)
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            host = metrics.host_summary(state)
+        self.assertTrue(host.startswith("[Click 결과] "), host)
         self.assertIn(
             "10개 중 2개 실행 · 8개는 마지막 통과 이후 입력 불변으로 현재 유효(재사용) · "
             "약 6분 40초 재실행 생략〔추정〕",
@@ -368,6 +374,19 @@ class VerificationEfficiencyTests(unittest.TestCase):
         self.assertIn("테스트 실행시간 감소: 약 80%", host)
         self.assertIn("시간 근거 커버리지 8/8", host)
         self.assertIn("Click 관리비용 제외", host)
+        # The same summary renders whole in the default (English) locale: the
+        # fragments are not argv items, so they are not cut at the value limit.
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            english = metrics.host_summary(state)
+        self.assertTrue(english.startswith("[Click result] "), english)
+        self.assertIn(
+            "2 of 10 executed · 8 current (inputs unchanged since their last pass, reused) · "
+            "About 6m 40s of reruns avoided (estimate)",
+            english,
+        )
+        self.assertIn("this run's test time: 1m 40s", english)
+        self.assertIn("test time reduction: About 80%", english)
+        self.assertNotIn("…", english)
 
         short_reuse = [
             self.canonical_decision(suffix, "reuse-exact", 1_000)
@@ -445,9 +464,15 @@ class VerificationEfficiencyTests(unittest.TestCase):
         self.assertIn(
             "reused-duration-sample-missing", partial["reason_codes"]
         )
-        partial_host = metrics.host_summary(missing)
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            partial_host = metrics.host_summary(missing)
         self.assertIn("시간 표본 1/2개 · 부분 추정 합계 약 50 ms〔추정〕", partial_host)
         self.assertIn("테스트 실행시간 감소: 측정 정보 없음", partial_host)
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            english_host = metrics.host_summary(missing)
+        self.assertTrue(english_host.startswith("[Click result] "), english_host)
+        self.assertIn("timing samples 1/2", english_host)
+        self.assertIn("Not measured", english_host)
 
         legacy_state = self.completed_canonical_batch(
             [self.canonical_decision("1", "reuse-exact", 50)], {},
@@ -516,7 +541,10 @@ class VerificationEfficiencyTests(unittest.TestCase):
         self.assertIsNone(failed["full_sequential_test_execution_estimate_ms"])
         self.assertIn("request-not-passed", failed["reason_codes"])
         self.assertIn("scope-incomplete", failed["reason_codes"])
-        self.assertIn("2개 샤드 요청 미완료", metrics.host_summary(failed_state))
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "ko"}):
+            self.assertIn("2개 샤드 요청 미완료", metrics.host_summary(failed_state))
+        with mock.patch.dict(os.environ, {"CLICK_LANGUAGE": "en"}):
+            self.assertIn("2 shards, request incomplete", metrics.host_summary(failed_state))
 
     def test_revalidation_savings_keeps_retries_and_parent_plan_out_of_batch(self):
         parent = metrics.build_plan(
@@ -1087,7 +1115,25 @@ saved.value='unsupported';next=reload(storage);assert.equal(next.api.getLocale()
 const blocked={getItem(){throw Error('storage unavailable');},setItem(){throw Error('storage unavailable');}};
 next=reload(blocked);assert.equal(next.api.getLocale(),'ko');assert.equal(next.api.setLanguage('en'),'en');
 assert.equal(next.document.documentElement.attributes.lang,'en');
-assert.equal(next.api.setLanguage('<script>'),'ko');
+assert.equal(next.api.setLanguage('<script>'),'en');
+''')
+
+    def test_default_language_follows_the_browser_and_falls_back_to_english(self):
+        self.run_language_script(r'''
+function fresh(navigator) {
+  const next={...context,document:new Document(),localStorage:{getItem:()=>null,setItem(){}}};
+  if(navigator===undefined)delete next.navigator;else next.navigator=navigator;
+  loadDashboard(next);return next.api.getLocale();
+}
+assert.equal(fresh(undefined),'en');
+assert.equal(fresh({language:'en-US'}),'en');
+assert.equal(fresh({language:'de-DE'}),'en');
+assert.equal(fresh({language:'ko-KR'}),'ko');
+assert.equal(fresh({language:'ko'}),'ko');
+assert.equal(fresh({language:'zh-CN'}),'zh-CN');
+assert.equal(fresh({language:'zh-Hans-CN'}),'zh-CN');
+assert.equal(fresh({language:'zh-TW'}),'en');
+assert.equal(fresh({}),'en');
 ''')
 
     def test_translation_coverage_and_status_distinctions(self):

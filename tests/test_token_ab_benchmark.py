@@ -41,7 +41,7 @@ def _transcript(path: Path, responses, commands, *, duplicate: bool = False) -> 
             rows.append(json.loads(json.dumps(message)))
         if index < len(commands):
             rows.append({"type": "user", "message": {"content": [
-                {"type": "tool_result", "content": "[Click 결과] 2개 중 1개만 실행 · 1개 재사용"}]}})
+                {"type": "tool_result", "content": "[Click result] 1 of 2 executed · 1 reused"}]}})
     rows.append({"type": "result", "subtype": "success", "is_error": False, "num_turns": len(responses),
                  "duration_ms": 1000, "total_cost_usd": 0.5, "session_id": "session-1",
                  "usage": {"input_tokens": 7, "cache_creation_input_tokens": 11,

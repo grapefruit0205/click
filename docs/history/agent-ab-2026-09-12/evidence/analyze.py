@@ -19,8 +19,10 @@ from pathlib import Path
 HERE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parent
 RAN = re.compile(r"Ran (\d+) tests? in ([0-9.]+)s")
 CLICK_EXEC = re.compile(r"\[Click verification (\d+)/(\d+):")
-PARALLEL = re.compile(r"병렬 실행 벽시계 ([0-9.]+)초")
-SINGLE = re.compile(r"이번 테스트 실행: ([0-9.]+)초(?! 합산)")
+# Click renders its result line in the host locale (Korean in this record;
+# English by default since v1.1.1), so both spellings are accepted.
+PARALLEL = re.compile(r"(?:병렬 실행 벽시계 ([0-9.]+)초|([0-9.]+)s wall clock with parallel shards)")
+SINGLE = re.compile(r"(?:이번 테스트 실행: ([0-9.]+)초(?! 합산)|this run's test time: ([0-9.]+)s(?! summed))")
 REUSED = re.compile(r"Click reused (\d+) current")
 
 
@@ -34,7 +36,7 @@ def session_rows():
             out, cmd = call["output"], call["command"]
             if "click-gate" in cmd:
                 executed = len(CLICK_EXEC.findall(out))
-                walls = PARALLEL.findall(out) or SINGLE.findall(out) or ["0"]
+                walls = [a or b for a, b in PARALLEL.findall(out)] or [a or b for a, b in SINGLE.findall(out)] or ["0"]
                 executions += executed
                 test_wall += float(walls[0])
                 requests.append({"executed": executed, "wall_s": float(walls[0]), "reused_all": bool(REUSED.search(out))})

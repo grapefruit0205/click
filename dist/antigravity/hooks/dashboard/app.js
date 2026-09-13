@@ -3,9 +3,17 @@
   const MESSAGES = Object.freeze(globalThis.ClickDashboardMessages);
   // UI language only. Canonical measurements, decisions and user-authored text stay unchanged.
   const LANGUAGE_STORAGE_KEY='click.dashboard.language';
-  const normalizeLocale=value=>['ko','en','zh-CN'].includes(value)?value:'ko';
-  let locale='ko';
-  try { locale=normalizeLocale(globalThis.localStorage?.getItem(LANGUAGE_STORAGE_KEY)); } catch (_) {}
+  const normalizeLocale=value=>['ko','en','zh-CN'].includes(value)?value:'en';
+  // A stored choice wins; otherwise the browser language picks Korean or
+  // Simplified Chinese, and everything else reads English.
+  function browserLocale() {
+    const tag=String(globalThis.navigator?.language ?? '').toLowerCase();
+    if(tag.startsWith('ko'))return 'ko';
+    if(tag==='zh'||tag.startsWith('zh-cn')||tag.startsWith('zh-hans')||tag.startsWith('zh-sg'))return 'zh-CN';
+    return 'en';
+  }
+  let locale=browserLocale();
+  try { const stored=globalThis.localStorage?.getItem(LANGUAGE_STORAGE_KEY); if(['ko','en','zh-CN'].includes(stored))locale=stored; } catch (_) {}
   const localeTag=()=>({'ko':'ko-KR','en':'en-US','zh-CN':'zh-CN'}[locale]);
   function msg(strings,...values) {
     const key=Array.isArray(strings)
