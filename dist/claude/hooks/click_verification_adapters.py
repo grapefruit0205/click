@@ -361,6 +361,14 @@ def command_profile(
                 "node-test",
                 minimum_test_runner_class("node", test_arguments),
             )
+        # A framework's resolved entry point run by node directly is the same
+        # check as the `jest`/`vitest` launcher, and the only form that stays
+        # one process on Windows, where the launchers are cmd shims.
+        entry = arguments[0].replace("\\", "/") if arguments else ""
+        if entry.endswith("/jest/bin/jest.js"):
+            return _match(JEST_ADAPTER, "jest", minimum_test_runner_class("jest", arguments[1:]))
+        if entry.endswith("/vitest/vitest.mjs"):
+            return _match("vitest-v1", "vitest", minimum_test_runner_class("vitest", arguments[1:]))
         return None
     if executable in {"npm", "pnpm", "yarn", "bun"}:
         meaningful = [item for item in arguments if item not in {"run", "exec", "x"}]

@@ -62,6 +62,9 @@ class VerificationAdapterContractTests(unittest.TestCase):
             (["py.exe", "-3.13", "-m", "pytest", "-q", "Tests/Test_Case.py"], "cpython-pytest-v1", "targeted"),
             ([r"C:\Python313\python.exe", "-m", "pytest", "tests"], "cpython-pytest-v1", "broad"),
             (["node", "--test", "test/case.test.js"], "node-test-v1", "targeted"),
+            (["node", "node_modules/jest/bin/jest.js", "--runTestsByPath", "test/case.test.js"], "jest-v1", "targeted"),
+            ([r"C:\repo\node_modules\vitest\vitest.mjs", "run"], "generic-named-verification-v1", "deep"),
+            ([r"C:\Program Files\nodejs\node.EXE", r"C:\repo\node_modules\vitest\vitest.mjs", "run"], "vitest-v1", "broad"),
             (["npm", "run", "test"], "javascript-package-script-v1", "broad"),
             (["npx", "vitest", "test/case.test.ts"], "vitest-v1", "targeted"),
             (["cargo", "test", "core"], "cargo-v1", "targeted"),
@@ -97,6 +100,11 @@ class VerificationAdapterContractTests(unittest.TestCase):
                 ["python3", "-c", "print('not verification')"]
             )
         )
+        # A script run by node is a check only at a framework's own entry point.
+        for argv in (["node", "runner.js", "case.cjs"], ["node", "vitest.mjs", "run"],
+                     ["node", "jest/bin/jest.js"], ["node", "node_modules/jest/bin/jest.js.bak"]):
+            with self.subTest(argv=argv):
+                self.assertIsNone(click_verification_adapters.command_profile(argv))
         self.assertIsNone(
             click_verification_adapters.capability_report("unknown-adapter")
         )

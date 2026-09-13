@@ -54,6 +54,15 @@
   Node 22.23.2 binary is the pinned identity. Without the toolchain or the
   headers a Windows check that consumes `Math.random` or shared memory stays
   ineligible, as before.
+- A framework's resolved entry point run by `node` is the framework's check.
+  `node <root>/node_modules/jest/bin/jest.js …` and
+  `node <root>/node_modules/vitest/vitest.mjs …` are recognized as the jest
+  and vitest checks the launchers stand for (the launchers are cmd shims on
+  Windows; the entry point stays one process on every host), with the same
+  scope classification; any other script run by `node` remains unrecognized.
+  The conditional Hook tests run on both native backends through that form,
+  and the Windows CI job now installs the pinned jest and vitest fixtures and
+  runs their real worker paths and the conditional Hook path under ETW.
 
 ## v1.2.0 — 2026-09-13 — Claude Code on Windows
 

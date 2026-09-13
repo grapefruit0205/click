@@ -292,7 +292,34 @@ class RealConditionalTests(unittest.TestCase):
             self.assertFalse(conditional.eligible_record(dynamic))
 
 
-@unittest.skipUnless(sys.platform == 'linux' and shutil.which('node') and shutil.which('strace'), 'Linux Node and strace required')
+def _native_backend_ready() -> bool:
+    """The host can capture a Node run: strace on Linux, elevated ETW on Windows."""
+    if sys.platform == 'linux':
+        return bool(shutil.which('strace'))
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            return bool(shutil.which('logman')) and bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except (AttributeError, OSError):
+            return False
+    return False
+
+
+def _runner_commands(workspace, names):
+    """A tiny deterministic check runner at jest's resolved entry-point path.
+
+    `node <root>/node_modules/jest/bin/jest.js <file>` is the recognized jest
+    check that stays one process on every host (the `jest` launcher is a
+    shebang script on Linux and a cmd shim on Windows); actual Node
+    observation is real.
+    """
+    runner = workspace / 'node_modules' / 'jest' / 'bin' / 'jest.js'
+    runner.parent.mkdir(parents=True)
+    runner.write_text('require(require("node:path").resolve(process.argv[2]));\n')
+    return runner, [[shutil.which('node'), str(runner), name + '.cjs'] for name in names]
+
+
+@unittest.skipUnless(sys.platform in node.PROFILES and shutil.which('node') and _native_backend_ready(), 'Node with a native capture backend required')
 class ConditionalHookTests(support.ClickGateTestCase):
     def test_default_hook_learns_then_reuses_and_reruns_changed_child(self):
         if subprocess.check_output(['node','--version']).strip().decode() != node.VERSION:
@@ -306,11 +333,8 @@ class ConditionalHookTests(support.ClickGateTestCase):
             (self.workspace/(name+'.cjs')).write_text(source)
         # A tiny deterministic check-runner fixture exercises the existing
         # recognized Jest command boundary; actual Node observation is real.
-        runner=self.workspace/'jest'
-        runner.write_text('#!/usr/bin/env node\nrequire(require("node:path").resolve(process.argv[2]));\n')
-        runner.chmod(0o755)
-        self.initialize_git('.gitignore','alpha.cjs','beta.cjs','jest')
-        commands=[[str(runner),name+'.cjs'] for name in ('alpha','beta')]
+        runner, commands = _runner_commands(self.workspace, ('alpha', 'beta'))
+        self.initialize_git('.gitignore','alpha.cjs','beta.cjs','node_modules/jest/bin/jest.js')
         def run(turn):
             payload=self.verify_gate(commands,turn,evidence_ids=['ALPHA','BETA'])
             self.assertIn("updatedInput",payload["hookSpecificOutput"],payload)
@@ -374,11 +398,8 @@ class ConditionalHookTests(support.ClickGateTestCase):
             "require('node:worker_threads').parentPort.postMessage(require('node:fs').readFileSync('worker.cfg','utf8'));\n"
         )
         (self.workspace / 'beta.cjs').write_text("console.log('ran-beta');\n")
-        runner = self.workspace / 'jest'
-        runner.write_text('#!/usr/bin/env node\nrequire(require("node:path").resolve(process.argv[2]));\n')
-        runner.chmod(0o755)
-        self.initialize_git('.gitignore', 'alpha.cjs', 'worker.cjs', 'beta.cjs', 'jest')
-        commands = [[str(runner), name + '.cjs'] for name in ('alpha', 'beta')]
+        runner, commands = _runner_commands(self.workspace, ('alpha', 'beta'))
+        self.initialize_git('.gitignore', 'alpha.cjs', 'worker.cjs', 'beta.cjs', 'node_modules/jest/bin/jest.js')
         alpha_key = support.CLICK_EVIDENCE.evidence_key('ALPHA')
 
         def run(turn):
