@@ -351,7 +351,7 @@ class NodeDiagnosticHookTests(ClickGateTestCase):
         self.assertNotIn("[Click framework observer]", run.stdout)
 
 
-@unittest.skipUnless(sys.platform == "linux" and shutil.which("node") and shutil.which("c++"), "native state reader requires Linux toolchain")
+@unittest.skipUnless(shutil.which("node"), "native state reader needs Node")
 class NativeNodeStateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
