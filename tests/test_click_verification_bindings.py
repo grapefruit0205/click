@@ -131,6 +131,14 @@ class VerificationBindingStageTests(unittest.TestCase):
         own = sorted(bindings._own_command_directories())[0]
         plugin_bin = str(Path(own))
         entries = ["/usr/local/bin", "/usr/bin", "/home/user/.local/bin"]
+
+        def spelled(*values: str) -> str:
+            # Windows entries are re-spelled to one canonical form (see
+            # test_windows_search_path_spellings_share_one_identity).
+            if os.name == "nt":
+                return os.pathsep.join(os.path.normcase(os.path.normpath(value)) for value in values)
+            return os.pathsep.join(values)
+
         # The Hook process sees a repeated entry; the tool call that runs the
         # verification sees Click's own command directory appended instead.
         hook = os.pathsep.join([*entries, "/usr/bin"])
@@ -139,18 +147,18 @@ class VerificationBindingStageTests(unittest.TestCase):
         self.assertEqual(
             bindings.normalized_search_path(hook), bindings.normalized_search_path(runner)
         )
-        self.assertEqual(bindings.normalized_search_path(hook), os.pathsep.join(entries))
+        self.assertEqual(bindings.normalized_search_path(hook), spelled(*entries))
         # Order and every distinct directory are preserved: a repeat can never
         # win over its first occurrence, so dropping it changes no resolution.
         self.assertEqual(
             bindings.normalized_search_path(os.pathsep.join(["/b", "/a", "/b"])),
-            os.pathsep.join(["/b", "/a"]),
+            spelled("/b", "/a"),
         )
         # Only the search path is normalized; other values stay verbatim.
         fingerprint = bindings.environment_fingerprint(
             {"PATH": hook, "TZ": "UTC" + os.pathsep + "UTC"}
         )
-        self.assertEqual(fingerprint["PATH"], os.pathsep.join(entries))
+        self.assertEqual(fingerprint["PATH"], spelled(*entries))
         self.assertEqual(fingerprint["TZ"], "UTC" + os.pathsep + "UTC")
         # A real directory difference still changes the identity.
         self.assertNotEqual(
@@ -259,6 +267,35 @@ class VerificationBindingStageTests(unittest.TestCase):
                         malformed,
                     )
 
+    @unittest.skipUnless(os.name == "nt", "Windows search-path spelling")
+    def test_windows_search_path_spellings_share_one_identity(self):
+        # Git Bash hands `bash -c python` the raw Windows entries and
+        # `bash -c 'sh …'` the re-spelled ones; both name the same directories.
+        raw = ";".join(
+            [
+                "C:\\Program Files\\dotnet\\",
+                "C:\\\\ghcup\\bin",
+                "c:\\tools\\php",
+                "C:\\Windows\\System32\\OpenSSH\\",
+            ]
+        )
+        respelled = ";".join(
+            [
+                "C:\\Program Files\\dotnet",
+                "C:\\ghcup\\bin",
+                "C:\\tools\\php",
+                "C:\\Windows\\System32\\OpenSSH",
+            ]
+        )
+        self.assertEqual(
+            bindings.normalized_search_path(raw), bindings.normalized_search_path(respelled)
+        )
+        self.assertEqual(bindings.normalized_search_path(raw).count(";"), 3)
+        self.assertNotEqual(
+            bindings.normalized_search_path(raw),
+            bindings.normalized_search_path(raw + ";C:\\extra"),
+        )
+
     def test_environment_binding_covers_only_the_fingerprint_subset(self):
         execution = {"PATH": "/usr/bin", "PWD": "/work", "DATABASE_URL": "one", "TZ": "UTC"}
         binding = bindings.verification_environment_binding(execution, "t" * 32)
@@ -276,6 +313,18 @@ class VerificationBindingStageTests(unittest.TestCase):
         missing_bound = {"PATH": "/usr/bin", "PWD": "/work", "DATABASE_URL": "one"}
         _, drifted, _ = bindings.verification_environment_from_binding(binding, "t" * 32, missing_bound)
         self.assertTrue(drifted)
+
+        # The drift report names what moved, never the values.
+        drift: dict[str, object] = {}
+        bindings.verification_environment_from_binding(binding, "t" * 32, changed_noise, drift=drift)
+        self.assertEqual(drift, {"changed": [], "absent": 0})
+        bindings.verification_environment_from_binding(
+            binding, "t" * 32, {**changed_bound, "LANG": "C.UTF-8"}, drift=drift
+        )
+        self.assertEqual(drift, {"changed": ["LANG", "TZ"], "absent": 0})
+        bindings.verification_environment_from_binding(binding, "t" * 32, missing_bound, drift=drift)
+        self.assertEqual(drift, {"changed": [], "absent": 1})
+        self.assertNotIn("Etc/GMT+7", repr(drift))
 
     def test_executable_payload_uses_content_instead_of_volatile_mtime(self):
         baseline = {

@@ -127,3 +127,24 @@ def install_runner_shell_renderer(
 
 def render_runner_shell_command(arguments: list[str]) -> str:
     return _runner_shell_renderer(arguments)
+
+
+# Hosts render the same runner argv for different tool shells: Codex on
+# Windows runs the rewritten command in PowerShell or cmd.exe, Claude Code in
+# Git Bash. Adapters register their renderer by host id and the resident
+# worker, which serves whichever host installed the package, activates the
+# right one for each event it dispatches.
+_host_renderers: dict[str, RunnerShellRenderer] = {}
+
+
+def register_host_renderer(host_id: str, renderer: RunnerShellRenderer) -> None:
+    if not isinstance(host_id, str) or not host_id or not callable(renderer):
+        raise TypeError("Click host renderers need a host id and a callable.")
+    _host_renderers[host_id] = renderer
+
+
+def activate_host_renderer(host_id: str) -> RunnerShellRenderer:
+    """Install the renderer registered for ``host_id`` (the default otherwise)."""
+    renderer = _host_renderers.get(host_id, default_runner_shell_command)
+    install_runner_shell_renderer(renderer)
+    return renderer

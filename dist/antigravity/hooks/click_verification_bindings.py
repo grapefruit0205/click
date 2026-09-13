@@ -272,6 +272,13 @@ def normalized_search_path(value: str) -> str:
     entries: list[str] = []
     seen: set[str] = set()
     for entry in str(value).split(os.pathsep):
+        if os.name == "nt" and entry:
+            # Every MSYS hop (Git Bash, then sh) re-spells the Windows search
+            # path it hands to a native child: trailing separators dropped,
+            # doubled separators collapsed, the drive letter upper-cased. The
+            # Hook runs one hop deeper than the Bash tool, so the same
+            # directories would otherwise carry two identities.
+            entry = os.path.normcase(os.path.normpath(entry))
         key = os.path.normcase(entry)
         if key in own or key in seen or _is_plugin_command_directory(key):
             continue
@@ -395,7 +402,16 @@ def verification_environment_from_binding(
     binding: Any,
     runner_token: str,
     current_environment: dict[str, str],
+    *,
+    drift: dict[str, Any] | None = None,
 ) -> tuple[dict[str, str] | None, bool, str]:
+    """Project the runner's environment onto the prepared binding.
+
+    ``drift``, when given, receives ``{"changed": [names], "absent": count}``:
+    the fingerprinted variables whose value differs or that the Hook did not
+    bind, and how many bound variables the runner no longer sees (their names
+    exist only as keyed digests). Names only, never values.
+    """
     if not isinstance(binding, list) or not binding or len(binding) > 4096:
         return None, False, "Click verification runner environment binding was malformed."
     expected: dict[str, str] = {}
@@ -422,6 +438,7 @@ def verification_environment_from_binding(
     # fingerprinted value rebinds the receipt to what actually runs.
     matched: set[str] = set()
     drifted = False
+    changed: list[str] = []
     for key, value in environment_fingerprint(current_environment).items():
         normalized_key = verification_environment_key(str(key))
         key_digest = verification_environment_hmac(
@@ -430,15 +447,21 @@ def verification_environment_from_binding(
         expected_value = expected.get(key_digest)
         if expected_value is None:
             drifted = True
+            changed.append(normalized_key)
             continue
         current_value = verification_environment_hmac(
             runner_token, "value", f"{normalized_key}\0{value}"
         )
         if not secrets.compare_digest(expected_value, current_value):
             drifted = True
+            changed.append(normalized_key)
         matched.add(key_digest)
-    if matched != set(expected):
+    absent = len(set(expected) - matched)
+    if absent:
         drifted = True
+    if drift is not None:
+        drift["changed"] = sorted(changed)
+        drift["absent"] = absent
     return dict(current_environment), drifted, ""
 
 

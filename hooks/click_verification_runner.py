@@ -220,6 +220,9 @@ def _run_verification_impl(
     environment_rebound = batch.pop(
         "_click_verification_environment_rebound", False
     )
+    environment_drift = batch.pop("_click_verification_environment_drift", {})
+    if not isinstance(environment_drift, dict):
+        environment_drift = {}
     claim_input_bindings = batch.pop("_click_explicit_input_bindings", None)
     if (
         not isinstance(claim_input_bindings, dict)
@@ -262,9 +265,22 @@ def _run_verification_impl(
         )
         active_authoritative_execute = click_authoritative_observer.run_command
     if environment_rebound:
+        # Name the variables (never their values) so a host that adds or
+        # rewrites one between the Hook and the tool call can be identified
+        # from the transcript instead of from a debugger.
+        changed = environment_drift.get("changed")
+        absent = environment_drift.get("absent")
+        details: list[str] = []
+        if isinstance(changed, list) and changed:
+            details.append("changed: " + ", ".join(str(name) for name in changed[:12]))
+            if len(changed) > 12:
+                details[-1] += f" and {len(changed) - 12} more"
+        if isinstance(absent, int) and absent > 0:
+            details.append(f"{absent} bound variable(s) absent")
         print(
-            "[Click] Verification runner environment changed after preparation; "
-            "rebound to the current canonical environment.",
+            "[Click] Verification runner environment changed after preparation"
+            + (f" ({'; '.join(details)})" if details else "")
+            + "; rebound to the current canonical environment.",
             flush=True,
         )
     before = git_workspace_snapshot(Path.cwd())

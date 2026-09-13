@@ -222,11 +222,13 @@ def _claim_verification_run(
     current_environment = _observer_environment(
         _verification_environment(cwd=Path.cwd()), verification
     )
+    environment_drift: dict[str, Any] = {}
     verification_environment, environment_rebound, binding_error = (
         _verification_environment_from_binding(
             running_environment_binding,
             runner_token,
             current_environment,
+            drift=environment_drift,
         )
     )
     if binding_error:
@@ -343,6 +345,7 @@ def _claim_verification_run(
     batch["_click_claim_binding"] = claim_binding
     batch["_click_verification_environment"] = verification_environment
     batch["_click_verification_environment_rebound"] = environment_rebound
+    batch["_click_verification_environment_drift"] = environment_drift
     batch["_click_command_plans"] = runtime_command_plans
     labels = verification.get("source_labels")
     batch["_click_source_labels"] = (

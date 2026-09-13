@@ -77,8 +77,10 @@ claude plugin install click@click
 
 新建 Claude Code 会话后，已安装的 Hook 和技能即会加载。所有 `click-gate`
 命令都是普通的 Bash 命令，由已安装的 `PreToolUse` Hook 改写到 Click 运行器；
-Evidence 状态保存在 `~/.claude/plugins/data/click-click/`。支持 Linux 与
-macOS；宿主限制详见 [Click for Claude Code](platforms/claude/README.md)。
+Evidence 状态保存在 `~/.claude/plugins/data/click-click/`。支持 Linux、macOS
+和 Windows：在 Windows 上，Claude Code 的 Bash 工具和 Hook 运行于 Git for
+Windows，Hook 启动器依次选择 `py -3`、`python`、`python3`。JS 条件复用仍仅限
+Linux。宿主限制详见 [Click for Claude Code](platforms/claude/README.md)。
 
 更新命令：
 
@@ -384,7 +386,7 @@ python3 --version
 
 然后新建任务，执行一个小型真实验证，并检查 `click-gate status`。仅看到插件已启用，并不能说明其 Hook 实际运行过。Windows CI 覆盖情况和原生 Observer 验证记录见[版本说明](RELEASE_NOTES.md)；它们不能替代对用户实际安装的宿主及配置的检查。
 
-在 Claude Code 中，用 `claude plugin list` 查看已安装插件，用 `/hooks` 查看 `[plugin:click]` 的 Hook 定义；源码构建可用 `claude plugin validate ./dist/claude --strict` 检查。Hook 命令运行 `python3`，请确认 Claude Code 使用的 shell 中 `python3 --version` 可用。Hook 的输出和错误会以 `click hook error` 行出现在对话记录中。
+在 Claude Code 中，用 `claude plugin list` 查看已安装插件，用 `/hooks` 查看 `[plugin:click]` 的 Hook 定义；源码构建可用 `claude plugin validate ./dist/claude --strict` 检查。Hook 命令为 `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`，Claude Code 在 Linux 和 macOS 上通过 `sh -c` 运行它，在 Windows 上通过 Git Bash 运行；启动器在 Linux 和 macOS 上运行 `python3`，在 Windows 上依次尝试 `py -3`、`python`、`python3`，并跳过只会提示安装 Python 的 Microsoft Store 别名。Windows 需要安装 Git for Windows：没有它，Claude Code 只提供 PowerShell 工具，而 Click 尚未改写该工具。Hook 的输出和错误会以 `click hook error` 行出现在对话记录中。
 
 ## Antigravity
 

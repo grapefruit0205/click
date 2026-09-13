@@ -1,0 +1,3 @@
+# Claude Code runs the Hook launcher through sh (Git Bash on Windows); a
+# CRLF checkout under core.autocrlf would break it.
+*.sh text eol=lf

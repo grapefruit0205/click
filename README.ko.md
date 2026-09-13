@@ -86,8 +86,11 @@ claude plugin install click@click
 새 Claude Code 세션을 시작하면 설치된 Hook과 스킬이 로드됩니다. 모든
 `click-gate` 명령은 평범한 Bash 명령이며, 설치된 `PreToolUse` Hook이 Click
 러너로 다시 씁니다. Evidence 상태는 `~/.claude/plugins/data/click-click/`에
-저장됩니다. Linux와 macOS를 지원하며, 호스트별 제한은
-[Click for Claude Code](platforms/claude/README.md)를 참고하세요.
+저장됩니다. Linux·macOS·Windows를 지원합니다. Windows에서는 Claude Code의
+Bash 도구와 Hook이 Git for Windows에서 실행되며, Hook 실행기가 `py -3`,
+`python`, `python3` 순으로 인터프리터를 고릅니다. JS 조건부 재사용은 Linux
+전용입니다. 호스트별 제한은 [Click for Claude Code](platforms/claude/README.md)를
+참고하세요.
 
 업데이트 명령은 다음과 같습니다.
 
@@ -404,7 +407,7 @@ python3 --version
 
 이후 새 작업에서 작은 실제 검증을 실행하고 `click-gate status`를 확인합니다. 플러그인 활성화 표시만으로 Hook 실행까지 확인된 것은 아닙니다. Windows CI와 OS별 Observer 검증 범위는 [릴리스 노트](RELEASE_NOTES.md)에 있으며, 사용자에게 설치된 호스트와 설정도 별도로 확인해야 합니다.
 
-Claude Code에서는 `claude plugin list`로 설치된 플러그인을, `/hooks`에서 `[plugin:click]` Hook 정의를 확인합니다. 소스 빌드는 `claude plugin validate ./dist/claude --strict`로 검사할 수 있습니다. Hook 명령은 `python3`를 실행하므로 Claude Code가 사용하는 셸에서 `python3 --version`이 동작해야 합니다. Hook 출력과 오류는 대화 기록에 `click hook error` 줄로 표시됩니다.
+Claude Code에서는 `claude plugin list`로 설치된 플러그인을, `/hooks`에서 `[plugin:click]` Hook 정의를 확인합니다. 소스 빌드는 `claude plugin validate ./dist/claude --strict`로 검사할 수 있습니다. Hook 명령은 `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`이며 Claude Code가 Linux·macOS에서는 `sh -c`, Windows에서는 Git Bash로 실행합니다. 실행기는 Linux·macOS에서 `python3`를, Windows에서는 `py -3`, `python`, `python3` 순으로 실행하고, Python 설치만 권하는 Microsoft Store 별칭은 건너뜁니다. Windows에는 Git for Windows가 있어야 합니다. 없으면 Claude Code가 PowerShell 도구만 제공하는데, Click은 아직 그 도구를 다시 쓰지 않습니다. Hook 출력과 오류는 대화 기록에 `click hook error` 줄로 표시됩니다.
 
 ## Antigravity
 

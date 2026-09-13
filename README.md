@@ -87,8 +87,11 @@ claude plugin install click@click
 Start a new Claude Code session so the installed Hooks and skill load. Every
 `click-gate` command is an ordinary Bash command that the installed `PreToolUse`
 Hook rewrites onto Click's runner; Evidence state lives under
-`~/.claude/plugins/data/click-click/`. Linux and macOS are supported; see
-[Click for Claude Code](platforms/claude/README.md) for the host limits.
+`~/.claude/plugins/data/click-click/`. Linux, macOS and Windows are supported;
+on Windows, Claude Code's Bash tool and its Hooks run in Git for Windows, and
+the Hook launcher picks `py -3`, `python` or `python3`. JS conditional reuse
+stays Linux-only. See [Click for Claude Code](platforms/claude/README.md) for
+the host limits.
 
 To update:
 
@@ -412,7 +415,7 @@ Restart Codex after an installation or update. In the CLI, use `/hooks` to revie
 
 Then start a new task, perform a small real verification, and inspect `click-gate status`. An enabled plugin alone does not demonstrate that its Hooks ran. Windows CI coverage and native Observer validation are described in the [release notes](RELEASE_NOTES.md); they do not replace checking the user's installed host and configuration.
 
-On Claude Code, `claude plugin list` shows the installed plugin and `/hooks` lists the `[plugin:click]` Hook definitions; `claude plugin validate ./dist/claude --strict` checks a source build. The Hook command runs `python3`, so confirm `python3 --version` works in the shell Claude Code uses. Hook output and errors appear in the transcript as `click hook error` lines.
+On Claude Code, `claude plugin list` shows the installed plugin and `/hooks` lists the `[plugin:click]` Hook definitions; `claude plugin validate ./dist/claude --strict` checks a source build. The Hook command is `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`, which Claude Code runs through `sh -c` on Linux and macOS and through Git Bash on Windows; the launcher runs `python3` (Linux and macOS) or `py -3`, `python`, `python3` in that order (Windows), skipping the Microsoft Store alias that only offers to install Python. On Windows, Git for Windows must be installed: without it Claude Code offers only its PowerShell tool, which Click does not rewrite yet. Hook output and errors appear in the transcript as `click hook error` lines.
 
 ## Antigravity
 
