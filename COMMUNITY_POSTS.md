@@ -27,9 +27,11 @@ Allowed, with the condition attached:
 
 Not allowed:
 
-- Any token or cost *saving*. In the eight-session record tokens went up
-  (+19–37%) and cost +6–11%; the v1.1.0 plain form brought cost level with
-  Click off in two sessions, which is parity, not a saving.
+- Any token or cost *saving*. In the eight-session record cost went up +6–11%
+  (from ~1.6 extra turns of cache reads and longer typed commands); the
+  v1.1.0 plain form brought cost level with Click off in two sessions, which
+  is parity, not a saving. Quote cost, not raw token totals: those are
+  dominated by cheap cache reads and mislead on their own.
 - Any percentage for "real projects" or "production". The record is a fixture.
 - Attributing the wall-time gain to reuse alone: on equal shards it is mostly
   concurrent shard execution; reuse shows as executions 20 → 10 and one fully
@@ -173,7 +175,7 @@ codex plugin marketplace add grapefruit0205/click && codex plugin add click@clic
 
 必须说清楚的三点。第一，耗时下降主要来自**分片并发执行**而不是复用：4 个分片长度相同，
 只要有一个要跑，这一轮就是约 15 秒；复用体现在执行次数减半和最后一轮 0 秒。第二，
-**Token 和费用是上升的**（Token +19~37%，费用 +6~11%），多出来的是 1~2 个回合的缓存读取和
+**费用是上升的**（+6~11%），多出来的是 1~2 个回合的缓存读取和
 模型每轮敲的那段约 200 字符的 JSON 命令，不是 Click 的输出更长。v1.1.0 为此加了简写形式
 `click-gate verify -- <命令>`，另测的 2 个会话里费用降到与关闭 Click 持平（$0.57 vs $0.60）；
 样本只有 2 个，是方向，不是节省。第三，这是 40 秒套件的结果；2 秒的套件会因为管理成本
@@ -227,7 +229,7 @@ are untouched.
 Measured: the same three-bug fix task, Opus 5, eight headless sessions, four
 with the plugin off and four on, alternated, on a four-module 40 s `unittest`
 fixture. Session time 381 s → 123 s (−68%); test module executions 20 → 10;
-cost +6–11%, tokens +19–37%. All eight fixed every bug without touching tests.
+cost +6–11% (mostly cache reads from ~1.6 extra turns). All eight fixed every bug without touching tests.
 v1.1.0's plain `click-gate verify -- <command>` form brought Click-on cost level
 with Click off in two further sessions (n=2, a direction).
 The gain is mostly concurrent shard execution on equal-length shards; reuse is
