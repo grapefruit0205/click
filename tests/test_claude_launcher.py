@@ -404,28 +404,6 @@ class GitBashIntegrationTests(unittest.TestCase):
             except OSError:
                 time.sleep(0.25)
 
-    def test_git_bash_environment_diagnostics(self) -> None:
-        """Temporary: print the PATH each launch flow hands to Python."""
-        plugin_root = write_package(self.base / "diag")
-        environment = self.environment(plugin_root, self.base / "diag data", "0")
-        probe = "import json, os, sys; print(json.dumps({'PATH': os.environ.get('PATH'), 'executable': sys.executable, 'keys': sorted(os.environ)}))"
-        # The launcher chain itself, with the adapter replaced by the probe.
-        (plugin_root / "hooks" / "claude_hook.py").write_text(probe + "\n", encoding="utf-8")
-        flows = {
-            "bash-python": f"python -c \"{probe}\"",
-            "bash-sh-python": f"sh -c 'python -c \"{probe}\"'",
-            "bash-sh-py": f"sh -c 'py -3 -c \"{probe}\"'",
-            "bash-launcher": hook_command("pre-tool").replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root)),
-        }
-        results: dict[str, object] = {}
-        for name, command in flows.items():
-            result = self.bash_run(command, stdin="", cwd=self.base, environment=environment)
-            try:
-                results[name] = json.loads(result.stdout)
-            except json.JSONDecodeError:
-                results[name] = {"stdout": result.stdout[:2000], "stderr": result.stderr[:2000], "rc": result.returncode}
-        print("CLAUDE-GIT-BASH-DIAGNOSTICS " + json.dumps(results, ensure_ascii=True))
-
     def test_hooks_and_rewritten_commands_run_through_git_bash(self) -> None:
         for root_name, worker in (("click", "1"), ("Click Plugin Root With Spaces", "0")):
             with self.subTest(plugin_root=root_name, worker=worker):

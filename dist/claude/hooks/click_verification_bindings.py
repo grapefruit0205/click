@@ -272,6 +272,13 @@ def normalized_search_path(value: str) -> str:
     entries: list[str] = []
     seen: set[str] = set()
     for entry in str(value).split(os.pathsep):
+        if os.name == "nt" and entry:
+            # Every MSYS hop (Git Bash, then sh) re-spells the Windows search
+            # path it hands to a native child: trailing separators dropped,
+            # doubled separators collapsed, the drive letter upper-cased. The
+            # Hook runs one hop deeper than the Bash tool, so the same
+            # directories would otherwise carry two identities.
+            entry = os.path.normcase(os.path.normpath(entry))
         key = os.path.normcase(entry)
         if key in own or key in seen or _is_plugin_command_directory(key):
             continue

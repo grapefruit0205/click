@@ -259,6 +259,35 @@ class VerificationBindingStageTests(unittest.TestCase):
                         malformed,
                     )
 
+    @unittest.skipUnless(os.name == "nt", "Windows search-path spelling")
+    def test_windows_search_path_spellings_share_one_identity(self):
+        # Git Bash hands `bash -c python` the raw Windows entries and
+        # `bash -c 'sh …'` the re-spelled ones; both name the same directories.
+        raw = ";".join(
+            [
+                "C:\\Program Files\\dotnet\\",
+                "C:\\\\ghcup\\bin",
+                "c:\\tools\\php",
+                "C:\\Windows\\System32\\OpenSSH\\",
+            ]
+        )
+        respelled = ";".join(
+            [
+                "C:\\Program Files\\dotnet",
+                "C:\\ghcup\\bin",
+                "C:\\tools\\php",
+                "C:\\Windows\\System32\\OpenSSH",
+            ]
+        )
+        self.assertEqual(
+            bindings.normalized_search_path(raw), bindings.normalized_search_path(respelled)
+        )
+        self.assertEqual(bindings.normalized_search_path(raw).count(";"), 3)
+        self.assertNotEqual(
+            bindings.normalized_search_path(raw),
+            bindings.normalized_search_path(raw + ";C:\\extra"),
+        )
+
     def test_environment_binding_covers_only_the_fingerprint_subset(self):
         execution = {"PATH": "/usr/bin", "PWD": "/work", "DATABASE_URL": "one", "TZ": "UTC"}
         binding = bindings.verification_environment_binding(execution, "t" * 32)
