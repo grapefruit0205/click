@@ -1,6 +1,8 @@
 # Release notes
 
-## Unreleased v1.2 candidate
+## v1.2.0 — 2026-09-13 — Claude Code on Windows
+
+Both marketplaces pin `v1.2.0`; updating v1.1.1 installs it.
 
 - Claude Code on Windows. The Claude Code package's Hook command is now
   `sh "${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh"`, a POSIX launcher that
