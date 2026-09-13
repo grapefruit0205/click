@@ -396,6 +396,7 @@ def parse_windows_etw(
     allow_workspace_root: bool = False,
     event_filter: Callable[[int, int | None, str, str | None, str | None], bool] | None = None,
     normalize_path: Callable[[str], str] | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> ParsedTrace:
     """Normalize bounded ETW XML into content-free repository inputs.
 
@@ -410,6 +411,12 @@ def parse_windows_etw(
     """
 
     documents = (raw,) if isinstance(raw, bytes) else tuple(raw)
+    unresolved_reasons: dict[str, int] = {}
+
+    def _note(reason: str) -> None:
+        # Counts only, for the caller's diagnostics; never paths or contents.
+        unresolved_reasons[reason] = unresolved_reasons.get(reason, 0) + 1
+
     # Process starts precede the file session's events in the collector's
     # document order, so the root's descendants are known before a file event
     # is retained. Events of unrelated processes are dropped as they stream
@@ -444,9 +451,9 @@ def parse_windows_etw(
 
     events, unresolved = _iter_events(documents, keep)
     if truncated:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("truncated")
     if not isinstance(root_pid, int) or isinstance(root_pid, bool) or root_pid <= 0:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("root-pid")
         root_pid = -1
     mappings = dict(device_paths or {})
     transparent_images: set[str] = set()
@@ -458,7 +465,7 @@ def parse_windows_etw(
                 )
             )
         except (TypeError, ValueError):
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("transparent-image")
     root_text = str(workspace)
     try:
         root = _canonical_windows_path(root_text, device_paths=mappings)
@@ -479,7 +486,7 @@ def parse_windows_etw(
             pid = _first_integer(fields, _PID_FIELDS)
             parent = _first_integer(fields, _PARENT_PID_FIELDS)
             if pid is None or parent is None or pid <= 0 or parent < 0:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("process-event")
                 continue
             parent_by_pid[pid] = parent
             image = _first_text(fields, _IMAGE_FIELDS)
@@ -545,7 +552,7 @@ def parse_windows_etw(
             if normalize_path is not None:
                 normalized = ntpath.normpath(str(normalize_path(normalized)))
         except ValueError:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("path-canonical")
             return
         normalized_case = ntpath.normcase(normalized)
         absolute = absolute_inputs.get(normalized_case)
@@ -556,7 +563,7 @@ def parse_windows_etw(
                 absolute_conflicts.add(normalized_case)
         elif absolute is None:
             if len(absolute_inputs) >= MAX_TRANSIENT_INPUTS:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("path-limit")
             else:
                 absolute = {
                     "path": normalized,
@@ -569,36 +576,36 @@ def parse_windows_etw(
         prefix = root_case + "\\"
         if normalized_case == root_case:
             if not allow_workspace_root:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("workspace-root")
             return
         if not normalized_case.startswith(prefix):
             try:
                 digest = hashlib.sha256(normalized_case.encode("utf-8")).hexdigest()
             except UnicodeEncodeError:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("external-encoding")
                 return
             if digest not in external_digests:
                 if len(external_digests) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
-                    unresolved = _bounded_add(unresolved, 1)
+                    unresolved = _bounded_add(unresolved, 1); _note("external-limit")
                 else:
                     external_digests.add(digest)
             return
         relative = normalized[len(root.rstrip("\\")) + 1 :].replace("\\", "/")
         if not relative or relative in {".", ".."} or relative.startswith("../"):
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("relative-shape")
             return
         relative_key = relative.rstrip("/")
         try:
             encoded = relative.encode("utf-8")
         except UnicodeEncodeError:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("relative-encoding")
             return
         if (
             len(encoded) > click_dependency_cache.MAX_SHADOW_OBSERVER_PATH_BYTES
             or "\\" in relative
             or any(ord(character) < 32 or ord(character) == 127 for character in relative)
         ):
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("relative-chars")
             return
         existing = inputs.get(relative_key)
         if existing is not None and existing["kind"] != kind:
@@ -610,7 +617,7 @@ def parse_windows_etw(
                 return
         if existing is None:
             if len(inputs) >= click_dependency_cache.MAX_SHADOW_OBSERVER_INPUTS:
-                unresolved = _bounded_add(unresolved, 1)
+                unresolved = _bounded_add(unresolved, 1); _note("inputs-limit")
                 return
             existing = {
                 "path": relative_key + "/" if kind == "directory" else relative_key,
@@ -633,7 +640,7 @@ def parse_windows_etw(
                 else:
                     candidate_case = ntpath.normcase(candidate)
                     if candidate_case.startswith(root_case + "\\"):
-                        unresolved = _bounded_add(unresolved, 1)
+                        unresolved = _bounded_add(unresolved, 1); _note("orphan-event")
             continue
         if pid not in descendants:
             continue
@@ -652,27 +659,27 @@ def parse_windows_etw(
         elif event_id in _IGNORED_FILE_EVENT_IDS:
             operation, kind = None, None
         else:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("unknown-event-id")
             continue
         if event_filter is not None and path and not event_filter(pid, event_id, path, kind, operation):
             continue
         if kind is None or operation is None:
             continue
         if not path:
-            unresolved = _bounded_add(unresolved, 1)
+            unresolved = _bounded_add(unresolved, 1); _note("missing-path")
             continue
         add_path(path, kind=kind, operation=operation)
 
     for relative in conflicts:
         inputs.pop(relative, None)
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("kind-conflict")
     for absolute in absolute_conflicts:
         absolute_inputs.pop(absolute, None)
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("absolute-conflict")
     if not root_exec_observed:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("root-exec")
     if root_execution_bound and not process_root_observed:
-        unresolved = _bounded_add(unresolved, 1)
+        unresolved = _bounded_add(unresolved, 1); _note("root-start")
     normalized_inputs = tuple(
         {
             "path": item["path"],
@@ -688,6 +695,8 @@ def parse_windows_etw(
         and not truncated
         and process_scope_complete
     )
+    if diagnostics is not None:
+        diagnostics["unresolved_reasons"] = dict(unresolved_reasons)
     return ParsedTrace(
         inputs=normalized_inputs,
         external_input_count=len(external_digests),

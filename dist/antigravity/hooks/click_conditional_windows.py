@@ -214,7 +214,7 @@ def project_capture(documents, *, project, cwd, directory, root_pid, device_path
     parsed = windows.parse_windows_etw(
         tuple(documents), workspace=Path(root), root_pid=root_pid, truncated=truncated,
         root_execution_bound=True, process_scope_complete=True, device_paths=mappings,
-        allow_workspace_root=True, event_filter=admit, normalize_path=long_name,
+        allow_workspace_root=True, event_filter=admit, normalize_path=long_name, diagnostics=report,
     )
     report.update({
         "started": state["started"], "dynamic": state["dynamic"], "unmapped": list(state["unmapped"]),
