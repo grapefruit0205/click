@@ -131,6 +131,14 @@ class VerificationBindingStageTests(unittest.TestCase):
         own = sorted(bindings._own_command_directories())[0]
         plugin_bin = str(Path(own))
         entries = ["/usr/local/bin", "/usr/bin", "/home/user/.local/bin"]
+
+        def spelled(*values: str) -> str:
+            # Windows entries are re-spelled to one canonical form (see
+            # test_windows_search_path_spellings_share_one_identity).
+            if os.name == "nt":
+                return os.pathsep.join(os.path.normcase(os.path.normpath(value)) for value in values)
+            return os.pathsep.join(values)
+
         # The Hook process sees a repeated entry; the tool call that runs the
         # verification sees Click's own command directory appended instead.
         hook = os.pathsep.join([*entries, "/usr/bin"])
@@ -139,18 +147,18 @@ class VerificationBindingStageTests(unittest.TestCase):
         self.assertEqual(
             bindings.normalized_search_path(hook), bindings.normalized_search_path(runner)
         )
-        self.assertEqual(bindings.normalized_search_path(hook), os.pathsep.join(entries))
+        self.assertEqual(bindings.normalized_search_path(hook), spelled(*entries))
         # Order and every distinct directory are preserved: a repeat can never
         # win over its first occurrence, so dropping it changes no resolution.
         self.assertEqual(
             bindings.normalized_search_path(os.pathsep.join(["/b", "/a", "/b"])),
-            os.pathsep.join(["/b", "/a"]),
+            spelled("/b", "/a"),
         )
         # Only the search path is normalized; other values stay verbatim.
         fingerprint = bindings.environment_fingerprint(
             {"PATH": hook, "TZ": "UTC" + os.pathsep + "UTC"}
         )
-        self.assertEqual(fingerprint["PATH"], os.pathsep.join(entries))
+        self.assertEqual(fingerprint["PATH"], spelled(*entries))
         self.assertEqual(fingerprint["TZ"], "UTC" + os.pathsep + "UTC")
         # A real directory difference still changes the identity.
         self.assertNotEqual(
