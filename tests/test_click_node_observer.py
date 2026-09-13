@@ -73,8 +73,8 @@ class RealNodeObservationTests(unittest.TestCase):
         self.assertFalse(self.record["reuse_authorized"])
         self.assertIn("engine-input-coverage-incomplete", self.record["reasons"])
         self.assertIsNotNone(controller.poll(), "observer process was stranded")
-        # The controller exits by itself once its FIFO writer is released;
-        # a terminated controller would report a signal exit instead.
+        # The controller exits by itself once it has reported; a terminated
+        # controller would report a signal exit instead.
         self.assertEqual(controller.returncode, 0, "observer process did not exit after reporting")
         self.assertFalse(Path(directory).exists(), "transient observer directory was retained")
         self.assertNotIn("ws://", json.dumps(self.record))

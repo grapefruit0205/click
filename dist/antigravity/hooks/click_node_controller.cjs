@@ -386,28 +386,42 @@ async function endpoint(value) {
   });
 }
 
+// Each target announces its inspector endpoint in `endpoint-<pid>.json`
+// (see click_node_bootstrap.mjs). Polling a directory needs no FIFO, socket
+// or pipe name, so the same transport serves every host. A file is consumed
+// once its single line is complete; a partial write is read again next tick.
+const ENDPOINT_FILE = /^endpoint-[0-9]+\.json$/;
+const consumed = new Set();
 let pendingInput = '';
-const input = fs.createReadStream(path.join(directory, 'endpoints.pipe'), { encoding: 'utf8' });
-input.on('data', chunk => {
-  pendingInput += chunk;
-  if (pendingInput.length > 65536) { failure('endpoint-limit'); pendingInput = ''; return; }
-  let newline;
-  while ((newline = pendingInput.indexOf('\n')) >= 0) {
-    const row = pendingInput.slice(0, newline); pendingInput = pendingInput.slice(newline + 1);
-    try { endpoint(JSON.parse(row)).catch(() => failure('session-setup-failed')); }
+function collectEndpoints() {
+  let names;
+  try { names = fs.readdirSync(directory); } catch { failure('endpoint-channel-failed'); return; }
+  for (const name of names) {
+    if (!ENDPOINT_FILE.test(name) || consumed.has(name)) continue;
+    const file = path.join(directory, name);
+    let row;
+    try { row = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    if (row.length > 65536) { consumed.add(name); failure('endpoint-limit'); continue; }
+    const newline = row.indexOf('\n');
+    if (newline < 0) { pendingInput = row; continue; }
+    consumed.add(name);
+    pendingInput = '';
+    try { fs.unlinkSync(file); } catch {}
+    try { endpoint(JSON.parse(row.slice(0, newline))).catch(() => failure('session-setup-failed')); }
     catch { failure('invalid-endpoint'); }
   }
-});
-input.on('error', () => failure('endpoint-channel-failed'));
+}
+const input = setInterval(collectEndpoints, 10);
 process.stdin.resume();
 async function stop() {
   if (stopping) return;
   stopping = true;
+  clearInterval(input);
+  collectEndpoints();
   if (pendingInput.trim()) failure('endpoint-truncated');
   if (!sessions.size) failure('no-runtime-session');
   if ([...sessions].some(session => !session.finished)) failure('session-completion-unobserved');
   await Promise.allSettled([...sessions].map(session => session.release()));
-  input.destroy();
   sendLine({ kind: 'result', counts, sessions: sessions.size, contexts, installed, completed,
     workers: workerCount, process_ids: [...processIds].sort((a,b) => a-b), values: valueRecords,
     reasons: [...reasons].sort() });

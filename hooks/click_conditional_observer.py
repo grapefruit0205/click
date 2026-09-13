@@ -59,7 +59,6 @@ ordinary inputs. No application read is removed because it is later written.
         return None
     root = Path(project).resolve()
     ready = str(Path(directory) / f"ready-{next(iter(tree.process_ids))}")
-    pipe = str(Path(directory) / "endpoints.pipe")
     started, lines = False, []
     for line in tree.trace.decode("utf-8", errors="strict").splitlines():
         _, call_line = linux._strip_pid(line.strip())
@@ -76,8 +75,6 @@ ordinary inputs. No application read is removed because it is later written.
             if linux._return_integer(result) == 0:
                 started = True
             continue
-        if path == pipe and call == "openat" and "O_WRONLY" in arguments:
-            continue
         # libc probes kernel statx availability with a null pointer. EFAULT
         # supplies no filesystem value and is not a missing path dependency.
         if call == "statx" and arguments.startswith("0, NULL,") and result.startswith("-1 EFAULT"):
@@ -89,7 +86,7 @@ ordinary inputs. No application read is removed because it is later written.
             # fixed output transport. Stdin and arbitrary descriptors do not.
             continue
         if path and path.startswith(str(directory) + "/") and call in linux._OPEN_CALLS and "O_WRONLY" in arguments:
-            continue  # the collector's own transport files, written by the bootstrap
+            continue  # the collector's own transport files (endpoint announcement, worker markers), written by the bootstrap
         if (path == "/proc/self/cgroup" or (path and re.fullmatch(r"/proc/[0-9]+/cgroup", path))
                 or (path and path.startswith("/sys/fs/cgroup/") and path.endswith(("/memory.high", "/memory.max")))):
             # libuv and V8 read the process cgroup and memory limits when the

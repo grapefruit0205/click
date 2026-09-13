@@ -125,7 +125,6 @@ class Collector:
         self.record = empty("unsupported-runtime")
         self.child = None
         self.location = None
-        self.descriptor = None
         self.messages = queue.Queue(maxsize=8)
         self.process_ids = set()
         self.runtime_path = None
@@ -157,10 +156,9 @@ class Collector:
             self.location = tempfile.TemporaryDirectory(prefix="click-node-inputs-")
             directory = Path(self.location.name)
             os.chmod(directory, 0o700)
-            fifo = directory / "endpoints.pipe"
-            os.mkfifo(fifo, 0o600)
-            # Keep a reader and writer open across short-lived forked processes.
-            self.descriptor = os.open(fifo, os.O_RDWR | os.O_NONBLOCK | os.O_CLOEXEC)
+            # Targets announce their inspector endpoints as files in this
+            # directory and the controller polls for them: one transport for
+            # every host, with no FIFO, socket or pipe name to manage.
             child_environment = {key: value for key, value in environment.items()
                                  if key not in {"NODE_OPTIONS", "CLICK_NODE_OBSERVER_DIRECTORY"}}
             self.child = click_process.spawn_argv([str(node), str(Path(__file__).with_name("click_node_controller.cjs")), str(directory),
@@ -241,18 +239,6 @@ class Collector:
                 self.child.stdin.close()
             except OSError:
                 pass
-        # The controller reads the FIFO through a blocking pool thread, and
-        # its exit joins that pool. Unlink first so a late target cannot
-        # block opening a reader-less FIFO, then release the last writer so
-        # the pending read returns EOF instead of outliving a 5s wait.
-        if self.location is not None:
-            try:
-                (Path(self.location.name) / "endpoints.pipe").unlink()
-            except OSError:
-                pass
-        if self.descriptor is not None:
-            os.close(self.descriptor)
-            self.descriptor = None
         if self.child is not None:
             try:
                 if self.child.poll() is None:
