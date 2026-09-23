@@ -47,6 +47,8 @@ reuse origin 계약을 복사하지 않습니다. 표시 데이터는 실행 권
 검증 요청의 `reporting`을 생략하면 v1 `raw`가 적용되어 기존 stdout/stderr 전달 동작을 유지합니다.
 `format: actionable`을 명시하면 원래 명령을 다시 실행하지 않고 그 한 번의 stdout/stderr에서
 unittest/pytest 실패 test id, 오류 종류, 안전한 파일/행, 핵심 메시지와 제한된 stack을 정리합니다.
+각 실패 아래에는 traceback이 테스트 frame과 실패 frame에 대해 출력한 코드 줄을 붙입니다(최대 2개
+frame, frame당 3줄, 같은 위치는 한 번). 이 줄은 캡처한 출력에서만 가져오며 파일을 읽지 않습니다.
 
 ```json
 {

@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 61009,
+ "stop_reason": "end_turn",
+ "session_id": "73a992b7-f220-4956-ab7b-dcfa111d5c67",
+ "total_cost_usd": 0.11609050000000001,
+ "usage": {
+  "input_tokens": 116,
+  "cache_creation_input_tokens": 24125,
+  "cache_read_input_tokens": 399645,
+  "output_tokens": 5552,
+  "output_tokens_details": {
+   "thinking_tokens": 2042
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 24125,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 10,
+    "output_tokens": 282,
+    "cache_read_input_tokens": 38417,
+    "cache_creation_input_tokens": 639,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 639
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-haiku-4-5-20251001": {
+   "inputTokens": 116,
+   "outputTokens": 5552,
+   "cacheReadInputTokens": 399645,
+   "cacheCreationInputTokens": 24125,
+   "webSearchRequests": 0,
+   "costUSD": 0.11609050000000001,
+   "contextWindow": 200000,
+   "maxOutputTokens": 32000,
+   "thinkingTokens": 2042,
+   "canonicalModel": "claude-haiku-4-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 16,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "Perfect! All tests are passing. Here are the files I changed:\n\n1. **ledger/gamma.py** \u2014 Added dash-collapsing regex to convert multiple consecutive dashes into single dashes (e.g., \"---\" \u2192 \"-\")\n\n2. **ledger/alpha.py** \u2014 Fixed pagination formula from `page * size` to `(page - 1) * size` to correctly implement 1-based page numbering\n\n3. **ledger/beta.py** \u2014 Implemented the largest-remainder method by calculating fractional parts and distributing leftover cents to shares with the largest fractional remainders\n\nAll test suites now pass.",
+ "ttft_ms": 2632,
+ "type": "result",
+ "duration_ms": 146056,
+ "uuid": "1e0889eb-7b23-4281-82ab-928fa31c8442",
+ "ttft_stream_ms": 1517,
+ "time_to_request_ms": 686,
+ "first_content_frame_ms": 1517,
+ "queued_turn_count": 0,
+ "result_index": 0
+}

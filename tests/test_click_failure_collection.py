@@ -184,6 +184,55 @@ class ClickFailureCollectionIntegrationTests(ClickGateTestCase):
             ["failed", "failed", "passed"],
         )
 
+    def test_each_collected_failure_shows_its_own_traceback_lines(self) -> None:
+        (self.workspace / "second_fixture.py").write_text(
+            "import unittest\n\n\n"
+            "def total(values):\n"
+            "    return sum(values) - 1\n\n\n"
+            "class SecondFixture(unittest.TestCase):\n"
+            "    def test_total(self):\n"
+            "        self.assertEqual(total([1, 2]), 3)\n",
+            encoding="utf-8",
+        )
+        self.prepare_git("second_fixture.py")
+        second = {
+            "evidence_id": "E2",
+            "argv": [
+                sys.executable,
+                "-m",
+                "unittest",
+                "second_fixture.SecondFixture.test_total",
+            ],
+            "class": "targeted",
+        }
+        completed, state = self.run_request(
+            [self.check("E1", 1), second],
+            policy=self.policy(["E1", "E2"], extra_sources=1, extra_failures=1),
+            request_id="collected-code-lines",
+        )
+        self.assertEqual(completed.returncode, 1)
+        combined = completed.stdout + completed.stderr
+        self.assertIn(
+            "    verification_fixture.py:8: self.fail('expected verification failure')",
+            combined,
+        )
+        self.assertIn("at second_fixture.py:10: AssertionError: 2 != 3", combined)
+        self.assertIn(
+            "    second_fixture.py:10: self.assertEqual(total([1, 2]), 3)", combined
+        )
+        records = state["verification"][click_diagnostics.STATE_FIELD]["records"]
+        self.assertEqual(
+            [
+                [
+                    (excerpt["file"], excerpt["line"])
+                    for failure in record["failures"]
+                    for excerpt in failure["code"]
+                ]
+                for record in records
+            ],
+            [[("verification_fixture.py", 8)], [("second_fixture.py", 10)]],
+        )
+
     def test_same_source_stops_after_its_first_failure(self) -> None:
         self.prepare_git()
         completed, state = self.run_request(

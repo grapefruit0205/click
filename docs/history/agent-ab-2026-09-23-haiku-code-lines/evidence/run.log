@@ -1,0 +1,24 @@
+[14:42:25] waiting for idle before 1/8 arm=A
+[14:46:45] start 1/8 arm=A gate={'waited_s': 260, 'other_cores_mean': 1.37, 'timed_out': False}
+[14:55:27] done  session-01-A: wall=452.6s turns=15 cost=$0.11659119999999999 exec=20 test_wall=327.1s via={'direct': 5, 'routed': 0, 'click-gate': 0} final_ok=True tests_touched=False rc=0 other_cores_mean=1.08
+[14:55:27] waiting for idle before 2/8 arm=B
+[14:56:29] start 2/8 arm=B gate={'waited_s': 62, 'other_cores_mean': 0.7, 'timed_out': False}
+[15:02:10] done  session-02-B: wall=275.2s turns=17 cost=$0.11706600000000002 exec=10 test_wall=86.4s via={'direct': 0, 'routed': 1, 'click-gate': 5} final_ok=True tests_touched=False rc=0 other_cores_mean=1.11
+[15:02:10] waiting for idle before 3/8 arm=B
+[15:03:12] start 3/8 arm=B gate={'waited_s': 61, 'other_cores_mean': 0.85, 'timed_out': False}
+[15:06:44] done  session-03-B: wall=145.5s turns=16 cost=$0.12462859999999999 exec=10 test_wall=68.3s via={'direct': 0, 'routed': 1, 'click-gate': 4} final_ok=True tests_touched=False rc=0 other_cores_mean=1.14
+[15:06:44] waiting for idle before 4/8 arm=A
+[15:07:45] start 4/8 arm=A gate={'waited_s': 61, 'other_cores_mean': 1.26, 'timed_out': False}
+[15:14:05] done  session-04-A: wall=314.5s turns=15 cost=$0.11739380000000002 exec=16 test_wall=252.2s via={'direct': 4, 'routed': 0, 'click-gate': 0} final_ok=True tests_touched=False rc=0 other_cores_mean=1.15
+[15:14:05] waiting for idle before 5/8 arm=A
+[15:15:07] start 5/8 arm=A gate={'waited_s': 61, 'other_cores_mean': 1.21, 'timed_out': False}
+[15:23:26] done  session-05-A: wall=437.9s turns=18 cost=$0.14240299999999997 exec=24 test_wall=367.8s via={'direct': 6, 'routed': 0, 'click-gate': 0} final_ok=True tests_touched=False rc=0 other_cores_mean=1.65
+[15:23:26] waiting for idle before 6/8 arm=B
+[15:26:46] start 6/8 arm=B gate={'waited_s': 200, 'other_cores_mean': 1.44, 'timed_out': False}
+[15:30:16] done  session-06-B: wall=150.0s turns=16 cost=$0.11609050000000001 exec=10 test_wall=71.7s via={'direct': 0, 'routed': 2, 'click-gate': 3} final_ok=True tests_touched=False rc=0 other_cores_mean=1.88
+[15:30:16] waiting for idle before 7/8 arm=B
+[15:42:04] start 7/8 arm=B gate={'waited_s': 707, 'other_cores_mean': 1.49, 'timed_out': False}
+[15:45:43] done  session-07-B: wall=173.7s turns=20 cost=$0.1561977 exec=11 test_wall=80.6s via={'direct': 0, 'routed': 6, 'click-gate': 0} final_ok=True tests_touched=False rc=0 other_cores_mean=1.8
+[15:45:43] waiting for idle before 8/8 arm=A
+[15:46:55] start 8/8 arm=A gate={'waited_s': 71, 'other_cores_mean': 1.47, 'timed_out': False}
+[15:53:14] done  session-08-A: wall=325.7s turns=17 cost=$0.12928520000000002 exec=20 test_wall=247.5s via={'direct': 5, 'routed': 0, 'click-gate': 0} final_ok=True tests_touched=False rc=0 other_cores_mean=1.45

@@ -1,0 +1,47 @@
+earlier: claude-haiku-4-5-20251001 plugin=8d4ec6161b5de046 order=ABBAABBA 2.1.280 (Claude Code)
+this: claude-haiku-4-5-20251001 plugin=c03bef67624328e5 order=ABBAABBA 2.1.280 (Claude Code)
+
+median (min–max)                 earlier click-off        earlier click-on          this click-off           this click-on
+Bash                                    6.5 (4–10)                8 (5–11)                 7 (5–7)               6.5 (6–7)
+Read                                       4 (3–5)                 7 (7–8)                 5 (3–6)                 6 (6–7)
+Edit                                       4 (3–4)               5.5 (5–6)                 4 (3–5)                 3 (3–5)
+MultiEdit                                  0 (0–0)                 0 (0–0)                 0 (0–0)                 0 (0–0)
+Write                                      0 (0–0)                 0 (0–0)                 0 (0–0)                 0 (0–0)
+Glob                                       0 (0–0)                 0 (0–0)                 0 (0–0)                 0 (0–0)
+Grep                                       0 (0–0)                 0 (0–0)                 0 (0–0)                 0 (0–0)
+tool calls                            14.5 (11–18)            20.5 (18–24)              15 (14–17)            15.5 (15–19)
+test-file reads                            1 (0–2)                 3 (3–4)               1.5 (0–3)                 3 (3–3)
+distinct test files read                   1 (0–2)                 3 (3–4)               1.5 (0–3)                 3 (3–3)
+source reads                               3 (3–3)                 4 (4–4)                 3 (3–4)                 3 (3–4)
+python3 -c probes                          0 (0–2)                 2 (0–2)                 0 (0–0)                 0 (0–0)
+test requests                            5.5 (3–7)                 5 (4–8)                 5 (4–6)               5.5 (5–6)
+other Bash                                 1 (1–1)                 1 (1–1)               1.5 (1–2)                 1 (1–1)
+edits of ledger/beta.py                    2 (1–2)               3.5 (3–4)                 2 (1–3)                 1 (1–3)
+turns                                 15.5 (12–19)            21.5 (19–25)              16 (15–18)            16.5 (16–20)
+session wall s                 398.8 (251.9–458.6)     189.5 (142.4–200.4)     381.8 (314.5–452.6)     161.8 (145.5–275.2)
+API retry backoff s                        0 (0–0)                 0 (0–0)                 0 (0–0)              0 (0–74.3)
+test wall s                      331.1 (200.6–395)        87.4 (52.2–89.2)     289.6 (247.5–367.8)        76.2 (68.3–86.4)
+cost USD                       0.124 (0.094–0.139)     0.163 (0.141–0.176)     0.123 (0.117–0.142)     0.121 (0.116–0.156)
+output tokens                     5488 (4329–6375)        7375 (6894–7891)      5671.5 (5322–6114)      5478.5 (5310–6757)
+
+per session: tool calls (Bash/Read/Edit), test-file reads, probes, beta edits, turns, API retry backoff:
+  earlier click-off:
+    session-01-A: 14 (7/3/4) · tests read 0 · probes 0 · beta edits 2 · turns 15 · retry backoff 0.0 s
+    session-04-A: 15 (6/5/4) · tests read 2 · probes 0 · beta edits 2 · turns 16 · retry backoff 0.0 s
+    session-05-A: 11 (4/4/3) · tests read 1 · probes 0 · beta edits 1 · turns 12 · retry backoff 0.0 s
+    session-08-A: 18 (10/4/4) · tests read 1 · probes 2 · beta edits 2 · turns 19 · retry backoff 0.0 s
+  earlier click-on:
+    session-02-B: 18 (5/8/5) · tests read 4 · probes 0 · beta edits 3 · turns 19 · retry backoff 0.0 s
+    session-03-B: 20 (8/7/5) · tests read 3 · probes 2 · beta edits 3 · turns 21 · retry backoff 0.0 s
+    session-06-B: 21 (8/7/6) · tests read 3 · probes 2 · beta edits 4 · turns 22 · retry backoff 0.0 s
+    session-07-B: 24 (11/7/6) · tests read 3 · probes 2 · beta edits 4 · turns 25 · retry backoff 0.0 s
+  this click-off:
+    session-01-A: 14 (7/3/4) · tests read 0 · probes 0 · beta edits 2 · turns 15 · retry backoff 0.0 s
+    session-04-A: 14 (5/4/5) · tests read 0 · probes 0 · beta edits 3 · turns 15 · retry backoff 0.0 s
+    session-05-A: 17 (7/6/4) · tests read 3 · probes 0 · beta edits 2 · turns 18 · retry backoff 0.0 s
+    session-08-A: 16 (7/6/3) · tests read 3 · probes 0 · beta edits 1 · turns 17 · retry backoff 0.0 s
+  this click-on:
+    session-02-B: 16 (7/6/3) · tests read 3 · probes 0 · beta edits 1 · turns 17 · retry backoff 74.3 s
+    session-03-B: 15 (6/6/3) · tests read 3 · probes 0 · beta edits 1 · turns 16 · retry backoff 0.0 s
+    session-06-B: 15 (6/6/3) · tests read 3 · probes 0 · beta edits 1 · turns 16 · retry backoff 0.0 s
+    session-07-B: 19 (7/7/5) · tests read 3 · probes 0 · beta edits 3 · turns 20 · retry backoff 0.0 s

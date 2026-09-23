@@ -154,6 +154,365 @@ class ClickDiagnosticsTests(unittest.TestCase):
             all(item["failure_kind"] == "test-failure" for item in record["failures"])
         )
 
+    def unittest_output(self, *sections: str) -> bytes:
+        separator = "=" * 70 + "\n"
+        rule = "-" * 70 + "\n"
+        return (
+            "".join(separator + section for section in sections)
+            + rule
+            + f"Ran {len(sections)} tests in 0.001s\n\nFAILED (failures={len(sections)})\n"
+        ).encode()
+
+    def test_unittest_summary_carries_the_code_line_the_traceback_printed(self) -> None:
+        # The file on disk holds other text: the line comes from the output.
+        path = self.workspace / "tests" / "test_widget.py"
+        record = self.record(
+            self.unittest_output(
+                "FAIL: test_first_page (tests.test_widget.PageTests.test_first_page)\n"
+                + "-" * 70 + "\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{path}", line 2, in test_first_page\n'
+                "    self.assertEqual(paginate(list(range(10)), 1, 3), [0, 1, 2])\n"
+                "AssertionError: Lists differ: [3, 4, 5] != [0, 1, 2]\n\n"
+                "First differing element 0:\n3\n0\n\n"
+                "- [3, 4, 5]\n+ [0, 1, 2]\n?  +\n\n"
+            )
+        )
+        failure = record["failures"][0]
+        # The exception line, not the last line of assertEqual's diff.
+        self.assertEqual(failure["message"], "Lists differ: [3, 4, 5] != [0, 1, 2]")
+        self.assertEqual(
+            failure["code"],
+            [
+                {
+                    "file": "tests/test_widget.py",
+                    "line": 2,
+                    "lines": [
+                        "self.assertEqual(paginate(list(range(10)), 1, 3), [0, 1, 2])"
+                    ],
+                }
+            ],
+        )
+        self.assertEqual(
+            click_diagnostics.render_actionable(record).splitlines()[1:3],
+            [
+                "- tests.test_widget.PageTests.test_first_page at "
+                "tests/test_widget.py:2: AssertionError: "
+                "Lists differ: [3, 4, 5] != [0, 1, 2]",
+                "    tests/test_widget.py:2: "
+                "self.assertEqual(paginate(list(range(10)), 1, 3), [0, 1, 2])",
+            ],
+        )
+
+    def test_error_in_project_code_shows_the_test_line_and_the_failing_line(self) -> None:
+        test = self.workspace / "tests" / "test_widget.py"
+        widget = self.workspace / "widget.py"
+        widget.write_text("def parse(text):\n    return decode(text)\n", encoding="utf-8")
+        library = Path(self.temporary.name) / "lib" / "decoder.py"
+        record = self.record(
+            self.unittest_output(
+                "ERROR: test_parse (tests.test_widget.WidgetTests.test_parse)\n"
+                + "-" * 70 + "\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{test}", line 2, in test_parse\n'
+                '    widget.parse("{not json")\n'
+                f'  File "{widget}", line 11, in parse\n'
+                "    return decode(text)\n"
+                "           ^^^^^^^^^^^^\n"
+                f'  File "{library}", line 353, in raw_decode\n'
+                "    obj, end = self.scan_once(s, idx)\n"
+                "               ^^^^^^^^^^^^^^^^^^^^^^\n"
+                "json.decoder.JSONDecodeError: Expecting value: line 1 column 2 (char 1)\n\n"
+            )
+        )
+        failure = record["failures"][0]
+        self.assertEqual((failure["file"], failure["line"]), ("widget.py", 11))
+        self.assertEqual(failure["error_type"], "ERROR")
+        # An error keeps its exception type in the message.
+        self.assertEqual(
+            failure["message"],
+            "json.decoder.JSONDecodeError: Expecting value: line 1 column 2 (char 1)",
+        )
+        self.assertEqual(
+            failure["code"],
+            [
+                {"file": "tests/test_widget.py", "line": 2, "lines": ['widget.parse("{not json")']},
+                {"file": "widget.py", "line": 11, "lines": ["return decode(text)"]},
+            ],
+        )
+        # A frame outside the workspace never contributes code.
+        self.assertNotIn("scan_once", json.dumps(record))
+        self.assertEqual(
+            click_diagnostics.render_actionable(record).splitlines()[2:4],
+            [
+                '    tests/test_widget.py:2: widget.parse("{not json")',
+                "    widget.py:11: return decode(text)",
+            ],
+        )
+
+    def test_chained_error_uses_the_last_traceback_and_skips_installed_frames(self) -> None:
+        test = self.workspace / "tests" / "test_widget.py"
+        widget = self.workspace / "widget.py"
+        widget.write_text("", encoding="utf-8")
+        installed = self.workspace / ".venv" / "lib" / "site-packages" / "yaml" / "reader.py"
+        installed.parent.mkdir(parents=True)
+        installed.write_text("", encoding="utf-8")
+        record = self.record(
+            self.unittest_output(
+                "ERROR: test_load (tests.test_widget.WidgetTests.test_load)\n"
+                + "-" * 70 + "\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{widget}", line 3, in load\n'
+                "    return yaml.load(text)\n"
+                f'  File "{installed}", line 40, in load\n'
+                "    raise ReaderError(position)\n"
+                "yaml.reader.ReaderError: unacceptable character\n\n"
+                "The above exception was the direct cause of the following exception:\n\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{test}", line 2, in test_load\n'
+                '    widget.load("\\x00")\n'
+                f'  File "{widget}", line 5, in load\n'
+                '    raise ConfigError("unreadable config") from error\n'
+                "widget.ConfigError: unreadable config\n\n"
+            )
+        )
+        failure = record["failures"][0]
+        self.assertEqual((failure["file"], failure["line"]), ("widget.py", 5))
+        self.assertEqual(failure["message"], "widget.ConfigError: unreadable config")
+        self.assertEqual(
+            [(item["file"], item["line"]) for item in failure["code"]],
+            [("tests/test_widget.py", 2), ("widget.py", 5)],
+        )
+        self.assertNotIn("site-packages", json.dumps(failure))
+
+    def test_buffered_output_after_the_traceback_is_not_the_failure(self) -> None:
+        path = self.workspace / "tests" / "test_widget.py"
+        widget = self.workspace / "widget.py"
+        widget.write_text("", encoding="utf-8")
+        record = self.record(
+            self.unittest_output(
+                "FAIL: test_retry (tests.test_widget.RetryTests.test_retry)\n"
+                + "-" * 70 + "\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{path}", line 2, in test_retry\n'
+                "    self.assertEqual(fetch(), 'ok')\n"
+                "AssertionError: 'timeout' != 'ok'\n"
+                "- timeout\n+ ok\n\n\n"
+                # `python -m unittest -b` output a logged exception here.
+                "Stderr:\n"
+                "ERROR:root:attempt 1 failed\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{widget}", line 9, in fetch\n'
+                "    return session.get(url)\n"
+                "TimeoutError: timed out\n"
+            )
+        )
+        failure = record["failures"][0]
+        self.assertEqual(failure["message"], "'timeout' != 'ok'")
+        self.assertEqual((failure["file"], failure["line"]), ("tests/test_widget.py", 2))
+        self.assertEqual(
+            [(item["file"], item["line"]) for item in failure["code"]],
+            [("tests/test_widget.py", 2)],
+        )
+
+    def test_subtests_keep_the_test_name_and_repeat_no_code_line(self) -> None:
+        path = self.workspace / "tests" / "test_widget.py"
+        frame = (
+            "Traceback (most recent call last):\n"
+            f'  File "{path}", line 2, in test_sum\n'
+            "    self.assertEqual(sum(allocate(total)), total)\n"
+        )
+        record = self.record(
+            self.unittest_output(
+                # Python 3.10 prints `(module.Class)` without the method.
+                "FAIL: test_sum (tests.test_widget.SumTests) (total=10)\n"
+                + "-" * 70 + "\n" + frame + "AssertionError: 9 != 10\n\n",
+                "FAIL: test_sum (tests.test_widget.SumTests.test_sum) [split] (total=11)\n"
+                + "-" * 70 + "\n" + frame + "AssertionError: 9 != 11\n\n",
+            )
+        )
+        self.assertEqual(
+            [failure["test_id"] for failure in record["failures"]],
+            [
+                "tests.test_widget.SumTests.test_sum (total=10)",
+                "tests.test_widget.SumTests.test_sum [split] (total=11)",
+            ],
+        )
+        self.assertEqual(
+            [failure["message"] for failure in record["failures"]],
+            ["9 != 10", "9 != 11"],
+        )
+        rendered = click_diagnostics.render_actionable(record)
+        self.assertEqual(
+            rendered.count("self.assertEqual(sum(allocate(total)), total)"), 1
+        )
+
+    def test_code_lines_are_bounded_and_redacted(self) -> None:
+        path = self.workspace / "tests" / "test_widget.py"
+        # Python 3.13+ prints every line of a multi-line statement.
+        record = self.record(
+            self.unittest_output(
+                "FAIL: test_config (tests.test_widget.ConfigTests.test_config)\n"
+                + "-" * 70 + "\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{path}", line 2, in test_config\n'
+                "    self.assertEqual(\n"
+                "    ~~~~~~~~~~~~~~~~^\n"
+                '        load(password="example-private-value"),\n'
+                "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
+                f"        {{'mode': {'x' * 300!r}}},\n"
+                "    )\n"
+                "AssertionError: {'mode': 'y'} != {'mode': 'x'}\n\n"
+            )
+        )
+        [excerpt] = record["failures"][0]["code"]
+        lines = excerpt["lines"]
+        self.assertEqual(len(lines), click_diagnostics.MAX_CODE_LINES)
+        self.assertEqual(lines[:2], ["self.assertEqual(", "load(password=<redacted>,"])
+        self.assertTrue(lines[-1].endswith("…"))
+        self.assertTrue(
+            all(len(line) <= click_diagnostics.MAX_CODE_CHARS for line in lines)
+        )
+        self.assertNotIn("example-private-value", json.dumps(record))
+        self.assertNotIn("~~~", json.dumps(record))
+
+    def test_pytest_failures_each_carry_their_own_location_and_code(self) -> None:
+        (self.workspace / "widget.py").write_text("", encoding="utf-8")
+        summary = (
+            "=========================== short test summary info ============================\n"
+            "FAILED tests/test_widget.py::test_total - assert [33, 33, 33] == [34, 33,...\n"
+            "FAILED tests/test_widget.py::TestSplit::test_empty - ValueError: weights must...\n"
+            "========================= 2 failed, 1 passed in 0.03s ==========================\n"
+        )
+        header = (
+            "=================================== FAILURES ===================================\n"
+            "__________________________________ test_total __________________________________\n"
+        )
+        second = "_____________________________ TestSplit.test_empty _____________________________\n"
+        # pytest 9.1.1 output for the same two failures in three --tb styles.
+        outputs = {
+            "auto": header
+            + "\n    def test_total():\n"
+            ">       assert allocate(100, [1, 1, 1]) == [34, 33, 33]\n"
+            "E       assert [33, 33, 33] == [34, 33, 33]\n"
+            "E         \n"
+            "E         At index 0 diff: 33 != 34\n\n"
+            "tests/test_widget.py:6: AssertionError\n"
+            + second
+            + "\nself = <test_widget.TestSplit object at 0x7f3a2c1d0e50>\n\n"
+            "    def test_empty(self):\n"
+            ">       split(10, [])\n\n"
+            "tests/test_widget.py:10: \n"
+            + "_ " * 40 + "\n\n"
+            "total = 10, weights = []\n\n"
+            "    def split(total, weights):\n"
+            "        if not weights:\n"
+            '>           raise ValueError("weights must not be empty")\n'
+            "E           ValueError: weights must not be empty\n\n"
+            "widget.py:6: ValueError\n"
+            + summary,
+            "short": header
+            + "tests/test_widget.py:6: in test_total\n"
+            "    assert allocate(100, [1, 1, 1]) == [34, 33, 33]\n"
+            "E   assert [33, 33, 33] == [34, 33, 33]\n"
+            "E     \n"
+            "E     At index 0 diff: 33 != 34\n"
+            + second
+            + "tests/test_widget.py:10: in test_empty\n"
+            "    split(10, [])\n"
+            "widget.py:6: in split\n"
+            '    raise ValueError("weights must not be empty")\n'
+            "E   ValueError: weights must not be empty\n"
+            + summary,
+            "native": header
+            + "Traceback (most recent call last):\n"
+            f'  File "{self.temporary.name}/lib/_pytest/python.py", line 167, in pytest_pyfunc_call\n'
+            "    result = testfunction(**testargs)\n"
+            "             ^^^^^^^^^^^^^^^^^^^^^^^^\n"
+            f'  File "{self.workspace}/tests/test_widget.py", line 6, in test_total\n'
+            "    assert allocate(100, [1, 1, 1]) == [34, 33, 33]\n"
+            "AssertionError: assert [33, 33, 33] == [34, 33, 33]\n"
+            "  \n"
+            "  At index 0 diff: 33 != 34\n"
+            + second
+            + "Traceback (most recent call last):\n"
+            f'  File "{self.workspace}/tests/test_widget.py", line 10, in test_empty\n'
+            "    split(10, [])\n"
+            f'  File "{self.workspace}/widget.py", line 6, in split\n'
+            '    raise ValueError("weights must not be empty")\n'
+            "ValueError: weights must not be empty\n"
+            + summary,
+        }
+        for style, output in outputs.items():
+            with self.subTest(style=style):
+                record = self.record(
+                    output.encode(),
+                    argv=[sys.executable, "-m", "pytest", "tests"],
+                )
+                self.assertEqual(
+                    [
+                        (
+                            failure["test_id"],
+                            failure["message"],
+                            failure["file"],
+                            failure["line"],
+                            [(item["file"], item["line"], item["lines"]) for item in failure["code"]],
+                        )
+                        for failure in record["failures"]
+                    ],
+                    [
+                        (
+                            "tests/test_widget.py::test_total",
+                            # Whole, where the summary line was cut to fit.
+                            "assert [33, 33, 33] == [34, 33, 33]",
+                            "tests/test_widget.py",
+                            6,
+                            [
+                                (
+                                    "tests/test_widget.py",
+                                    6,
+                                    ["assert allocate(100, [1, 1, 1]) == [34, 33, 33]"],
+                                )
+                            ],
+                        ),
+                        (
+                            "tests/test_widget.py::TestSplit::test_empty",
+                            "ValueError: weights must not be empty",
+                            "widget.py",
+                            6,
+                            [
+                                ("tests/test_widget.py", 10, ["split(10, [])"]),
+                                ("widget.py", 6, ['raise ValueError("weights must not be empty")']),
+                            ],
+                        ),
+                    ],
+                )
+
+    def test_progress_report_carries_the_code_lines(self) -> None:
+        path = self.workspace / "tests" / "test_widget.py"
+        record = self.record(
+            self.unittest_output(
+                "FAIL: test_widget (tests.test_widget.WidgetTests.test_widget)\n"
+                + "-" * 70 + "\n"
+                "Traceback (most recent call last):\n"
+                f'  File "{path}", line 2, in test_widget\n'
+                "    assert False\n"
+                "AssertionError\n\n"
+            )
+        )
+        verification: dict = {"last_batch_digest": "b" * 64}
+        click_diagnostics.store_record(
+            verification, record, click_diagnostics.default_reporting()
+        )
+        report = click_diagnostics.enrich_progress(
+            {"summary": {}, "checks": []}, {"verification": verification}
+        )["actionable_report"]
+        self.assertEqual(report["failures"][0]["message"], "AssertionError")
+        self.assertEqual(
+            report["failures"][0]["code"],
+            [{"file": "tests/test_widget.py", "line": 2, "lines": ["assert False"]}],
+        )
+
     def test_framework_recognizes_windows_python_and_launcher_commands(self) -> None:
         self.assertEqual(
             click_diagnostics._framework(
@@ -426,6 +785,46 @@ class ClickDiagnosticRunnerIntegrationTests(ClickGateTestCase):
         self.assertFalse(click_diagnostics.supports_actionable(["git", "diff", "--check"]))
         self.assertTrue(click_diagnostics.reporting_was_omitted(json.dumps(request)))
         self.assertFalse(click_diagnostics.reporting_was_omitted(json.dumps(explicit)))
+
+    def test_routed_check_summary_shows_the_lines_the_traceback_printed(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        (self.workspace / "widget.py").write_text(
+            "def split(total, weights):\n"
+            "    if not weights:\n"
+            "        raise ValueError('weights must not be empty')\n"
+            "    return [total // len(weights)] * len(weights)\n",
+            encoding="utf-8",
+        )
+        (self.workspace / "widget_test.py").write_text(
+            "import unittest\n\n"
+            "import widget\n\n\n"
+            "class WidgetTests(unittest.TestCase):\n"
+            "    def test_split_evenly(self):\n"
+            "        self.assertEqual(widget.split(100, [1, 1, 1]), [34, 33, 33])\n\n"
+            "    def test_empty_weights(self):\n"
+            "        widget.split(10, [])\n",
+            encoding="utf-8",
+        )
+        self.initialize_git(".gitignore", "verification_fixture.py", "widget.py", "widget_test.py")
+        self.prompt_submit("Evidence 검증", "turn-1")
+        # The plain command an agent types; Evidence routes it through Click.
+        command = shlex.join([sys.executable, "-m", "unittest", "widget_test"])
+        routed = self.pre_tool(
+            "Bash", command, "turn-1", submit_prompt=False, tool_use_id="routed-failure"
+        )
+        assert routed is not None
+        completed = self.run_rewritten(routed)
+        self.assertEqual(completed.returncode, 1)
+        combined = completed.stdout + completed.stderr
+        self.assertNotIn("Traceback (most recent call last)", combined)
+        for expected in (
+            "at widget_test.py:8: AssertionError: Lists differ: [33, 33, 33] != [34, 33, 33]",
+            "    widget_test.py:8: self.assertEqual(widget.split(100, [1, 1, 1]), [34, 33, 33])",
+            "at widget.py:3: ERROR: ValueError: weights must not be empty",
+            "    widget_test.py:11: widget.split(10, [])",
+            "    widget.py:3: raise ValueError('weights must not be empty')",
+        ):
+            self.assertIn(expected, combined)
 
     def test_reuse_reports_output_the_host_did_not_read_again(self) -> None:
         (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
