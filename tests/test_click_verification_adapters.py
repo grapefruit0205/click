@@ -210,5 +210,59 @@ class VerificationAdapterContractTests(unittest.TestCase):
         )
 
 
+class AutoRouteTests(unittest.TestCase):
+    """Which plain Bash commands Evidence mode runs through `click-gate verify`."""
+
+    def test_checks_route_and_keep_their_own_output_filters_verbatim(self) -> None:
+        unittest_discover = ["python3", "-m", "unittest", "discover", "-s", "tests"]
+        cases = {
+            "python3 -m unittest discover -s tests": (unittest_discover, ""),
+            "python3 -m pytest -q 2>&1 | tail -5": (["python3", "-m", "pytest", "-q"], "2>&1 | tail -5"),
+            "pytest -q 2>&1": (["pytest", "-q"], "2>&1"),
+            "pytest -q |& tail -20": (["pytest", "-q"], "|& tail -20"),
+            "pytest -k 'a or (b)'": (["pytest", "-k", "a or (b)"], ""),
+            "pytest 'x>y' 2>&1 | tail -3": (["pytest", "x>y"], "2>&1 | tail -3"),
+            # The forms an unguided agent typed in docs/history/agent-ab-2026-09-12,
+            # with the filter's own quoting preserved.
+            'python3 -m unittest discover -s tests 2>&1 | grep -E "^(FAIL|ERROR):|^Ran" '
+            "| sed 's/ (total.*//' | sort | uniq -c": (
+                unittest_discover,
+                '2>&1 | grep -E "^(FAIL|ERROR):|^Ran" | sed \'s/ (total.*//\' | sort | uniq -c',
+            ),
+            'npx vitest run | grep "$PATTERN"': (["npx", "vitest", "run"], '| grep "$PATTERN"'),
+            # Every check Click recognizes, including ones that may write the
+            # tree: a write is recorded as a host change, not a failure.
+            "npm test": (["npm", "test"], ""),
+            "npm run build 2>&1 | tail -20": (["npm", "run", "build"], "2>&1 | tail -20"),
+            "python3 -m coverage run -m pytest": (
+                ["python3", "-m", "coverage", "run", "-m", "pytest"], ""
+            ),
+            "jest -u": (["jest", "-u"], ""),
+            "go test ./...": (["go", "test", "./..."], ""),
+            "cargo check": (["cargo", "check"], ""),
+        }
+        for command, expected in cases.items():
+            with self.subTest(command=command):
+                self.assertEqual(click_verification_plan.auto_route_argv(command), expected)
+
+    def test_anything_the_argv_runner_would_not_reproduce_stays_with_the_host(self) -> None:
+        for command in (
+            # Not a check Click recognizes.
+            "ls -la", "python3 -m http.server", "python3 script.py",
+            # Shell semantics the argv runner has no equivalent for.
+            "FOO=1 pytest", "pytest $ARGS", "pytest tests/test_*.py", "cd app && pytest",
+            "pytest; ls", "pytest || true", "pytest &", "pytest > out.txt", "pytest 2>/dev/null",
+            "pytest 2 >&1", "pytest 2>&1 | tail -3 > f", "pytest |", "pytest\nls",
+            # Filters run under the same host decision as the check, so none
+            # may write a file, run a command, or read another input.
+            "pytest | tee log", "pytest | awk '{print $1}'", "pytest | xargs rm",
+            'pytest | grep "$(rm x)"', "pytest | grep `x`", "pytest | sed -i s/a/b/ f",
+            "pytest | sed s/a/b/ file.txt", "pytest | sed 's/a/b/w out'", "pytest | sed 's/a/b/e'",
+            "pytest | sed -e s/a/b/ file", "pytest | uniq in out", "pytest | cat file",
+            "pytest | sort -o f",
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(click_verification_plan.auto_route_argv(command))
+
 if __name__ == "__main__":
     unittest.main()

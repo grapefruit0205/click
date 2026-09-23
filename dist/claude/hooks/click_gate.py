@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import shutil
 import stat
 import subprocess
@@ -506,7 +507,7 @@ def _record_evidence_completion(event: dict[str, Any], raw: str) -> tuple[str, s
 
 
 def _prepare_verification(
-    event: dict[str, Any], raw: str
+    event: dict[str, Any], raw: str, *, host_routed: bool = False
 ) -> tuple[str, str, str]:
     return click_verification.prepare(
         event,
@@ -515,7 +516,52 @@ def _prepare_verification(
         render_command=click_runner_transport.render_runner_shell_command,
         git_workspace_snapshot=click_verification.git_workspace_snapshot,
         git_capture=click_verification.git_capture,
+        host_routed=host_routed,
     )
+
+
+AUTO_ROUTE_DISABLED = frozenset({"0", "false", "off", "no"})
+
+
+def _auto_route_check(event: dict[str, Any], tool_input: object, command: str) -> bool:
+    """Run a plain check command from the host through Click's verify runner.
+
+    The runner is the one `click-gate verify -- <argv>` produces, with the same
+    `allow`: on Claude Code that skips the permission prompt and a `dontAsk`
+    allowlist (deny and ask rules still apply), which the agent could already
+    obtain by typing the Click form. The command's own `2>&1` and output
+    filters follow the runner unchanged, with raw reporting so they see the
+    format they were written for. A check that writes the tree is recorded as
+    a host change rather than a failed verification. Anything Click cannot
+    prepare falls back to the host running the command unchanged, so routing
+    never blocks work. An agent that ignores the Evidence directive still gets
+    receipts and reuse; `CLICK_AUTO_ROUTE=0` turns routing off.
+    """
+    if os.environ.get("CLICK_AUTO_ROUTE", "").strip().lower() in AUTO_ROUTE_DISABLED:
+        return False
+    if isinstance(tool_input, dict) and tool_input.get("run_in_background") is True:
+        return False
+    routed = click_verification.auto_route_argv(command)
+    if routed is None:
+        return False
+    argv, suffix = routed
+    request = click_lifecycle.verify_request_for_argv(argv)
+    if "|" in suffix:
+        request["reporting"] = click_diagnostics.default_reporting()
+    rewritten, error, advisory = _prepare_verification(
+        event, json.dumps(request, sort_keys=True), host_routed=True
+    )
+    if error:
+        return False
+    note = (
+        f"Click advisory: this check runs as `click-gate verify -- {shlex.join(argv)}`; "
+        "its result line says whether it ran or reused a receipt."
+    )
+    _allow_rewritten_with_advisory(
+        f"{rewritten} {suffix}" if suffix else rewritten,
+        "\n".join(filter(None, (note, advisory))),
+    )
+    return True
 
 
 def _prune_json_reports(root: Path, report_path: Path) -> None:
@@ -1357,6 +1403,8 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 "Click blocked mutation while its exact Evidence verification runner is "
                 "active. Wait for that bound result before changing the revision."
             )
+            return
+        if tool_name == "Bash" and _auto_route_check(event, tool_input, str(command)):
             return
         mutation_error = _mark_contract_mutated(event)
         if mutation_error:

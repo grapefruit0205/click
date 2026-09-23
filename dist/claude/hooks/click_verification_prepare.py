@@ -437,6 +437,7 @@ def _prepare_verification(
     render_command: Callable[[list[str]], str],
     git_workspace_snapshot: Callable[..., dict[str, Any] | None] = _git_workspace_snapshot,
     git_capture: Callable[[Path, list[str]], bytes | None] = _git_capture,
+    host_routed: bool = False,
 ) -> tuple[str, str, str]:
     # A preparation hook and its runner are different processes. Measure their
     # local elapsed segments, not a subtraction of cross-process clock origins.
@@ -449,7 +450,7 @@ def _prepare_verification(
         result = _prepare_verification_impl(
             event, raw, runner_script=runner_script, render_command=render_command,
             git_workspace_snapshot=git_workspace_snapshot, git_capture=git_capture,
-            measurement=trace,
+            measurement=trace, host_routed=host_routed,
         )
     elapsed = (time.perf_counter_ns() - started) / 1_000_000
     try:
@@ -556,6 +557,7 @@ def _prepare_verification_impl(
     ),
     git_capture: Callable[[Path, list[str]], bytes | None] = _git_capture,
     measurement: dict[str, Any] | None = None,
+    host_routed: bool = False,
 ) -> tuple[str, str, str]:
     state = _read_contract_state(event)
     runtime = click_runtime_state.view(state)
@@ -1699,6 +1701,9 @@ def _prepare_verification_impl(
             "runner_token_digest": hashlib.sha256(runner_token.encode()).hexdigest(),
             "runner_claimed_at": 0,
             "running_evidence_keys": sorted(requested_keys),
+            # A plain host command Click routed to this runner, not a request
+            # the agent made: a workspace change it causes is a host change.
+            "running_host_routed": host_routed,
             "running_environment_digests": running_environment_digests,
             "running_environment_binding": running_environment_binding,
             "running_environment_binding_digest": (

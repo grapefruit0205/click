@@ -192,6 +192,7 @@ hmac = _common.hmac
 host_coverage_binding_digest = _common.host_coverage_binding_digest
 host_coverage_binding_is_authentic = _common.host_coverage_binding_is_authentic
 is_recognized_command = _common.is_recognized_command
+auto_route_argv = _common.auto_route_argv
 is_recognized_tokens = _common.is_recognized_tokens
 json = _common.json
 minimum_class = _common.minimum_class

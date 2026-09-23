@@ -464,3 +464,137 @@ def is_recognized_verification_command(command: str) -> bool:
     except ValueError:
         return False
     return is_recognized_verification_tokens(fallback)
+
+
+# Output filters an agent pipes a check through. They run after Click's runner
+# exactly as written, under the same host decision, so only filters that
+# neither write a file nor run a command qualify.
+AUTO_ROUTE_OUTPUT_FILTERS = frozenset({
+    "cat", "cut", "egrep", "fgrep", "grep", "head", "nl", "sed", "sort", "tail",
+    "tr", "uniq", "wc",
+})
+AUTO_ROUTE_SHELL_EXPANSION = frozenset("$`*?[]{}~")
+# sed's `w`/`W` commands and flags write a file and `e` runs one.
+SED_SIDE_EFFECT = re.compile(r"(?:^|[/;}\s])[wWe](?:\s|$)")
+
+
+def _is_output_filter(segment: list[str]) -> bool:
+    if any("$(" in token for token in segment):
+        return False
+    consumer, arguments = click_capability.command_parts(segment)
+    if consumer not in AUTO_ROUTE_OUTPUT_FILTERS:
+        return False
+    operands = [argument for argument in arguments if not argument.startswith("-")]
+    if consumer == "cat":
+        return not operands
+    if consumer == "sort":
+        return not any(argument.startswith(("-o", "--output")) for argument in arguments)
+    if consumer == "uniq":
+        return len(operands) < 2
+    if consumer == "sed":
+        # The script is the first operand unless -e/-f supply it; any other
+        # operand is a file the caller meant sed to read instead of stdin.
+        scripted = False
+        sed_operands: list[str] = []
+        pending_value = False
+        for argument in arguments:
+            if pending_value:
+                pending_value = False
+            elif argument.startswith(("-i", "--in-place")):
+                return False
+            elif argument in {"-e", "-f", "--expression", "--file"}:
+                scripted = pending_value = True
+            elif argument.startswith(("--expression=", "--file=")):
+                scripted = True
+            elif not argument.startswith("-"):
+                sed_operands.append(argument)
+        if pending_value or len(sed_operands) > (0 if scripted else 1):
+            return False
+        return not any(SED_SIDE_EFFECT.search(argument) for argument in segment[1:])
+    return True
+
+
+def _unquoted_characters(command: str):
+    """Yield (index, character) for the characters outside quotes and escapes."""
+    quote = ""
+    escaped = False
+    for index, character in enumerate(command):
+        if escaped:
+            escaped = False
+        elif character == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if character == quote:
+                quote = ""
+        elif character in "'\"":
+            quote = character
+        else:
+            yield index, character
+
+
+def auto_route_argv(command: str) -> tuple[list[str], str] | None:
+    """The check argv a plain Bash command runs, when Click may run it instead.
+
+    Returns ``(argv, suffix)``: the exact argv of the recognized check, and the
+    command's own text after it (a ``2>&1`` and the output filters it pipes
+    through), which the host shell applies to Click's runner unchanged.
+    Anything the argv runner would not reproduce exactly (shell expansion or an
+    environment prefix in the check, command lists, other redirections, a
+    filter that writes a file or runs a command) returns None, and the host
+    runs the command unchanged.
+    """
+    if "\n" in command or "\r" in command:
+        return None
+    try:
+        lexer = shlex.shlex(
+            command,
+            posix=True,
+            punctuation_chars="".join(sorted(click_capability.SHELL_CONTROL_PUNCTUATION)),
+        )
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return None
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if token in {"|", "|&"}:  # `|&` is bash's `2>&1 |`
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    producer = segments[0]
+    merges_stderr = producer[-3:] == ["2", ">&", "1"]
+    if merges_stderr:
+        producer = producer[:-3]
+    if not producer or not all(segments[1:]):
+        return None
+    # Unquoted control punctuation always lexes as a token of its own, so a
+    # token mixing it with other characters was quoted. The check still
+    # refuses expansion characters, quoted or not: the argv runner has no
+    # shell, and the lexer no longer says which ones the shell would expand.
+    for segment in (producer, *segments[1:]):
+        if click_capability.ENVIRONMENT_ASSIGNMENT.match(segment[0]):
+            return None
+        for token in segment:
+            if "`" in token or set(token) <= click_capability.SHELL_CONTROL_PUNCTUATION:
+                return None
+    if any(set(token) & AUTO_ROUTE_SHELL_EXPANSION for token in producer):
+        return None
+    if click_verification_adapters.command_profile(producer) is None:
+        return None
+    if not all(_is_output_filter(segment) for segment in segments[1:]):
+        return None
+    if not merges_stderr and len(segments) == 1:
+        return list(producer), ""
+    # The lexer admitted no unquoted control character before the suffix but
+    # the redirection's `>` or the first pipe, so the suffix starts there.
+    index, character = next(
+        (index, character)
+        for index, character in _unquoted_characters(command)
+        if character in ">|"
+    )
+    if character == ">":
+        if not command[:index].endswith((" 2", "\t2")):
+            return None
+        index -= 1
+    return list(producer), command[index:].strip()

@@ -1,5 +1,28 @@
 # Release notes
 
+## Unreleased v1.4 candidate
+
+- Evidence mode routes plain check commands through Click. A model that runs
+  `python3 -m unittest discover -s tests 2>&1 | tail -5` instead of the
+  `click-gate verify -- …` form the directive asks for no longer bypasses
+  receipts and reuse: the `PreToolUse` Hook rewrites the call to the runner the
+  Click form produces and appends the command's own `2>&1` and output filters
+  unchanged, with raw reporting so a filter sees the format it was written for.
+  Until now such a call was recorded as a host mutation, which also advanced
+  the revision. Haiku 4.5 issued no `click-gate` request in its paired pilot
+  (docs/history/agent-ab-2026-09-12). Every command Click recognizes as a check
+  is routed, including `npm test`, `npm run build`, coverage runs and snapshot
+  updates; shell expansion, environment prefixes, command lists, other
+  redirections and filters that write a file or run a command leave the call to
+  the host, as does any preparation error. The rewrite carries the same `allow`
+  as a typed `click-gate verify`. `CLICK_AUTO_ROUTE=0` turns it off.
+- A routed check that changes protected repository content (a build that
+  writes tracked output, a snapshot update) is recorded as a host change
+  instead of a failed verification: its exit status is kept rather than
+  turned into 3, the revision advances, no receipt is issued, and the next
+  verification is not blocked. An explicit `click-gate verify` keeps the
+  fail-closed behavior.
+
 ## v1.3.0 — 2026-09-13 — Conditional JS reuse on Windows
 
 Both marketplaces pin `v1.3.0`; updating v1.2.0 installs it.

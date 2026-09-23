@@ -1076,6 +1076,7 @@ def _run_verification_impl(
         if isinstance(approved_argv, list) and approved_argv:
             check["argv"] = approved_argv
 
+    host_routed = batch.get("_click_host_routed") is True
     workspace_changed = False
     workspace_root = ""
     workspace_digest = ""
@@ -1113,13 +1114,22 @@ def _run_verification_impl(
                     "content; this classification is informational because every new "
                     "non-ignored path already makes verification stale.\n"
                 )
-            sys.stderr.write(
-                "[Click] Verification changed protected repository content. "
-                "The batch is stale; perform or restore that change through the approved "
-                "mutation path before verifying again.\n"
-            )
-            if exit_code == 0:
-                exit_code = 3
+            if host_routed:
+                # The host ran this command; a check that writes the tree (a
+                # build, a snapshot update) keeps its own exit status and is
+                # recorded as a host change, never as a reusable result.
+                sys.stderr.write(
+                    "[Click] This command changed repository files, so Click recorded "
+                    "it as a workspace change instead of a reusable check result.\n"
+                )
+            else:
+                sys.stderr.write(
+                    "[Click] Verification changed protected repository content. "
+                    "The batch is stale; perform or restore that change through the approved "
+                    "mutation path before verifying again.\n"
+                )
+                if exit_code == 0:
+                    exit_code = 3
 
     final_input_digests: dict[str, str] = {}
     explicit_input_changed = False
@@ -1144,7 +1154,7 @@ def _run_verification_impl(
             "[Click] An explicit verification input changed during execution. "
             "The batch is stale and no reusable PASS will be recorded.\n"
         )
-        if exit_code == 0:
+        if exit_code == 0 and not host_routed:
             exit_code = 3
 
     combined_shadow_records: dict[str, dict[str, Any]] = {}
