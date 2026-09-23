@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 64770,
+ "stop_reason": "end_turn",
+ "session_id": "063a72c6-5fc9-4447-bbc5-7c4b3e7c4925",
+ "total_cost_usd": 0.14240299999999997,
+ "usage": {
+  "input_tokens": 146,
+  "cache_creation_input_tokens": 25805,
+  "cache_read_input_tokens": 600770,
+  "output_tokens": 6114,
+  "output_tokens_details": {
+   "thinking_tokens": 1968
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 25805,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 8,
+    "output_tokens": 188,
+    "cache_read_input_tokens": 40455,
+    "cache_creation_input_tokens": 281,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 281
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-haiku-4-5-20251001": {
+   "inputTokens": 146,
+   "outputTokens": 6114,
+   "cacheReadInputTokens": 600770,
+   "cacheCreationInputTokens": 25805,
+   "webSearchRequests": 0,
+   "costUSD": 0.14240299999999997,
+   "contextWindow": 200000,
+   "maxOutputTokens": 32000,
+   "thinkingTokens": 1968,
+   "canonicalModel": "claude-haiku-4-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 18,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "Perfect! All tests pass. Here are the files I changed:\n\n1. **ledger/alpha.py** \u2014 Fixed pagination to use correct 1-based page calculation: changed `start = page * size` to `start = (page - 1) * size`\n\n2. **ledger/beta.py** \u2014 Implemented the largest-remainder method for allocation: added logic to distribute leftover cents to shares with the largest fractional parts, with tie-breaking by index (earlier indices get remainder first)\n\n3. **ledger/gamma.py** \u2014 Fixed slug generation to collapse repeated dashes: added regex substitution to collapse consecutive dashes into single dashes with `re.sub(r\"-+\", \"-\", dashed)`",
+ "ttft_ms": 2119,
+ "type": "result",
+ "duration_ms": 434508,
+ "uuid": "cdbec3dc-1e61-4ef7-8314-9365c30e2133",
+ "ttft_stream_ms": 1017,
+ "time_to_request_ms": 184,
+ "first_content_frame_ms": 1018,
+ "queued_turn_count": 0,
+ "result_index": 0
+}
