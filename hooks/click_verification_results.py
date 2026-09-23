@@ -175,7 +175,11 @@ def _record_verification_result(
     verification["runner_claimed_at"] = 0
     verification["started_at"] = 0
     verification["last_exit_code"] = exit_code
-    verification["workspace_changed"] = workspace_changed
+    # A routed host command that changed the tree is a host change: the
+    # revision still advances below and nothing is reusable, but it is not a
+    # failed verification that blocks the next one.
+    host_routed = verification.pop("running_host_routed", False) is True
+    verification["workspace_changed"] = workspace_changed and not host_routed
     sources = _evidence_sources(state)
     if sources is None or not sources:
         return False
@@ -437,9 +441,9 @@ def _record_verification_result(
         previous_revision = revision
         revision += 1
         verification["mutation_revision"] = revision
-        verification["status"] = "failed"
-        verification["failed_revision"] = revision
-        verification["unchanged_failure_retries"] = 1
+        verification["status"] = "ready" if host_routed else "failed"
+        verification["failed_revision"] = -1 if host_routed else revision
+        verification["unchanged_failure_retries"] = 0 if host_routed else 1
         state["observations"] = _fresh_observation_state()
         for source_key, source in sources.items():
             if not isinstance(source, dict):
@@ -460,9 +464,9 @@ def _record_verification_result(
             was_current = _evidence_is_current(source, previous_revision)
             if check_positions and source_ran:
                 click_evidence.clear_successor_receipt(source)
-                source["status"] = "failed"
+                source["status"] = "ready" if host_routed else "failed"
                 source["attempts"] = int(source.get("attempts", 0)) + 1
-                source["unchanged_failure_retries"] = 1
+                source["unchanged_failure_retries"] = 0 if host_routed else 1
                 source["last_exit_code"] = (
                     precise["exit_code"]
                     if precise is not None and precise["valid"]

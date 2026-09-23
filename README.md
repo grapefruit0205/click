@@ -174,6 +174,19 @@ executions. Automatic sharding needs initial setup and a baseline; when tools
 must be installed or policy committed, status explains the next action. Click
 does not install tools on its own.
 
+In Evidence mode a verification request does not have to name Click. A plain
+check command Click recognizes (`python3 -m pytest -q 2>&1 | tail -5`,
+`npm test`, `npm run build`, `go test ./...`) is routed through
+`click-gate verify -- <argv>` by the Hook, so a model that ignores the Evidence
+directive still gets receipts and reuse. The command's own `2>&1` and output
+filters such as `| tail` still apply. A check that writes repository files (a
+build, a snapshot update) keeps its exit status and is recorded as a workspace
+change, not as a failed or reusable check. Anything that needs a shell
+(expansion, `&&`, redirection, a filter that writes or runs something) runs
+unchanged. On Claude Code the routed command carries the same `allow` as
+`click-gate verify`, so it skips the permission prompt; `CLICK_AUTO_ROUTE=0`
+turns routing off.
+
 Automation depends on the tool and input profile:
 
 | Capability | Scope |

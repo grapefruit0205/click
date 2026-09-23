@@ -343,6 +343,7 @@ def _claim_verification_run(
     _write_json(state_path, state)
     # This stays inside this invocation, outside the persisted receipt schema.
     batch["_click_claim_binding"] = claim_binding
+    batch["_click_host_routed"] = verification.get("running_host_routed") is True
     batch["_click_verification_environment"] = verification_environment
     batch["_click_verification_environment_rebound"] = environment_rebound
     batch["_click_verification_environment_drift"] = environment_drift
