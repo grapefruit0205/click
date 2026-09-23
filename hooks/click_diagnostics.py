@@ -34,6 +34,11 @@ MAX_FAILURES_PER_COMMAND = 12
 MAX_MESSAGE_CHARS = 480
 MAX_TEST_ID_CHARS = 240
 MAX_STACK_FRAMES = 8
+# Source lines the traceback printed: the failing frame and the test's frame,
+# each at most a few lines (a multi-line statement) of bounded width.
+MAX_CODE_FRAMES = 2
+MAX_CODE_LINES = 3
+MAX_CODE_CHARS = 160
 LOG_DIRECTORY = "verification-diagnostics"
 LOG_MAX_AGE_SECONDS = 24 * 60 * 60
 LOG_MAX_FILES = 128
@@ -46,15 +51,34 @@ _SECRET_ASSIGNMENT = re.compile(
     r"(\s*[:=]\s*)(?:['\"]?)[^\s,;]+"
 )
 _BEARER_VALUE = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]{8,}")
-_UNITTEST_HEADER = re.compile(r"^(FAIL|ERROR):\s+(.+?)(?:\s+\(([^)]+)\))?$")
+# `FAIL: test_x (module.Class.test_x)`, then a subtest's ` [msg] (params)`.
+# Python 3.10 prints `(module.Class)` without the method name.
+_UNITTEST_HEADER = re.compile(
+    r"^(?P<status>FAIL|ERROR):\s+(?P<name>\S+)"
+    r"(?:\s+\((?P<qualified>[^()\s]+)\))?(?P<subtest>.*)$"
+)
 _TRACEBACK_FRAME = re.compile(
     r'^\s*File\s+["\'](?P<file>.*?)["\'],\s+line\s+(?P<line>[0-9]+)(?:,\s+in\s+(?P<func>.+))?$'
+)
+_EXCEPTION_LINE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*(?::|$)")
+# Python 3.11+ and pytest underline the failing expression on its own line.
+_POSITION_MARKERS = re.compile(r"^\s*[~^]+[\s~^]*$")
+_CHAINED_EXCEPTION = (
+    "The above exception was the direct cause of the following exception:",
+    "During handling of the above exception, another exception occurred:",
 )
 _PYTEST_FAILURE = re.compile(
     r"^FAILED\s+(?P<test>\S+?)(?:\s+-\s+(?P<message>.*))?$"
 )
-_PYTEST_FRAME = re.compile(
-    r"^(?P<file>[^:\r\n]+[.]py):(?P<line>[0-9]+):(?:\s+in\s+(?P<func>.*))?$"
+# A title longer than the terminal leaves a single `_` on each side.
+_PYTEST_SECTION = re.compile(r"^_+ (?P<title>.+?) _+$")
+_PYTEST_BANNER = re.compile(r"^(?:={2,}|-{2,}) .+ (?:={2,}|-{2,})$")
+_PYTEST_ENTRY_SEPARATOR = re.compile(r"^_(?: _)+\s*$")
+# `path:line: in func` opens a short entry; `path:line: Kind` (or a bare
+# `path:line:`) closes a long entry whose failing line pytest marks with `>`.
+_PYTEST_LOCATION = re.compile(
+    r"^(?P<file>[^:\r\n]+[.]py):(?P<line>[0-9]+):"
+    r"(?:\s+in\s+(?P<func>.+)|\s+[A-Za-z_][A-Za-z0-9_.]*)?\s*$"
 )
 _SENSITIVE_PARTS = frozenset(
     {
@@ -62,6 +86,9 @@ _SENSITIVE_PARTS = frozenset(
         "secret", "private", "id_rsa", "id_ed25519", "tokens", "token",
     }
 )
+# An in-repository virtualenv is inside the workspace but is not the project's
+# code: its frames (pytest's own under `--tb=native`, a library's) are skipped.
+_INSTALLED_PARTS = frozenset({"site-packages", "dist-packages"})
 
 
 def reporting_was_omitted(raw: Any) -> bool:
@@ -239,24 +266,185 @@ def _safe_file(value: str, workspace: Path) -> str:
     return relative.as_posix()
 
 
-def _frames(lines: list[str], workspace: Path) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for line in lines:
-        match = _TRACEBACK_FRAME.match(line) or _PYTEST_FRAME.match(line)
+def _frame(match: re.Match[str], code: list[str], block: int) -> dict[str, Any]:
+    return {
+        "file": match.group("file"),
+        "line": int(match.group("line")),
+        "function": match.group("func") or "",
+        "code": code,
+        "block": block,
+    }
+
+
+def _python_frames(lines: list[str]) -> tuple[list[dict[str, Any]], int]:
+    """CPython traceback frames with the source lines printed under each.
+
+    Also returns the index after the last frame's source lines, where CPython
+    prints the exception. `block` separates the tracebacks of a chain.
+    """
+    frames: list[dict[str, Any]] = []
+    block = 0
+    end = 0
+    index = 0
+    while index < len(lines):
+        text = lines[index]
+        index += 1
+        stripped = text.strip()
+        if stripped.startswith("Traceback (most recent call last)") or (
+            stripped in _CHAINED_EXCEPTION
+        ):
+            block += 1
+        match = _TRACEBACK_FRAME.match(text)
         if match is None:
             continue
-        safe = _safe_file(match.group("file"), workspace)
-        if not safe:
+        indent = len(text) - len(text.lstrip())
+        code: list[str] = []
+        while index < len(lines):
+            following = lines[index]
+            if not following.strip() or len(following) - len(following.lstrip()) <= indent:
+                break
+            if not _POSITION_MARKERS.match(following):
+                code.append(following)
+            index += 1
+        frames.append(_frame(match, code, block))
+        end = index
+    return frames, end
+
+
+def _exception_line(lines: list[str], start: int) -> str:
+    """The exception line CPython prints after the last traceback frame."""
+    for text in lines[start:]:
+        # Skip `[Previous line repeated N more times]` and similar notes.
+        if not text.strip() or text[:1].isspace():
             continue
-        frame = {"file": safe, "line": int(match.group("line"))}
-        function = _clean(match.groupdict().get("func") or "", 120)
-        if function:
-            frame["function"] = function
-        if frame not in result:
-            result.append(frame)
-        if len(result) >= MAX_STACK_FRAMES:
+        return text.strip() if _EXCEPTION_LINE.match(text) else ""
+    return ""
+
+
+def _pytest_marked_source(lines: list[str]) -> list[str]:
+    """The line pytest marked with `>` in a long entry, and its continuation."""
+    code: list[str] = []
+    for text in lines:
+        if not code:
+            if text.startswith(">") and text[1:].strip() != "???":
+                code.append(text[1:])
+            continue
+        if (
+            not text.strip()
+            or text.startswith("E ")
+            or text.rstrip() == "E"
+            or _PYTEST_LOCATION.match(text)
+        ):
             break
+        if not _POSITION_MARKERS.match(text):
+            code.append(text)
+    return code
+
+
+def _pytest_frames(lines: list[str]) -> list[dict[str, Any]]:
+    """Traceback entries of one pytest report section with their source."""
+    frames: list[dict[str, Any]] = []
+    block = 0
+    entry_start = 0
+    for index, text in enumerate(lines):
+        if text.strip() in _CHAINED_EXCEPTION:
+            block += 1
+            entry_start = index + 1
+            continue
+        if _PYTEST_ENTRY_SEPARATOR.match(text):
+            entry_start = index + 1
+            continue
+        match = _PYTEST_LOCATION.match(text)
+        if match is None:
+            continue
+        if match.group("func") is not None:
+            code: list[str] = []
+            for following in lines[index + 1 :]:
+                if not following.strip() or not following[:1].isspace():
+                    break
+                if not _POSITION_MARKERS.match(following):
+                    code.append(following)
+        else:
+            code = _pytest_marked_source(lines[entry_start:index])
+            entry_start = index + 1
+        frames.append(_frame(match, code, block))
+    # `--tb=native` prints CPython tracebacks inside the same sections.
+    return frames or _python_frames(lines)[0]
+
+
+def _code(lines: list[str]) -> list[str]:
+    code = [text for text in (_clean(line, MAX_CODE_CHARS) for line in lines) if text]
+    if len(code) > MAX_CODE_LINES:
+        code = code[:MAX_CODE_LINES]
+        code[-1] = _clean(code[-1] + " …", MAX_CODE_CHARS)
+    return code
+
+
+def _workspace_frames(
+    frames: list[dict[str, Any]], workspace: Path
+) -> list[dict[str, Any]]:
+    """Frames in safe workspace files, with relative paths and bounded code."""
+    safe_paths: dict[str, str] = {}
+    result: list[dict[str, Any]] = []
+    for frame in frames:
+        if frame["file"] not in safe_paths:
+            safe = _safe_file(frame["file"], workspace)
+            if _INSTALLED_PARTS.intersection(safe.split("/")):
+                safe = ""
+            safe_paths[frame["file"]] = safe
+        safe = safe_paths[frame["file"]]
+        if safe:
+            result.append(
+                {
+                    **frame,
+                    "file": safe,
+                    "function": _clean(frame["function"], 120),
+                    "code": _code(frame["code"]),
+                }
+            )
     return result
+
+
+def _stack(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    stack: list[dict[str, Any]] = []
+    for frame in frames:
+        entry = {"file": frame["file"], "line": frame["line"]}
+        if frame["function"]:
+            entry["function"] = frame["function"]
+        if entry not in stack:
+            stack.append(entry)
+        if len(stack) >= MAX_STACK_FRAMES:
+            break
+    return stack
+
+
+def _code_excerpts(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Source the traceback printed for the test's frame and the failing frame.
+
+    The failing frame is the innermost workspace frame; the test's frame is the
+    outermost workspace frame of the same traceback. Traceback order.
+    """
+    if not frames:
+        return []
+    failing = frames[-1]
+    test = next(frame for frame in frames if frame["block"] == failing["block"])
+    chosen = [failing]
+    if (test["file"], test["line"]) != (failing["file"], failing["line"]):
+        chosen.insert(0, test)
+    return [
+        {"file": frame["file"], "line": frame["line"], "lines": frame["code"]}
+        for frame in chosen
+        if frame["code"]
+    ][:MAX_CODE_FRAMES]
+
+
+def _location(failure: dict[str, Any], frames: list[dict[str, Any]]) -> None:
+    failure.update(
+        stack=_stack(frames),
+        code=_code_excerpts(frames),
+        file=frames[-1]["file"] if frames else "",
+        line=frames[-1]["line"] if frames else None,
+    )
 
 
 def _error_message(lines: list[str]) -> tuple[str, str]:
@@ -275,6 +463,16 @@ def _error_message(lines: list[str]) -> tuple[str, str]:
     return "AssertionError", "failure details unavailable"
 
 
+def _unittest_test_id(header: re.Match[str]) -> str:
+    name = header.group("name")
+    qualified = header.group("qualified") or ""
+    if qualified and qualified != name and not qualified.endswith("." + name):
+        qualified = f"{qualified}.{name}"
+    return " ".join(
+        part for part in (qualified or name, header.group("subtest").strip()) if part
+    )
+
+
 def _unittest_failures(text: str, workspace: Path) -> list[dict[str, Any]]:
     lines = text.splitlines()
     headers = [index for index, line in enumerate(lines) if _UNITTEST_HEADER.match(line)]
@@ -284,46 +482,106 @@ def _unittest_failures(text: str, workspace: Path) -> list[dict[str, Any]]:
         assert header is not None
         end = headers[offset + 1] if offset + 1 < len(headers) else len(lines)
         section = lines[index + 1 : end]
-        frames = _frames(section, workspace)
-        error_type, message = _error_message(section)
-        status = header.group(1)
-        test_id = _clean(header.group(3) or header.group(2), MAX_TEST_ID_CHARS)
+        # `-b` appends the test's own output, which may hold a logged
+        # traceback, after the failure's traceback.
+        for position, text in enumerate(section):
+            if text in ("Stdout:", "Stderr:"):
+                section = section[:position]
+                break
+        parsed, exception_at = _python_frames(section)
+        status = header.group("status")
+        # The exception line, not the last line of a multi-line message such
+        # as assertEqual's diff; an error keeps its exception type visible.
+        exception = _exception_line(section, exception_at) if parsed else ""
+        if exception:
+            kind, _, detail = exception.partition(":")
+            error_type = _clean(kind, 80)
+            message = _clean(exception if status == "ERROR" else detail) or error_type
+        else:
+            error_type, message = _error_message(section)
+        test_id = _clean(_unittest_test_id(header), MAX_TEST_ID_CHARS)
         failure: dict[str, Any] = {
             "test_id": test_id or "unknown-test",
             "error_type": error_type if status == "FAIL" else status,
             "message": message,
             "failure_kind": "test-failure" if status == "FAIL" else "test-error",
-            "stack": frames,
         }
-        if frames:
-            failure.update(file=frames[-1]["file"], line=frames[-1]["line"])
-        else:
-            failure.update(file="", line=None)
+        _location(failure, _workspace_frames(parsed, workspace))
         failures.append(failure)
     return failures
 
 
+def _pytest_sections(lines: list[str]) -> list[tuple[str, list[str]]]:
+    """Per-test report sections (`____ title ____`) in output order."""
+    sections: list[tuple[str, list[str]]] = []
+    body: list[str] | None = None
+    for text in lines:
+        header = _PYTEST_SECTION.match(text)
+        if header is not None and not _PYTEST_ENTRY_SEPARATOR.match(text):
+            body = []
+            sections.append((header.group("title"), body))
+        elif _PYTEST_BANNER.match(text):
+            body = None
+        elif body is not None:
+            body.append(text)
+    return sections
+
+
+def _pytest_exception(lines: list[str]) -> str:
+    """First line of the last exception pytest printed with `E` markers."""
+    blocks: list[str] = []
+    inside = False
+    for text in lines:
+        marked = text.startswith("E ") or text.rstrip() == "E"
+        if marked and not inside:
+            blocks.append("")
+        if marked and not blocks[-1]:
+            blocks[-1] = text[1:].strip()
+        inside = marked
+    if blocks and blocks[-1]:
+        return blocks[-1]
+    parsed, exception_at = _python_frames(lines)
+    return _exception_line(lines, exception_at) if parsed else ""
+
+
 def _pytest_failures(text: str, workspace: Path) -> list[dict[str, Any]]:
     lines = text.splitlines()
-    frames = _frames(lines, workspace)
+    sections = _pytest_sections(lines)
+    claimed: set[int] = set()
     failures: list[dict[str, Any]] = []
     for line in lines:
         match = _PYTEST_FAILURE.match(line)
         if match is None:
             continue
-        message = _clean(match.group("message") or "pytest test failed")
+        # A section is titled by the node id after the file:
+        # `tests/t.py::Case::test_x[1]` -> `Case.test_x[1]`.
+        title = match.group("test").split("::", 1)[-1].replace("::", ".")
+        position = next(
+            (
+                index
+                for index, (name, _) in enumerate(sections)
+                if name == title and index not in claimed
+            ),
+            None,
+        )
+        body: list[str] = []
+        if position is not None:
+            claimed.add(position)
+            body = sections[position][1]
+        # The summary line is cut to the terminal width; the section is not.
+        message = _clean(
+            _pytest_exception(body) or match.group("message") or "pytest test failed"
+        )
         error_type = "AssertionError" if "assert" in message.lower() else "TestFailure"
+        if message.startswith("AssertionError: "):
+            message = message.removeprefix("AssertionError: ")
         failure: dict[str, Any] = {
             "test_id": _clean(match.group("test"), MAX_TEST_ID_CHARS),
             "error_type": error_type,
             "message": message,
             "failure_kind": "test-failure",
-            "stack": frames[-MAX_STACK_FRAMES:],
-            "file": "",
-            "line": None,
         }
-        if frames:
-            failure.update(file=frames[-1]["file"], line=frames[-1]["line"])
+        _location(failure, _workspace_frames(_pytest_frames(body), workspace))
         failures.append(failure)
         if len(failures) >= MAX_FAILURES_PER_COMMAND:
             break
@@ -678,6 +936,7 @@ def render_actionable(record: dict[str, Any]) -> str:
             f"local log ref {record.get('log_ref') or 'unavailable'}."
         )
     lines = [f"[Click diagnostic] {source} failed ({len(failures)} parsed failure(s))."]
+    shown: set[tuple[Any, Any]] = set()
     for failure in failures[:MAX_FAILURES_PER_COMMAND]:
         location = ""
         if failure.get("file") and isinstance(failure.get("line"), int):
@@ -686,6 +945,19 @@ def render_actionable(record: dict[str, Any]) -> str:
             f"- {failure.get('test_id', 'unknown-test')}{location}: "
             f"{failure.get('error_type', 'Failure')}: {failure.get('message', '')}"
         )
+        # The source lines the traceback printed, once per location: subtests
+        # and parametrized cases often fail on the same line.
+        excerpts = failure.get("code")
+        for excerpt in excerpts if isinstance(excerpts, list) else []:
+            code = excerpt.get("lines") if isinstance(excerpt, dict) else None
+            if not isinstance(code, list) or not code:
+                continue
+            key = (excerpt.get("file"), excerpt.get("line"))
+            if key in shown:
+                continue
+            shown.add(key)
+            lines.append(f"    {key[0]}:{key[1]}: {code[0]}")
+            lines.extend(f"      {text}" for text in code[1:])
     lines.append(f"Local retained log ref: {record.get('log_ref') or 'unavailable'}")
     return "\n".join(lines)
 
@@ -738,6 +1010,7 @@ def enrich_progress(progress: dict[str, Any], state: dict[str, Any]) -> dict[str
             "file": failure.get("file", ""),
             "line": failure.get("line"),
             "stack": failure.get("stack", []),
+            "code": failure.get("code", []),
             "failure_kind": failure.get("failure_kind", "unknown"),
             "log_ref": record.get("log_ref"),
         }

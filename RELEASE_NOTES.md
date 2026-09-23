@@ -22,6 +22,22 @@
   turned into 3, the revision advances, no receipt is issued, and the next
   verification is not blocked. An explicit `click-gate verify` keeps the
   fail-closed behavior.
+- The actionable failure summary shows the code the traceback printed. Each
+  parsed unittest/pytest failure is followed by the source lines shown for the
+  test's frame and, when different, the innermost frame in the project: at
+  most two frames of three lines, once per location, taken from the check's
+  captured output without reading files. The message is now the exception
+  line instead of the last line of a multi-line message, so an assertEqual
+  failure reads `Lists differ: [] != [6]` rather than `?  +`; a subtest keeps
+  its test name, an error keeps its exception type, and each pytest failure
+  takes its location from its own report section instead of the last frame
+  in the output. Repeating the paired Haiku 4.5 sessions of
+  docs/history/agent-ab-2026-09-23-haiku with this build, the Click-on arm
+  took 16.5 turns and 15.5 tool calls against 16 and 15 with Click off (was 22
+  and 20.5 against 16 and 14.5), at the same cost and 58% less session time
+  (docs/history/agent-ab-2026-09-23-haiku-code-lines). Its sessions still read
+  the failing modules' test files; the `python3 -c` probes that recovered the
+  value the old message dropped did not recur.
 
 ## v1.3.0 — 2026-09-13 — Conditional JS reuse on Windows
 
