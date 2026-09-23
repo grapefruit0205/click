@@ -11,6 +11,7 @@ provenance, not current execution instructions.
 | Review hardening | Verification reuse and lifecycle boundary hardening | [Record](review-hardening/README.md) |
 | Multilanguage expansion | Python, Node, npm, Go, content, Vitest, and Jest profiles | [Record](multilang-expansion/README.md) |
 | Paired agent sessions | Eight Opus 5 sessions, Click on vs off, on a 40 s four-module fixture | [Record](agent-ab-2026-09-12/README.md) |
+| Paired agent sessions, Haiku | Eight Haiku 4.5 sessions, Click with Evidence auto-routing on vs off, same fixture | [Record](agent-ab-2026-09-23-haiku/README.md) |
 
 Files under `prompts/` are the inputs that guided the historical work. Files
 under `reports/`, `evidence/`, and `logs/` are outputs. Literal paths and command

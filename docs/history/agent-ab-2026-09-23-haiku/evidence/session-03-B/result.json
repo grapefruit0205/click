@@ -1,0 +1,97 @@
+{
+ "duration_api_ms": 79327,
+ "stop_reason": "end_turn",
+ "session_id": "7a61f642-962d-4c7e-b7ba-5dc0797c1bc2",
+ "total_cost_usd": 0.1577936,
+ "usage": {
+  "input_tokens": 180,
+  "cache_creation_input_tokens": 26235,
+  "cache_read_input_tokens": 681986,
+  "output_tokens": 7389,
+  "output_tokens_details": {
+   "thinking_tokens": 2789
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 26235,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 10,
+    "output_tokens": 337,
+    "cache_read_input_tokens": 40134,
+    "cache_creation_input_tokens": 1032,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 1032
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard"
+ },
+ "modelUsage": {
+  "claude-haiku-4-5-20251001": {
+   "inputTokens": 180,
+   "outputTokens": 7389,
+   "cacheReadInputTokens": 681986,
+   "cacheCreationInputTokens": 26235,
+   "webSearchRequests": 0,
+   "costUSD": 0.1577936,
+   "contextWindow": 200000,
+   "maxOutputTokens": 32000,
+   "thinkingTokens": 2789,
+   "canonicalModel": "claude-haiku-4-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "permission_denials": [],
+ "terminal_reason": "completed",
+ "fast_mode_state": "off",
+ "fast_mode_disabled_reason": "sdk_opt_in_required",
+ "subagent_stats": {
+  "spawned": 0,
+  "requested": {
+   "background": 0,
+   "foreground": 0,
+   "unset": 0
+  },
+  "started_in_background": 0,
+  "max_depth": 0,
+  "spawned_by_subagents": 0,
+  "completed": 0,
+  "failed": 0,
+  "killed": {
+   "parent": 0,
+   "user": 0,
+   "system": 0
+  },
+  "refused": {
+   "depth_limit": 0,
+   "concurrency_limit": 0,
+   "budget": 0
+  },
+  "by_type": {}
+ },
+ "is_error": false,
+ "num_turns": 21,
+ "subtype": "success",
+ "api_error_status": null,
+ "result": "Excellent! All tests now pass. Here's a summary of the files I changed:\n\n## Fixed Files\n\n1. **`ledger/gamma.py`** \u2014 Fixed `slugify()` to collapse repeated dashes using `re.sub(r\"-+\", \"-\", dashed)`\n\n2. **`ledger/alpha.py`** \u2014 Fixed `paginate()` to use correct 1-based indexing: `start = (page - 1) * size` instead of `page * size`\n\n3. **`ledger/beta.py`** \u2014 Fixed `allocate()` to properly distribute remainders using the largest-remainder method with stable sorting: `fractionals.sort(key=lambda x: (-x[0], x[1]))` ensures remainders go to earliest indices when fractional parts tie",
+ "ttft_ms": 2615,
+ "type": "result",
+ "duration_ms": 181590,
+ "uuid": "a6291694-9432-4a35-90ae-c7950d3ea2b0",
+ "ttft_stream_ms": 1532,
+ "time_to_request_ms": 573,
+ "first_content_frame_ms": 1533,
+ "queued_turn_count": 0,
+ "result_index": 0
+}
