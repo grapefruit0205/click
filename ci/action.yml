@@ -1,0 +1,97 @@
+name: Click CI
+description: >-
+  Skip a test or check command when nothing it was observed reading has changed
+  since its last passing run on the default branch. Any language, no config.
+branding:
+  icon: fast-forward
+  color: blue
+inputs:
+  run:
+    description: The command to run, as you would write it in a `run:` step (bash).
+    required: true
+  working-directory:
+    description: Directory to run the command in.
+    default: "."
+  unit:
+    description: >-
+      Name for this command when the same command runs in several matrix legs
+      (for example the toolchain version), so each leg keeps its own record.
+    default: ""
+  mode:
+    description: >-
+      auto (record on default-branch pushes, select elsewhere), record, select,
+      shadow (decide, run anyway, report), or off.
+    default: auto
+outputs:
+  skipped:
+    description: "'true' when the command was skipped."
+    value: ${{ steps.run.outputs.skipped }}
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CLICK_CI_RUN: ${{ inputs.run }}
+        CLICK_CI_UNIT: ${{ inputs.unit }}
+        CLICK_CI_INPUT_MODE: ${{ inputs.mode }}
+      run: |
+        if [ "$RUNNER_OS" != Linux ]; then
+          # Observation needs strace; other runners run the command as is.
+          echo "mode=off" >> "$GITHUB_OUTPUT"
+          echo "key=none" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        tool="$GITHUB_ACTION_PATH/click_ci.py"
+        if [ "$CLICK_CI_INPUT_MODE" = auto ]; then
+          mode=$(/usr/bin/python3 "$tool" mode)
+        else
+          mode=$CLICK_CI_INPUT_MODE
+        fi
+        # The same shell a `run:` step uses, so the command behaves identically.
+        key=$(/usr/bin/python3 "$tool" key --unit "$CLICK_CI_UNIT" -- bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN")
+        echo "mode=$mode" >> "$GITHUB_OUTPUT"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+        echo "store=$RUNNER_TEMP/click-ci/$key" >> "$GITHUB_OUTPUT"
+    - if: steps.plan.outputs.mode != 'off'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.store }}
+        key: click-ci-v1-${{ runner.os }}-${{ steps.plan.outputs.key }}-${{ github.sha }}
+        restore-keys: click-ci-v1-${{ runner.os }}-${{ steps.plan.outputs.key }}-
+    - if: steps.plan.outputs.mode == 'record'
+      shell: bash
+      run: |
+        command -v strace >/dev/null || {
+          sudo apt-get update -qq && sudo apt-get install -y -qq strace >/dev/null
+        }
+    - id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CLICK_CI_RUN: ${{ inputs.run }}
+        CLICK_CI_UNIT: ${{ inputs.unit }}
+        CLICK_CI_STORE: ${{ steps.plan.outputs.store }}
+        CLICK_CI_REPORT: ${{ runner.temp }}/click-ci-report.jsonl
+        CLICK_CI_MODE: ${{ steps.plan.outputs.mode }}
+      run: |
+        if [ "$CLICK_CI_MODE" = off ]; then
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+          exec bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN"
+        fi
+        before=$(wc -l < "$CLICK_CI_REPORT" 2>/dev/null || echo 0)
+        status=0
+        /usr/bin/python3 "$GITHUB_ACTION_PATH/click_ci.py" run --mode "$CLICK_CI_MODE" \
+          --unit "$CLICK_CI_UNIT" -- bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN" || status=$?
+        skipped=false
+        if tail -n +"$((before + 1))" "$CLICK_CI_REPORT" 2>/dev/null | grep -q '"action": "skipped"'; then
+          skipped=true
+        fi
+        echo "skipped=$skipped" >> "$GITHUB_OUTPUT"
+        exit "$status"
+    - if: steps.plan.outputs.mode == 'record' && success()
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.plan.outputs.store }}
+        key: click-ci-v1-${{ runner.os }}-${{ steps.plan.outputs.key }}-${{ github.sha }}
