@@ -21,6 +21,8 @@ class HookOutputAdapter(Protocol):
 
     def context(self, value: str) -> dict[str, Any]: ...
 
+    def session_context(self, value: str) -> dict[str, Any]: ...
+
 
 class CodexOutputAdapter:
     """Preserve the existing Codex Hook wire format."""
@@ -71,6 +73,14 @@ class CodexOutputAdapter:
             }
         }
 
+    def session_context(self, value: str) -> dict[str, Any]:
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "SessionStart",
+                "additionalContext": value,
+            }
+        }
+
 
 class AntigravityOutputAdapter:
     """Serialize Click outcomes using Google Antigravity's Hook schema."""
@@ -104,3 +114,8 @@ class AntigravityOutputAdapter:
         return {
             "injectSteps": [{"ephemeralMessage": platform_context + value}]
         }
+
+    def session_context(self, value: str) -> dict[str, Any]:
+        # Antigravity registers no session-start Hook; its prompt context
+        # carries the mode text on every invocation.
+        return self.context(value)

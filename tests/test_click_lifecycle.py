@@ -252,6 +252,7 @@ class ClickLifecycleTests(unittest.TestCase):
             "def _handle_pre_tool(",
             "def _handle_post_tool(",
             "def _handle_prompt_submit(",
+            "def _handle_session_start(",
             "def _handle_session_end(",
             "def _runner_arguments(",
             "def main(",

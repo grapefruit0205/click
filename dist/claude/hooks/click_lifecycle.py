@@ -67,6 +67,9 @@ PUBLIC_DEFAULT_MODES = click_mode.PUBLIC_DEFAULT_MODES
 LEGACY_DEFAULT_MODE_ALIASES = click_mode.LEGACY_DEFAULT_MODE_ALIASES
 DEFAULT_MODES = click_mode.DEFAULT_MODES
 EPHEMERAL_STATE_TTL_SECONDS = 7 * 24 * 60 * 60
+SESSION_CONTEXT_SCHEMA_VERSION = 1
+# Mode texts a session-start delivery can carry for the whole context.
+SESSION_CONTEXT_MODES = frozenset({"evidence", "off"})
 COMPLETED_CONTRACT_TTL_SECONDS = 30 * 24 * 60 * 60
 
 _prompt_digest = click_prompt.prompt_digest
@@ -667,24 +670,10 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
     )
 
 
-def prompt_context(event: dict[str, Any]) -> str:
-    _prune_state()
-    authorization = _record_user_prompt(event)
-    default_mode = click_mode.read_default_mode()
-    migrated_from = click_mode.consume_migration_notice()
-    contract_state = _read_contract_state(event)
-    active_guarded = _session_contract_is_active(contract_state)
-    recovered_evidence = False
-    if default_mode == "evidence" and not active_guarded:
-        contract_state, recovered_evidence = _ensure_evidence_state(event)
-    elif (
-        click_runtime_state.view(contract_state).guarded_approved
-        and _append_follow_up(event, contract_state)
-    ):
-        _save_contract_state(event, contract_state)
-
+def _mode_context(default_mode: str, active_guarded: bool) -> tuple[str, str]:
+    """The static text that tells the model how Click's current mode works."""
     if default_mode == "guarded" or active_guarded:
-        context = (
+        return "guarded", (
             "Click Guarded mode is enabled. For software creation, modification, deletion, "
             "or repair, compile the compact Click contract, explain it plainly, ask once, "
             "and do not pass or mutate until a later UserPromptSubmit turn approves the "
@@ -710,8 +699,8 @@ def prompt_context(event: dict[str, Any]) -> str:
             "as a follow-up turn; require a new contract only when outcome, boundary, must-hold "
             "behavior, or verification commitment changes."
         )
-    elif default_mode == "off":
-        context = (
+    if default_mode == "off":
+        return "off", (
             "Click Off mode is enabled. Apply the Guarded contract workflow only when "
             "the user explicitly selects @Click or $click. Ordinary software work and "
             "code review remain fail-open unless explicitly activated. Once activated, a "
@@ -721,32 +710,132 @@ def prompt_context(event: dict[str, Any]) -> str:
             "metered and long-running "
             "local servers use `click-gate service` start/stop."
         )
-    else:
-        # Directive, not advisory: measured against Opus 5, the earlier "prefer
-        # ... when useful" wording was followed in none of eight sessions, and
-        # the sessions that did use Click loaded the Skill first and re-checked
-        # reused results by hand. The command's shape is given here so no Skill
-        # load is needed, and its nature as a hook-rewritten command is stated
-        # so the model does not probe PATH for a binary and give up. The argv
-        # form replaced the JSON envelope after eight paired Opus 5 sessions
-        # (docs/history/agent-ab-2026-09-12) showed the ~200-character JSON the
-        # model typed for every cycle as the main output-token overhead.
-        result_label = click_status_summary.message("[Click \uacb0\uacfc]", click_status_summary.resolve_locale())
-        context = (
-            "Click Evidence mode is enabled. Run every test or check command through Click "
-            "instead of directly, with the Bash tool: `click-gate verify -- <the exact check "
-            "command>`, for example `click-gate verify -- python3 -m pytest -q`. "
-            "`click-gate` is rewritten by the Click hook \u2014 do not look for it on PATH, "
-            "prefix it, or test whether it exists. When you re-run a check after an edit, "
-            "resubmit the exact same command; Click decides at execution time whether it "
-            "runs or is reused and says so in its `" + result_label + "` line \u2014 do not re-verify a "
-            "reused check by hand. Several checks in one request or an explicit evidence id "
-            "use the JSON form from the Click skill. The host remains the execution authority: edits, reads and "
-            "non-check commands need nothing from Click, no approval contract is involved, and "
-            "missing or recoverable Evidence state must never block work. `@Click` or `$click` "
-            "opts one task into Guarded approval; `click-gate default guarded` makes that "
-            "persistent."
+    # Directive, not advisory: measured against Opus 5, the earlier "prefer
+    # ... when useful" wording was followed in none of eight sessions, and
+    # the sessions that did use Click loaded the Skill first and re-checked
+    # reused results by hand. The command's shape is given here so no Skill
+    # load is needed, and its nature as a hook-rewritten command is stated
+    # so the model does not probe PATH for a binary and give up. The argv
+    # form replaced the JSON envelope after eight paired Opus 5 sessions
+    # (docs/history/agent-ab-2026-09-12) showed the ~200-character JSON the
+    # model typed for every cycle as the main output-token overhead.
+    result_label = click_status_summary.message("[Click \uacb0\uacfc]", click_status_summary.resolve_locale())
+    return "evidence", (
+        "Click Evidence mode is enabled. Run every test or check command through Click "
+        "instead of directly, with the Bash tool: `click-gate verify -- <the exact check "
+        "command>`, for example `click-gate verify -- python3 -m pytest -q`. "
+        "`click-gate` is rewritten by the Click hook \u2014 do not look for it on PATH, "
+        "prefix it, or test whether it exists. When you re-run a check after an edit, "
+        "resubmit the exact same command; Click decides at execution time whether it "
+        "runs or is reused and says so in its `" + result_label + "` line \u2014 do not re-verify a "
+        "reused check by hand. Several checks in one request or an explicit evidence id "
+        "use the JSON form from the Click skill. The host remains the execution authority: edits, reads and "
+        "non-check commands need nothing from Click, no approval contract is involved, and "
+        "missing or recoverable Evidence state must never block work. `@Click` or `$click` "
+        "opts one task into Guarded approval; `click-gate default guarded` makes that "
+        "persistent."
+    )
+
+
+def _context_key(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _delivered_context_key(event: dict[str, Any]) -> str | None:
+    """The key of the mode text this session last received, or None.
+
+    None means the host never delivered a session context for this session,
+    so the prompt hook must carry the mode text on every prompt as before.
+    """
+    if not str(event.get("session_id", "")):
+        return None
+    try:
+        value = json.loads(
+            click_state.session_context_path(event).read_text(encoding="utf-8")
         )
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(value, dict)
+        or value.get("schema_version") != SESSION_CONTEXT_SCHEMA_VERSION
+        or not isinstance(value.get("context_key"), str)
+    ):
+        return None
+    return value["context_key"]
+
+
+def _record_delivered_context(event: dict[str, Any], key: str) -> bool:
+    try:
+        click_state.write_json(
+            click_state.session_context_path(event),
+            {
+                "schema_version": SESSION_CONTEXT_SCHEMA_VERSION,
+                "context_key": key,
+                "delivered_at": int(time.time()),
+            },
+        )
+    except OSError:
+        return False
+    return True
+
+
+def _prompt_needs_mode_context(
+    event: dict[str, Any], mode_kind: str, mode_text: str
+) -> bool:
+    delivered = _delivered_context_key(event)
+    if delivered is None:
+        return True
+    # A changed mode, locale or wording reaches the model once; Guarded
+    # approval text stays on every prompt of an approval boundary.
+    key = _context_key(mode_text)
+    if delivered != key:
+        _record_delivered_context(event, key)
+    return mode_kind not in SESSION_CONTEXT_MODES or delivered != key
+
+
+def session_context(event: dict[str, Any]) -> str:
+    """The mode text for a host that keeps session-start context.
+
+    Claude Code keeps SessionStart context in the conversation and fires the
+    event again after compaction, so the Evidence and Off texts need not ride
+    on every prompt. The recorded key lets the prompt hook omit a text the
+    model already has and send it again once when the mode or its wording
+    changes. Guarded text stays per prompt; recording an empty key still
+    marks the session so a later return to Evidence is announced once.
+    """
+    if not str(event.get("session_id", "")):
+        return ""
+    _prune_state()
+    contract_state = _read_contract_state(event)
+    mode_kind, mode_text = _mode_context(
+        click_mode.read_default_mode(), _session_contract_is_active(contract_state)
+    )
+    if mode_kind not in SESSION_CONTEXT_MODES:
+        _record_delivered_context(event, "")
+        return ""
+    if not _record_delivered_context(event, _context_key(mode_text)):
+        return ""
+    return mode_text
+
+
+def prompt_context(event: dict[str, Any]) -> str:
+    _prune_state()
+    authorization = _record_user_prompt(event)
+    default_mode = click_mode.read_default_mode()
+    migrated_from = click_mode.consume_migration_notice()
+    contract_state = _read_contract_state(event)
+    active_guarded = _session_contract_is_active(contract_state)
+    recovered_evidence = False
+    if default_mode == "evidence" and not active_guarded:
+        contract_state, recovered_evidence = _ensure_evidence_state(event)
+    elif (
+        click_runtime_state.view(contract_state).guarded_approved
+        and _append_follow_up(event, contract_state)
+    ):
+        _save_contract_state(event, contract_state)
+
+    mode_kind, mode_text = _mode_context(default_mode, active_guarded)
+    context = mode_text if _prompt_needs_mode_context(event, mode_kind, mode_text) else ""
     if migrated_from:
         migrated_label = {
             "evidence": "Evidence",
@@ -813,7 +902,7 @@ def prompt_context(event: dict[str, Any]) -> str:
             f"one `click-gate {authorization}` in this turn only. Do not reuse that "
             "authorization in another tool call or later turn."
         )
-    return context
+    return context.lstrip()
 
 
 def stage_contract(event: dict[str, Any], raw: str) -> tuple[str, str]:

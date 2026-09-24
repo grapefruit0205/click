@@ -252,11 +252,13 @@ def _validate_claude(root: Path, errors: list[str], release_version: str) -> Non
     if not isinstance(hook_config, dict):
         return
     hooks = hook_config.get("hooks", {})
-    required_hooks = {"UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"}
+    required_hooks = {
+        "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"
+    }
     if not isinstance(hooks, dict) or set(hooks) != required_hooks:
         errors.append(
-            "Claude Code hooks.json must register exactly UserPromptSubmit, "
-            "PreToolUse, PostToolUse, and SessionEnd"
+            "Claude Code hooks.json must register exactly SessionStart, "
+            "UserPromptSubmit, PreToolUse, PostToolUse, and SessionEnd"
         )
     serialized = json.dumps(hook_config, sort_keys=True)
     # Shell form on purpose: exec form cannot fall back between `py`, `python`
