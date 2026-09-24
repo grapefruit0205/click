@@ -157,6 +157,7 @@ this is not a strace line
         self.assertIn("/work/한.txt", reducer.paths)
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"), "Click CI observes Linux runners only")
 class RecordDecisionTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()

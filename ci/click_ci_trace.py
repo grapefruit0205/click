@@ -20,6 +20,7 @@ import ast
 import ctypes
 from dataclasses import dataclass, field
 import os
+import posixpath
 from pathlib import Path
 import re
 import shutil
@@ -151,7 +152,8 @@ class TraceReducer:
     def __init__(self, initial_cwd: Path) -> None:
         self.cwd: dict[str, str] = {}
         self.root_pid: str | None = None
-        self.initial_cwd = os.path.normpath(str(initial_cwd))
+        # Traces always carry POSIX paths, whatever the host running the reducer.
+        self.initial_cwd = posixpath.normpath(Path(initial_cwd).as_posix())
         self.pending: dict[str, str] = {}
         self.waiting: dict[str, list[tuple[str, str, str]]] = {}
         self.orphans: dict[str, list[str]] = {}
@@ -272,18 +274,18 @@ class TraceReducer:
         if text is None or text == "":
             return None
         if text.startswith("/"):
-            return os.path.normpath(text)
+            return posixpath.normpath(text)
         origin = base if base and base.startswith("/") else self.cwd.get(pid)
         if origin is None:
             return None
-        return os.path.normpath(os.path.join(origin, text))
+        return posixpath.normpath(posixpath.join(origin, text))
 
     def _learn_cwd(self, pid: str, arguments: str) -> None:
         if pid in self.cwd:
             return
         match = re.search(r"AT_FDCWD<([^<>]*)>", arguments)
         if match and match.group(1).startswith("/"):
-            self._adopt(pid, os.path.normpath(match.group(1)))
+            self._adopt(pid, posixpath.normpath(match.group(1)))
 
     def _mark(self, path: str | None, kind: str, operation: str = "") -> None:
         if path is None:
@@ -336,7 +338,7 @@ class TraceReducer:
             annotation = _FD_ANNOTATION.search(arguments)
             if returned == 0:
                 if annotation and annotation.group(1).startswith("/"):
-                    self.cwd[pid] = os.path.normpath(annotation.group(1))
+                    self.cwd[pid] = posixpath.normpath(annotation.group(1))
                 else:
                     self.unplaced()
             return
@@ -344,7 +346,7 @@ class TraceReducer:
             annotation = _FD_ANNOTATION.search(arguments)
             if returned is not None and returned >= 0:
                 if annotation and annotation.group(1).startswith("/"):
-                    self._mark(os.path.normpath(annotation.group(1)), "input", "enumerate")
+                    self._mark(posixpath.normpath(annotation.group(1)), "input", "enumerate")
                 else:
                     self.unplaced()
             return
@@ -396,7 +398,7 @@ class TraceReducer:
                 self._mark(path, "input", "metadata")
                 return
             resolved = _RESULT_PATH.match(result)
-            target = os.path.normpath(resolved.group(1)) if resolved and resolved.group(1).startswith("/") else path
+            target = posixpath.normpath(resolved.group(1)) if resolved and resolved.group(1).startswith("/") else path
             if target != path and path is not None:
                 self._mark(path, "input", "metadata")
             if not writes:
@@ -507,7 +509,7 @@ class TraceReducer:
             else:
                 strings = _strings(arguments[unix.start():])
                 path = strings[0][0] if strings else None
-                if path is not None and self.paths.get(os.path.normpath(path), PathState("")).first == "produced":
+                if path is not None and self.paths.get(posixpath.normpath(path), PathState("")).first == "produced":
                     return
                 reason = f"socket:{path}"
             if not failed and reason not in self.volatile:
@@ -644,7 +646,7 @@ _STATX_BTIME_OFFSET = 80  # struct statx: stx_btime follows stx_atime
 def _statx():
     try:
         function = ctypes.CDLL(None, use_errno=True).statx
-    except (OSError, AttributeError):
+    except (OSError, AttributeError, TypeError):  # no libc statx (Windows, macOS)
         return None
     function.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_uint, ctypes.c_void_p]
     function.restype = ctypes.c_int
