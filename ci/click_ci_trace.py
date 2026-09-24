@@ -266,6 +266,8 @@ class TraceReducer:
                 self.unplaced(f"{pid} {name}({arguments}) = {result} [cwd unknown]")
         self.waiting.clear()
         for pid, head in self.pending.items():
+            if head.startswith("???("):
+                continue  # killed at a syscall stop before strace could read it
             self.unplaced(f"{pid} {head} [never resumed]")
         self.pending.clear()
 

@@ -144,6 +144,8 @@ this is not a strace line
 600 wait4(601,  <unfinished ...>
 601 <... ??? resumed>)               = ?
 601 +++ killed by SIGKILL +++
+603 ???( <unfinished ...>
+603 +++ killed by SIGKILL +++
 600 <... wait4 resumed>[{WIFSIGNALED(s) && WTERMSIG(s) == SIGKILL}], 0, NULL) = 601
 602 ptrace(PTRACE_TRACEME) = -1 EPERM (Operation not permitted)
 ''')
@@ -190,10 +192,14 @@ class RecordDecisionTests(unittest.TestCase):
                 str(self.repo / "src" / "absent.py"): click_ci_trace.PathState("missing", {"metadata"}),
                 str(self.repo / "src" / "__pycache__" / "calc.pyc"): click_ci_trace.PathState("input", {"read"}),
                 "/tmp/volatile/scratch": click_ci_trace.PathState("input", {"read"}),
+                # npm rotating its own debug logs is not a changed input.
+                "/nonexistent-home/.npm/_logs/2026-01-01T00_00_00_000Z-debug-0.log":
+                    click_ci_trace.PathState("input", {"metadata"}, modified_after_input=True),
             },
             volatile_reasons=[], unresolved_lines=0, process_count=1, duration_seconds=0.1)
         record = self.record(observation)
         self.assertEqual(set(record["inputs"]), {"repo:src/calc.py", "repo:src", "repo:src/absent.py"})
+        self.assertEqual(record["volatile"], [])
         self.assertTrue(self.decide(record).skip)
 
         (self.repo / "src" / "unused.py").write_text("OTHER = 2\n", encoding="utf-8")

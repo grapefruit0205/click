@@ -80,6 +80,9 @@ DEFAULT_IGNORES = (
     "node_modules/.cache", "node_modules/.cache/*", ".nyc_output", ".nyc_output/*",
 )
 IGNORED_NAMES = frozenset({"__pycache__"})
+# Tool logs under the home directory: rotated by the tool on every run, never
+# what a test checks (npm deletes its oldest debug log each time it starts).
+HOME_IGNORES = (".npm/_logs", ".npm/_logs/*")
 
 # The same allow-list Click's agent-side receipts bind (hooks/
 # click_verification_bindings.py): variables that change how a check runs.
@@ -154,7 +157,10 @@ class Places:
             if _within(path, root):
                 return None
         if _within(path, self.home):
-            return "home:" + os.path.relpath(path, self.home).replace(os.sep, "/")
+            relative = os.path.relpath(path, self.home).replace(os.sep, "/")
+            if any(fnmatch.fnmatchcase(relative, pattern) for pattern in HOME_IGNORES):
+                return None
+            return "home:" + relative
         return "abs:" + path
 
     def path(self, key: str) -> str:

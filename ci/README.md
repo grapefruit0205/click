@@ -76,7 +76,7 @@ The record is marked volatile, and the command always runs, when the command:
 
 - failed on the default branch;
 - changed or deleted a file it had read (tool caches such as `__pycache__`,
-  `.pytest_cache` and `.coverage` excepted);
+  `.pytest_cache`, `.coverage` and npm's rotated debug logs excepted);
 - connected to a non-loopback address or DNS, or to a local socket it did not
   create (a database or Docker daemon);
 - left processes running after it exited;
