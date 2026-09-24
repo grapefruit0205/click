@@ -28,6 +28,48 @@ scripts, data files, fixtures, lockfiles, installed packages and the
 toolchain itself are covered without a language-specific adapter. A file the
 command created itself is its product, not an input.
 
+## Split a suite by paths
+
+A command that runs the whole suite reads nearly every source file, so almost
+any change reruns it. When the command takes test files or directories as
+arguments, which most runners do, write `{paths}` where they go and give the
+globs:
+
+```yaml
+- uses: grapefruit0205/click/ci@<release tag or commit>
+  with:
+    run: pytest -q {paths}
+    paths: tests/**/test_*.py
+```
+
+```yaml
+    run: npx jest {paths}                     # or vitest run, rspec, phpunit, bats
+    paths: src/**/*.test.ts !src/legacy/**
+```
+
+```yaml
+    run: go test {paths}
+    paths: ./internal/*/ ./cmd/*/
+```
+
+Click CI knows nothing about these runners. It only substitutes paths:
+
+- **record** runs each group of paths as its own command under observation, so
+  every group has its own inputs.
+- **select** decides every group and runs the groups whose inputs changed
+  together, in one invocation. When none changed, the step is skipped.
+- **shadow** runs the groups select would run, then the ones it would skip,
+  and reports whether the skipped ones would have failed.
+
+Each path is its own group up to 32 paths; beyond that the paths fall into 32
+groups by a hash of their name, so adding a file changes only its own group
+(`groups:` sets another number). Fewer groups mean fewer command start-ups
+when recording and coarser selection on pull requests.
+
+Splitting assumes the files do not depend on running together or in a
+particular order, the same assumption as running one test file alone. The
+default branch still runs every path, group by group.
+
 ## When it never skips
 
 The record is marked volatile, and the command always runs, when the command:
@@ -52,10 +94,12 @@ should not have happened surfaces, at the latest, when the change merges.
 - **Linux runners only.** Observation uses strace (installed with `apt-get`
   when missing, in record mode only). On macOS and Windows runners the action
   runs the command unchanged.
-- **The command is the unit.** A single command that runs the whole suite
-  reads nearly every source file, so it skips only when a change touches
-  nothing it reads (documentation, other packages, other jobs' files). Split
-  suites (matrix partitions, per-package steps) skip per part.
+- **Without `paths`, the command is the unit.** A single command that runs the
+  whole suite reads nearly every source file, so it skips only when a change
+  touches nothing it reads (documentation, other packages, other jobs'
+  files). Use `{paths}` to split it.
+- **Globs** are separated by whitespace, so a pattern cannot contain a space
+  (match it with `?`). `node_modules` is never matched.
 - **Environment variables** are compared through an allow-list (PATH, locale,
   time zone, proxies, and the variable families of common toolchains such as
   `PYTHON*`, `NODE_*`, `GO*`, `CARGO_*`, `JAVA_*`). CI bookkeeping such as run
@@ -85,6 +129,7 @@ should not have happened surfaces, at the latest, when the change merges.
 python3 ci/click_ci.py run --mode record -- pytest -q
 python3 ci/click_ci.py run --mode select -- pytest -q
 python3 ci/click_ci.py plan -- pytest -q
+python3 ci/click_ci.py run --paths 'tests/**/test_*.py' -- pytest -q {paths}
 ```
 
 `--store DIR` (or `CLICK_CI_STORE`) selects where records live;

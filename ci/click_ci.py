@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import datetime as _datetime
 import fnmatch
+import glob
 import gzip
 import hashlib
 import json
@@ -62,6 +63,13 @@ DIGEST_WORKERS = min(8, os.cpu_count() or 1)
 CHECK_BATCH = 256
 # Repository files change most often; the toolchain under /usr least.
 CHECK_ORDER = {"repo": 0, "home": 1}
+# `run: pytest {paths}` with `paths: <globs>` splits one command into groups of
+# paths, each recorded and decided on its own. Up to AUTO_GROUPS paths get one
+# group each; beyond that, AUTO_GROUPS stable hash buckets keep the number of
+# recorded start-ups bounded.
+PATHS_TOKEN = "{paths}"
+AUTO_GROUPS = 32
+PATH_EXCLUDED_PARTS = frozenset({"node_modules", "__pycache__"})
 
 # Tool caches whose contents change how fast a command runs, not what it
 # checks. `.click/ci.json` can add patterns; it cannot remove these.
@@ -439,6 +447,56 @@ class Store:
         except FileNotFoundError:
             pass
 
+    def prune(self, keep: Iterable[str]) -> None:
+        """Drop records of groups that no longer exist."""
+        wanted = {self._path(key).name for key in keep}
+        for path in self.root.glob("*.json.gz"):
+            if path.name not in wanted:
+                path.unlink(missing_ok=True)
+
+
+# -- split commands ------------------------------------------------------------
+
+def expand_paths(patterns: Iterable[str], cwd: Path) -> list[str]:
+    """Paths matching the globs, as written, relative to cwd; ``!glob`` excludes."""
+    included: dict[str, str] = {}
+    excluded: set[str] = set()
+    for pattern in patterns:
+        negate = pattern.startswith("!")
+        body = pattern[1:] if negate else pattern
+        for match in glob.glob(body, root_dir=str(cwd), recursive=True):
+            normal = os.path.normpath(match)
+            if negate:
+                excluded.add(normal)
+            elif not PATH_EXCLUDED_PARTS.intersection(Path(normal).parts):
+                included.setdefault(normal, match)
+    return sorted(original for normal, original in included.items()
+                  if normal not in excluded
+                  and not any(str(parent) in excluded for parent in Path(normal).parents))
+
+
+def substitute(template: Sequence[str], paths: Sequence[str]) -> list[str]:
+    """The command with ``{paths}`` replaced: as arguments, or quoted inside a shell string."""
+    argv: list[str] = []
+    for item in template:
+        if item == PATHS_TOKEN:
+            argv.extend(paths)
+        else:
+            argv.append(item.replace(PATHS_TOKEN, shlex.join(paths)))
+    return argv
+
+
+def plan_groups(paths: Sequence[str], count: int = 0) -> list[list[str]]:
+    """One group per path, or hash buckets: adding a path changes only its own group."""
+    count = count if count > 0 else min(len(paths), AUTO_GROUPS)
+    if count >= len(paths):
+        return [[path] for path in paths]
+    buckets: list[list[str]] = [[] for _ in range(count)]
+    for path in paths:
+        digest = hashlib.sha256(os.path.normpath(path).encode("utf-8", "surrogateescape")).digest()
+        buckets[int.from_bytes(digest[:8], "big") % count].append(path)
+    return [sorted(bucket) for bucket in buckets if bucket]
+
 
 # -- mode selection and reporting -------------------------------------------
 
@@ -476,7 +534,7 @@ def _describe(decision: Decision) -> str:
     return f"{decision.reason}" + (f": {detail}" if detail else "")
 
 
-def _report(entry: Mapping[str, Any]) -> None:
+def _report(entry: Mapping[str, Any], *, summary: bool = True) -> None:
     target = os.environ.get("CLICK_CI_REPORT")
     if target:
         try:
@@ -484,12 +542,12 @@ def _report(entry: Mapping[str, Any]) -> None:
                 handle.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
         except OSError:
             pass
-    summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary:
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary and step_summary:
         verb = entry["action"]
         line = f"- click-ci **{verb}** `{entry['command']}` — {entry['detail']}\n"
         try:
-            with open(summary, "a", encoding="utf-8") as handle:
+            with open(step_summary, "a", encoding="utf-8") as handle:
                 handle.write(line)
         except OSError:
             pass
@@ -507,6 +565,37 @@ def _annotate(level: str, message: str) -> None:
         sys.stdout.flush()
     else:
         _say(message)
+
+
+def _record_unit(argv: Sequence[str], *, identity: Mapping[str, Any], store: Store, places: Places,
+                 environment: Mapping[str, str], strace: str, cwd: Path) -> tuple[int, dict[str, Any]]:
+    """Run one unit under observation and keep its record when it passes."""
+    command = shlex.join(argv)
+    observation = click_ci_trace.observe(argv, cwd=cwd, environment=environment, strace=strace)
+    record = build_record(observation, identity=identity, places=places,
+                          digester=Digester(places), environment=environment)
+    volatile = record["volatile"]
+    code = observation.exit_code
+    if code == 0:
+        store.save(identity["key"], record)
+        detail = f"recorded {len(record['inputs'])} inputs in {observation.duration_seconds:.1f}s"
+    else:
+        store.remove(identity["key"])
+        # Tracing must never turn a passing command into a failing one
+        # (ptrace users, tight timeouts): the unobserved run decides.
+        _say(f"`{command}` exited {code} under observation; running it again unobserved")
+        code = subprocess.call(list(argv), cwd=str(cwd))
+        detail = f"exited {observation.exit_code} under observation, {code} unobserved; nothing recorded"
+        if code == 0:
+            _annotate("warning", f"click-ci: `{command}` failed only under observation "
+                      f"({', '.join(volatile[:3]) or 'no traced cause'}); nothing was recorded")
+    if volatile:
+        detail += f"; volatile: {', '.join(volatile[:3])}"
+    _say(f"ran `{command}` (record) — {detail}")
+    return code, {"detail": detail, "saved": observation.exit_code == 0,
+                  "observed_exit_code": observation.exit_code,
+                  "volatile": volatile[:MAX_REPORTED_CHANGES],
+                  "unresolved_examples": record["unresolved_examples"]}
 
 
 def run(argv: Sequence[str], *, mode: str, store: Store, label: str | None = None,
@@ -541,32 +630,10 @@ def run(argv: Sequence[str], *, mode: str, store: Store, label: str | None = Non
             code = subprocess.call(list(argv), cwd=str(cwd))
             _report({**entry, "action": "ran", "exit_code": code, "detail": "record without strace"})
             return code
-        observation = click_ci_trace.observe(argv, cwd=cwd, environment=environment, strace=strace)
-        record = build_record(observation, identity=identity, places=places,
-                              digester=Digester(places), environment=environment)
-        volatile = record["volatile"]
-        code = observation.exit_code
-        if code == 0:
-            store.save(identity["key"], record)
-            detail = f"recorded {len(record['inputs'])} inputs in {observation.duration_seconds:.1f}s"
-        else:
-            store.remove(identity["key"])
-            # Tracing must never turn a passing command into a failing one
-            # (ptrace users, tight timeouts): the unobserved run decides.
-            _say(f"`{command}` exited {code} under observation; running it again unobserved")
-            code = subprocess.call(list(argv), cwd=str(cwd))
-            detail = f"exited {observation.exit_code} under observation, {code} unobserved; nothing recorded"
-            if code == 0:
-                _annotate("warning", f"click-ci: `{command}` failed only under observation "
-                          f"({', '.join(volatile[:3]) or 'no traced cause'}); nothing was recorded")
-        if volatile:
-            detail += f"; volatile: {', '.join(volatile[:3])}"
-        _say(f"ran `{command}` (record) — {detail}")
-        _report({**entry, "action": "recorded", "exit_code": code, "detail": detail,
-                 "observed_exit_code": observation.exit_code,
-                 "false_skip": decision.skip and code != 0,
-                 "volatile": volatile[:MAX_REPORTED_CHANGES],
-                 "unresolved_examples": record["unresolved_examples"]})
+        code, outcome = _record_unit(argv, identity=identity, store=store, places=places,
+                                     environment=environment, strace=strace, cwd=cwd)
+        _report({**entry, "action": "recorded", "exit_code": code, **outcome,
+                 "false_skip": decision.skip and code != 0})
         return code
     code = subprocess.call(list(argv), cwd=str(cwd))
     detail = _describe(decision)
@@ -579,16 +646,118 @@ def run(argv: Sequence[str], *, mode: str, store: Store, label: str | None = Non
     return code
 
 
+def _group_store(template: Sequence[str], cwd: Path, places: Places, store: Store,
+                 label: str | None) -> Store:
+    return Store(store.root / unit_identity(template, cwd, places, label)["key"])
+
+
+def _decide_groups(identities: Sequence[Mapping[str, Any]], *, store: Store, places: Places,
+                   environment: Mapping[str, str]) -> list[Decision]:
+    digester = Digester(places)  # shared: an input read by every group is hashed once
+    return [decide(store.load(identity["key"]), places=places, digester=digester, environment=environment)
+            for identity in identities]
+
+
+def _group_name(part: Sequence[str]) -> str:
+    return part[0] + (f" +{len(part) - 1}" if len(part) > 1 else "")
+
+
+def run_split(template: Sequence[str], patterns: Sequence[str], *, mode: str, store: Store,
+              groups: int = 0, label: str | None = None, cwd: Path | None = None) -> int:
+    """Record and decide each group of paths on its own; run the changed ones together."""
+    cwd = Path(cwd or os.getcwd())
+    environment = dict(os.environ)
+    command = shlex.join(template)
+    paths = expand_paths(patterns, cwd)
+    if not paths:
+        _say(f"no path in {cwd} matches {' '.join(patterns)}")
+        return 2
+    if mode == "off":
+        return subprocess.call(substitute(template, paths), cwd=str(cwd))
+    places = Places.discover(cwd, store=store.root)
+    store = _group_store(template, cwd, places, store, label)
+    parts = plan_groups(paths, groups)
+    units = [(part, substitute(template, part)) for part in parts]
+    identities = [unit_identity(argv, cwd, places, label) for _, argv in units]
+    base: dict[str, Any] = {"command": command, "mode": mode, "groups": len(parts), "paths": len(paths)}
+
+    if mode == "record":
+        strace = click_ci_trace.strace_available()
+        if strace is None:
+            _say("strace is unavailable: running unobserved and recording nothing")
+            code = subprocess.call(substitute(template, paths), cwd=str(cwd))
+            _report({**base, "action": "ran", "exit_code": code, "detail": "record without strace"})
+            return code
+        codes: list[int] = []
+        saved = 0
+        for (part, argv), identity in zip(units, identities):
+            code, outcome = _record_unit(argv, identity=identity, store=store, places=places,
+                                         environment=environment, strace=strace, cwd=cwd)
+            codes.append(code)
+            saved += bool(outcome["saved"])
+            _report({**base, "action": "group-recorded", "group": part, "unit": identity["key"],
+                     "exit_code": code, **outcome}, summary=False)
+        store.prune(identity["key"] for identity in identities)
+        failed = [_group_name(part) for part, code in zip(parts, codes) if code]
+        code = next((code for code in codes if code), 0)
+        detail = (f"recorded {saved} of {len(parts)} groups ({len(paths)} paths)"
+                  + (f"; failed: {', '.join(failed[:MAX_REPORTED_CHANGES])}" if failed else ""))
+        _say(f"`{command}` (record) — {detail}")
+        _report({**base, "action": "recorded", "exit_code": code, "detail": detail})
+        return code
+
+    started = time.monotonic()
+    decisions = _decide_groups(identities, store=store, places=places, environment=environment)
+    decide_seconds = round(time.monotonic() - started, 3)
+    for (part, _argv), identity, decision in zip(units, identities, decisions):
+        _report({**base, "action": "group-decided", "group": part, "unit": identity["key"],
+                 "would_skip": decision.skip, "reason": decision.reason, "changed": decision.changed,
+                 "checked_inputs": decision.checked, "detail": _describe(decision)}, summary=False)
+    run_parts = [part for part, decision in zip(parts, decisions) if not decision.skip]
+    skip_parts = [part for part, decision in zip(parts, decisions) if decision.skip]
+    run_paths = sorted(path for part in run_parts for path in part)
+    skip_paths = sorted(path for part in skip_parts for path in part)
+    why = "; ".join(f"{_group_name(part)} ← {_describe(decision)}"
+                    for part, decision in zip(parts, decisions) if not decision.skip)
+    base.update(decide_seconds=decide_seconds, ran_groups=len(run_parts), ran_paths=len(run_paths))
+    counts = f"{len(run_parts)} of {len(parts)} groups ({len(run_paths)} of {len(paths)} paths)"
+
+    if mode == "select":
+        if not run_paths:
+            detail = f"no observed input of any of {len(parts)} groups ({len(paths)} paths) changed"
+            _say(f"skipped `{command}` — {detail}")
+            _report({**base, "action": "skipped", "exit_code": 0, "detail": detail})
+            return 0
+        _say(f"running {counts}: {why[:600]}")
+        code = subprocess.call(substitute(template, run_paths), cwd=str(cwd))
+        _report({**base, "action": "ran", "exit_code": code, "detail": f"ran {counts}; {why[:600]}"})
+        return code
+
+    # shadow: run what select would, then what it would skip, and say whether skipping was wrong.
+    code = subprocess.call(substitute(template, run_paths), cwd=str(cwd)) if run_paths else 0
+    check = subprocess.call(substitute(template, skip_paths), cwd=str(cwd)) if skip_paths else 0
+    detail = f"would run {counts}" + (f"; the skipped paths failed with {check}" if check else "")
+    _say(f"`{command}` (shadow) — {detail}")
+    _report({**base, "action": "shadow", "exit_code": code or check, "detail": detail,
+             "would_skip": not run_paths, "false_skip": check != 0})
+    return code or check
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="click-ci", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("mode", help="print the mode `run --mode auto` would use here")
-    for name in ("run", "plan", "key"):
+    for name in ("run", "plan", "key", "paths"):
         command = sub.add_parser(name)
         command.add_argument("--store", type=Path,
                              default=Path(os.environ.get("CLICK_CI_STORE") or
                                           Path(tempfile.gettempdir()) / "click-ci"))
         command.add_argument("--unit", help="optional label kept in the unit identity")
+        command.add_argument("--paths", action="append", default=[], metavar="GLOBS",
+                             help=f"globs (whitespace-separated, !glob excludes) substituted for "
+                                  f"{PATHS_TOKEN} in the command; each group of paths is decided alone")
+        command.add_argument("--groups", type=int, default=0,
+                             help=f"number of path groups (default: one per path up to {AUTO_GROUPS})")
         if name == "run":
             command.add_argument("--mode", default="auto",
                                  choices=["auto", "record", "select", "shadow", "off"])
@@ -597,15 +766,35 @@ def main(arguments: Sequence[str] | None = None) -> int:
     if options.action == "mode":
         print(automatic_mode(os.environ))
         return 0
+    patterns = [item for value in options.paths for item in value.split()]
+    if options.action == "paths":
+        # The expansion alone, shell-quoted: lets a runner without Python-side
+        # observation (macOS, Windows) run the same command.
+        print(shlex.join(expand_paths(patterns, Path.cwd())))
+        return 0
     argv = list(options.argv)
     if argv[:1] == ["--"]:
         argv = argv[1:]
     if not argv:
         parser.error("give the command after `--`")
+    if patterns and not any(PATHS_TOKEN in item for item in argv):
+        parser.error(f"--paths needs {PATHS_TOKEN} in the command")
+    if not patterns and any(PATHS_TOKEN in item for item in argv):
+        parser.error(f"the command has {PATHS_TOKEN} but no --paths was given")
     store = Store(options.store)
     if options.action == "key":
         places = Places.discover(Path.cwd(), store=store.root)
         print(unit_identity(argv, Path.cwd(), places, options.unit)["key"])
+        return 0
+    if options.action == "plan" and patterns:
+        cwd = Path.cwd()
+        places = Places.discover(cwd, store=store.root)
+        parts = plan_groups(expand_paths(patterns, cwd), options.groups)
+        identities = [unit_identity(substitute(argv, part), cwd, places, options.unit) for part in parts]
+        decisions = _decide_groups(identities, store=_group_store(argv, cwd, places, store, options.unit),
+                                   places=places, environment=os.environ)
+        print(json.dumps([{"group": part, "skip": d.skip, "reason": d.reason, "changed": d.changed}
+                          for part, d in zip(parts, decisions)], indent=2))
         return 0
     if options.action == "plan":
         places = Places.discover(Path.cwd(), store=store.root)
@@ -617,6 +806,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
                           "recorded_commit": decision.recorded_commit}, indent=2))
         return 0
     mode = automatic_mode(os.environ) if options.mode == "auto" else options.mode
+    if patterns:
+        return run_split(argv, patterns, mode=mode, store=store, groups=options.groups, label=options.unit)
     return run(argv, mode=mode, store=store, label=options.unit)
 
 

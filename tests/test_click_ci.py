@@ -276,6 +276,36 @@ class ModeTests(unittest.TestCase):
         self.assertEqual(click_ci.automatic_mode({"CLICK_CI_MODE": "shadow"}), "shadow")
 
 
+class SplitTests(unittest.TestCase):
+    def test_globs_expand_with_exclusions_and_stay_as_written(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in ("tests/test_a.py", "tests/slow/test_s.py", "tests/helper.py",
+                             "web/node_modules/x/a.test.js", "web/app.test.js"):
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_text("", encoding="utf-8")
+            self.assertEqual(click_ci.expand_paths(["tests/**/test_*.py", "!tests/slow"], root),
+                             ["tests/test_a.py"])
+            self.assertEqual(click_ci.expand_paths(["./web/**/*.test.js"], root), ["./web/app.test.js"])
+
+    def test_paths_fill_an_argument_list_or_a_shell_string(self) -> None:
+        paths = ["tests/a b.py", "tests/c.py"]
+        self.assertEqual(click_ci.substitute(["pytest", "-q", "{paths}"], paths),
+                         ["pytest", "-q", "tests/a b.py", "tests/c.py"])
+        self.assertEqual(click_ci.substitute(["bash", "-c", "pytest {paths} -x"], paths),
+                         ["bash", "-c", "pytest 'tests/a b.py' tests/c.py -x"])
+
+    def test_groups_are_stable_when_a_path_is_added(self) -> None:
+        paths = [f"tests/test_{index}.py" for index in range(100)]
+        self.assertEqual(click_ci.plan_groups(paths[:3]), [[p] for p in paths[:3]])
+        before = click_ci.plan_groups(paths)
+        after = click_ci.plan_groups(sorted(paths + ["tests/test_new.py"]))
+        self.assertLessEqual(len(before), click_ci.AUTO_GROUPS)  # empty buckets are dropped
+        changed = [group for group in after if group not in before]
+        self.assertEqual(len(changed), 1)
+        self.assertIn("tests/test_new.py", changed[0])
+
+
 @unittest.skipUnless(sys.platform.startswith("linux") and click_ci_trace.strace_available(),
                      "strace observation runs on Linux with strace installed")
 class ObservedCommandTests(unittest.TestCase):
@@ -314,6 +344,41 @@ class ObservedCommandTests(unittest.TestCase):
             self.assertEqual((ran["action"], ran["changed"]), ("ran", ["repo:src/calc.py"]))
             shadow = run("shadow")
             self.assertEqual((shadow["action"], shadow["would_skip"]), ("shadow", False))
+
+    def test_split_command_reruns_only_the_groups_whose_inputs_changed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            repo, store, report = root / "repo", root / "store", root / "report.jsonl"
+            (repo / "src").mkdir(parents=True)
+            (repo / "tests").mkdir()
+            for name in ("alpha", "beta"):
+                (repo / "src" / f"{name}.py").write_text("VALUE = 1\n", encoding="utf-8")
+                (repo / "tests" / f"test_{name}.py").write_text(
+                    f"import sys, unittest\nsys.path.insert(0, 'src')\nimport {name}\n"
+                    f"class T(unittest.TestCase):\n    def test_value(self):\n"
+                    f"        self.assertEqual({name}.VALUE, 1)\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+
+            def run(mode: str) -> tuple[dict, str]:
+                environment = {**os.environ, "CLICK_CI_REPORT": str(report), "PYTHONDONTWRITEBYTECODE": "1"}
+                for name in ("GITHUB_STEP_SUMMARY", "GITHUB_ACTIONS"):
+                    environment.pop(name, None)
+                completed = subprocess.run(
+                    [sys.executable, str(SCRIPT), "run", "--mode", mode, "--store", str(store),
+                     "--paths", "tests/test_*.py", "--",
+                     sys.executable, "-B", "-m", "unittest", "{paths}"],
+                    cwd=repo, env=environment, capture_output=True, text=True, check=False)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                return json.loads(report.read_text(encoding="utf-8").splitlines()[-1]), completed.stderr
+
+            recorded, _ = run("record")
+            self.assertEqual((recorded["action"], recorded["groups"]), ("recorded", 2))
+            self.assertEqual(run("select")[0]["action"], "skipped")
+            (repo / "src" / "beta.py").write_text("VALUE = 1  # touched\n", encoding="utf-8")
+            ran, stderr = run("select")
+            self.assertEqual((ran["action"], ran["ran_paths"]), ("ran", 1))
+            self.assertIn("tests/test_beta.py ← inputs-changed: repo:src/beta.py", ran["detail"])
+            self.assertIn("Ran 1 test", stderr)
 
     def test_a_failure_caused_by_tracing_is_decided_by_an_unobserved_run(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -7,8 +7,23 @@ branding:
   color: blue
 inputs:
   run:
-    description: The command to run, as you would write it in a `run:` step (bash).
+    description: >-
+      The command to run, as you would write it in a `run:` step (bash). With
+      `paths`, write `{paths}` where the command takes its test files or
+      directories, for example `pytest -q {paths}`.
     required: true
+  paths:
+    description: >-
+      Globs, relative to working-directory, for the paths that replace
+      `{paths}` (`**` recurses, `!glob` excludes). Each group of paths is
+      recorded and decided on its own; a pull request runs only the groups
+      whose observed inputs changed, in one invocation.
+    default: ""
+  groups:
+    description: >-
+      How many groups to split the paths into. 0 (default) gives each path its
+      own group up to 32 paths, and 32 stable groups beyond that.
+    default: "0"
   working-directory:
     description: Directory to run the command in.
     default: "."
@@ -72,18 +87,32 @@ runs:
       env:
         CLICK_CI_RUN: ${{ inputs.run }}
         CLICK_CI_UNIT: ${{ inputs.unit }}
+        CLICK_CI_PATHS: ${{ inputs.paths }}
+        CLICK_CI_GROUPS: ${{ inputs.groups }}
         CLICK_CI_STORE: ${{ steps.plan.outputs.store }}
         CLICK_CI_REPORT: ${{ runner.temp }}/click-ci-report.jsonl
         CLICK_CI_MODE: ${{ steps.plan.outputs.mode }}
       run: |
+        tool="$GITHUB_ACTION_PATH/click_ci.py"
+        split=()
+        if [ -n "${CLICK_CI_PATHS//[[:space:]]/}" ]; then
+          split=(--paths "$CLICK_CI_PATHS" --groups "$CLICK_CI_GROUPS")
+        fi
         if [ "$CLICK_CI_MODE" = off ]; then
           echo "skipped=false" >> "$GITHUB_OUTPUT"
-          exec bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN"
+          if [ ${#split[@]} -eq 0 ]; then
+            exec bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN"
+          fi
+          # No observation here (macOS, Windows): expand the paths, run them all.
+          python=python3
+          [ "$RUNNER_OS" = Windows ] && python=python
+          paths=$("$python" "$tool" paths --paths "$CLICK_CI_PATHS")
+          exec bash --noprofile --norc -eo pipefail -c "${CLICK_CI_RUN//\{paths\}/"$paths"}"
         fi
         before=$(wc -l < "$CLICK_CI_REPORT" 2>/dev/null || echo 0)
         status=0
-        /usr/bin/python3 "$GITHUB_ACTION_PATH/click_ci.py" run --mode "$CLICK_CI_MODE" \
-          --unit "$CLICK_CI_UNIT" -- bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN" || status=$?
+        /usr/bin/python3 "$tool" run --mode "$CLICK_CI_MODE" --unit "$CLICK_CI_UNIT" "${split[@]}" \
+          -- bash --noprofile --norc -eo pipefail -c "$CLICK_CI_RUN" || status=$?
         skipped=false
         if tail -n +"$((before + 1))" "$CLICK_CI_REPORT" 2>/dev/null | grep -q '"action": "skipped"'; then
           skipped=true
