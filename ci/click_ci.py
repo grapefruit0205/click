@@ -464,13 +464,14 @@ class Store:
 # -- split commands ------------------------------------------------------------
 
 def expand_paths(patterns: Iterable[str], cwd: Path) -> list[str]:
-    """Paths matching the globs, as written, relative to cwd; ``!glob`` excludes."""
+    """Paths matching the globs, as written with ``/``, relative to cwd; ``!glob`` excludes."""
     included: dict[str, str] = {}
     excluded: set[str] = set()
     for pattern in patterns:
         negate = pattern.startswith("!")
         body = pattern[1:] if negate else pattern
         for match in glob.glob(body, root_dir=str(cwd), recursive=True):
+            match = match.replace(os.sep, "/")  # Windows: backslashes would be escapes in bash
             normal = os.path.normpath(match)
             if negate:
                 excluded.add(normal)
