@@ -126,6 +126,7 @@ class VerifyRequestTests(unittest.TestCase):
                          ["bash", "-o", "pipefail", "-c", "pytest {paths} | tail -3"])
         self.assertEqual(observed._shown(["bash", "-o", "pipefail", "-c", "pytest | tail"]), "pytest | tail")
 
+    @unittest.skipIf(os.name == "nt", "observed checks run on Linux only; their keys and commands are POSIX")
     def test_runner_command_names_the_store_and_globs(self) -> None:
         command = observed.runner_command(["pytest", "{paths}"], ["tests/*.py"], {"PLUGIN_DATA": "/data"})
         self.assertIn(f"{ENGINE} run --store /data/observed-checks --paths 'tests/*.py' -- pytest '{{paths}}'",
@@ -149,6 +150,7 @@ class GateRoutingTests(ClickGateTestCase):
     # The gate under test loads its own copy of the engine module.
     engine = CLICK_GATE.click_observed_check
 
+    @unittest.skipIf(os.name == "nt", "observed checks run on Linux only; their keys and commands are POSIX")
     def test_evidence_verify_goes_to_the_observed_check_where_strace_is(self) -> None:
         self.prompt_submit("run the tests", "turn-1")
         with mock.patch.object(self.engine, "available", return_value=True):
@@ -246,6 +248,7 @@ class PruneTests(unittest.TestCase):
             self.assertGreater((fresh.root / "k.json.gz").stat().st_mtime, past + 60)
 
 
+@unittest.skipIf(os.name == "nt", "observed checks run on Linux only; their keys and commands are POSIX")
 class RecordFreshnessTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
