@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Observe one CI command with strace and reduce the trace to its inputs.
+"""Observe one command with strace and reduce the trace to its inputs.
 
-Click's agent-side observer bounds its trace for a single hook-driven check.
-A CI test step reads far more, so this collector streams strace's output from
+This collector works for any program in any language: it sees the process
+tree's file, process and socket system calls. It streams strace's output from
 a FIFO, keeps no size limit, and stitches the ``<unfinished ...>`` and
 ``<... resumed>`` halves that ``-f`` produces when processes run concurrently.
+Click CI and the agent-side observed check both use it.
 
 The result keeps, per absolute path, the state the command found before it
 touched the path: what it read, listed, executed or looked up and did not
@@ -17,6 +18,7 @@ command is never skipped.
 from __future__ import annotations
 
 import ast
+import codecs
 import ctypes
 from dataclasses import dataclass, field
 import os
@@ -30,10 +32,10 @@ import subprocess
 import tempfile
 import threading
 import time
-from typing import Iterable, Sequence
+from typing import IO, Any, Callable, Iterable, Sequence
 
 
-TRACE_EXPRESSION = "trace=%file,%process,getdents64,getdents,connect,ptrace"
+TRACE_EXPRESSION = "trace=%file,%process,getdents64,getdents,bind,connect,ptrace"
 STRING_LIMIT = 4096
 LINGER_SECONDS = 5.0
 
@@ -129,6 +131,21 @@ def _decode(literal: str) -> str | None:
     return value
 
 
+def _fd_path(text: str) -> str | None:
+    """The absolute path strace's ``-y`` prints for a descriptor, or None.
+
+    Like quoted arguments, these escape bytes that are not printable ASCII
+    (a UTF-8 name such as ``\\355\\225\\234``), so they are decoded the same way.
+    """
+    if "\\" in text:
+        try:
+            text = codecs.escape_decode(text.encode("utf-8", "surrogateescape"))[0].decode(
+                "utf-8", "surrogateescape")
+        except ValueError:
+            return None
+    return posixpath.normpath(text) if text.startswith("/") and "\x00" not in text else None
+
+
 def _strings(arguments: str) -> list[tuple[str | None, str | None]]:
     """Each quoted path argument with the directory annotation before it."""
 
@@ -137,7 +154,7 @@ def _strings(arguments: str) -> list[tuple[str | None, str | None]]:
     for match in _QUOTED.finditer(arguments):
         between = arguments[previous:match.start()]
         annotations = _FD_ANNOTATION.findall(between)
-        base = annotations[-1] if annotations else None
+        base = _fd_path(annotations[-1]) if annotations else None
         if match.group(1):  # strace shortened the string: the path is unknown
             found.append((None, base))
         else:
@@ -166,6 +183,8 @@ class TraceReducer:
         self.processes = 0
         self.root_exit: int | None = None
         self.root_exited = threading.Event()
+        # Unix sockets the command bound itself: connecting to one is talking
+        # to another of its own processes (tsx, test servers), not a service.
         self.local_sockets: set[str] = set()
 
     # -- line handling -----------------------------------------------------
@@ -268,6 +287,10 @@ class TraceReducer:
         for pid, head in self.pending.items():
             if head.startswith("???("):
                 continue  # killed at a syscall stop before strace could read it
+            if head.split("(", 1)[0] in _IGNORED:
+                # A thread still in exit_group or signalling when another thread
+                # ended the process; such calls name no path either way.
+                continue
             self.unplaced(f"{pid} {head} [never resumed]")
         self.pending.clear()
 
@@ -286,8 +309,9 @@ class TraceReducer:
         if pid in self.cwd:
             return
         match = re.search(r"AT_FDCWD<([^<>]*)>", arguments)
-        if match and match.group(1).startswith("/"):
-            self._adopt(pid, posixpath.normpath(match.group(1)))
+        cwd = _fd_path(match.group(1)) if match else None
+        if cwd is not None:
+            self._adopt(pid, cwd)
 
     def _mark(self, path: str | None, kind: str, operation: str = "") -> None:
         if path is None:
@@ -338,22 +362,28 @@ class TraceReducer:
             return
         if name == "fchdir":
             annotation = _FD_ANNOTATION.search(arguments)
+            directory = _fd_path(annotation.group(1)) if annotation else None
             if returned == 0:
-                if annotation and annotation.group(1).startswith("/"):
-                    self.cwd[pid] = posixpath.normpath(annotation.group(1))
+                if directory is not None:
+                    self.cwd[pid] = directory
                 else:
                     self.unplaced()
             return
         if name in _LIST:
             annotation = _FD_ANNOTATION.search(arguments)
+            directory = _fd_path(annotation.group(1)) if annotation else None
             if returned is not None and returned >= 0:
-                if annotation and annotation.group(1).startswith("/"):
-                    self._mark(posixpath.normpath(annotation.group(1)), "input", "enumerate")
+                if directory is not None:
+                    self._mark(directory, "input", "enumerate")
                 else:
                     self.unplaced()
             return
+        if name == "bind":
+            if not failed:
+                self._bind(pid, arguments)
+            return
         if name == "connect":
-            self._connect(arguments, failed)
+            self._connect(pid, arguments, failed)
             return
         if name == "ptrace":
             # A debugger or tracer inside the command cannot attach while the
@@ -400,7 +430,7 @@ class TraceReducer:
                 self._mark(path, "input", "metadata")
                 return
             resolved = _RESULT_PATH.match(result)
-            target = posixpath.normpath(resolved.group(1)) if resolved and resolved.group(1).startswith("/") else path
+            target = (_fd_path(resolved.group(1)) if resolved else None) or path
             if target != path and path is not None:
                 self._mark(path, "input", "metadata")
             if not writes:
@@ -426,8 +456,8 @@ class TraceReducer:
                 self.unplaced()
                 return
             text, base = strings[0]
-            if text == "" and "AT_EMPTY_PATH" in arguments:
-                return
+            if text == "" and ("AT_EMPTY_PATH" in arguments or missing):
+                return  # an empty path without AT_EMPTY_PATH fails before any lookup
             path = self._resolve(pid, text, base)
             self._mark(path, "missing" if missing else "input", "metadata")
             return
@@ -493,7 +523,26 @@ class TraceReducer:
         # A traced call this reducer does not model: fail closed.
         self.unplaced()
 
-    def _connect(self, arguments: str, failed: bool) -> None:
+    def _socket(self, pid: str, arguments: str) -> str | None:
+        """A Unix socket address: ``@name`` when abstract, else its absolute path."""
+        unix = _UNIX.search(arguments)
+        if not unix:
+            return None
+        strings = _strings(arguments[unix.start():])
+        text = strings[0][0] if strings else None
+        if unix.group(1):
+            return "@" + (text or "")
+        return self._resolve(pid, text, None)
+
+    def _bind(self, pid: str, arguments: str) -> None:
+        address = self._socket(pid, arguments)
+        if address is None:
+            return
+        self.local_sockets.add(address)
+        if not address.startswith("@"):
+            self._mark(address, "produced")
+
+    def _connect(self, pid: str, arguments: str, failed: bool) -> None:
         inet = _INET.search(arguments)
         if inet:
             address = inet.group(1) or inet.group(2) or ""
@@ -504,16 +553,13 @@ class TraceReducer:
                 if reason not in self.volatile:
                     self.volatile.append(reason)
             return
-        unix = _UNIX.search(arguments)
-        if unix:
-            if unix.group(1):
-                reason = "socket:abstract"
-            else:
-                strings = _strings(arguments[unix.start():])
-                path = strings[0][0] if strings else None
-                if path is not None and self.paths.get(posixpath.normpath(path), PathState("")).first == "produced":
-                    return
-                reason = f"socket:{path}"
+        if _UNIX.search(arguments):
+            address = self._socket(pid, arguments)
+            if address in self.local_sockets:
+                return
+            if address is not None and self.paths.get(address, PathState("")).first == "produced":
+                return
+            reason = "socket:abstract" if address and address.startswith("@") else f"socket:{address}"
             if not failed and reason not in self.volatile:
                 self.volatile.append(reason)
 
@@ -551,14 +597,24 @@ def observe(
     environment: dict[str, str] | None = None,
     strace: str | None = None,
     seccomp: bool | None = None,
+    stdout: int | IO[Any] | None = None,
+    stderr: int | IO[Any] | None = None,
+    timeout_seconds: float | None = None,
+    on_start: Callable[[int], None] | None = None,
 ) -> Observation:
-    """Run ``argv`` once under strace and reduce what it touched."""
+    """Run ``argv`` once under strace and reduce what it touched.
+
+    Output goes where ``stdout``/``stderr`` say (inherited by default). A run
+    that exceeds ``timeout_seconds`` is killed and marked volatile. The traced
+    tree gets its own process group; ``on_start`` receives its id, so another
+    process can stop the whole tree.
+    """
 
     executable = strace or strace_available()
     if executable is None:
         raise RuntimeError("strace is not available")
     use_seccomp = _seccomp_supported(executable) if seccomp is None else seccomp
-    directory = Path(tempfile.mkdtemp(prefix="click-ci-trace-"))
+    directory = Path(tempfile.mkdtemp(prefix="click-trace-"))
     fifo = directory / "trace"
     os.mkfifo(fifo, 0o600)
     reducer = TraceReducer(cwd)
@@ -584,14 +640,22 @@ def observe(
     started = time.monotonic()
     started_at = time.time()
     process = subprocess.Popen([*command, "--", *argv], cwd=str(cwd), env=environment,
-                               start_new_session=True)
+                               stdout=stdout, stderr=stderr, start_new_session=True)
+    if on_start is not None:
+        on_start(process.pid)
     lingering = False
+    timed_out = False
     try:
         while True:
             try:
                 returncode = process.wait(timeout=0.5)
                 break
             except subprocess.TimeoutExpired:
+                if timeout_seconds is not None and time.monotonic() - started > timeout_seconds:
+                    timed_out = True
+                    os.killpg(process.pid, signal.SIGKILL)
+                    returncode = process.wait()
+                    break
                 if reducer.root_exited.is_set():
                     try:
                         returncode = process.wait(timeout=LINGER_SECONDS)
@@ -601,8 +665,12 @@ def observe(
                         os.killpg(process.pid, signal.SIGKILL)
                         returncode = process.wait()
                         break
-    except KeyboardInterrupt:
-        os.killpg(process.pid, signal.SIGINT)
+    except BaseException as exc:
+        # An interrupted caller must not leave the traced tree running.
+        try:
+            os.killpg(process.pid, signal.SIGINT if isinstance(exc, KeyboardInterrupt) else signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         process.wait()
         raise
     finally:
@@ -625,6 +693,9 @@ def observe(
     reasons = list(reducer.volatile)
     if lingering:
         reasons.append("processes-outlived-command")
+    if timed_out:
+        reasons.append("timed-out")
+        exit_code = returncode if returncode else -9
     if reducer.root_pid is None:
         reasons.append("empty-trace")
     return Observation(

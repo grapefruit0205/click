@@ -29,6 +29,7 @@ if __package__:
         click_mode,
         click_mutation,
         click_observation,
+        click_observed_check,
         click_prompt,
         click_runtime_state,
         click_service,
@@ -48,6 +49,7 @@ else:  # Executed directly from the bundled hooks directory.
     import click_mode
     import click_mutation
     import click_observation
+    import click_observed_check
     import click_prompt
     import click_runtime_state
     import click_service
@@ -58,6 +60,8 @@ else:  # Executed directly from the bundled hooks directory.
 
 
 CONTROL_COMMAND = "click-gate"
+# Replaced by the paths `click-gate verify --paths <globs>` names.
+PATHS_TOKEN = "{paths}"
 CLICK_AUTHORIZATION_PATTERNS = click_prompt.CLICK_AUTHORIZATION_PATTERNS
 CONTRACT_ID_PATTERN = re.compile(r"^ctr_[0-9a-f]{32}$")
 CONTRACT_STATE_SCHEMA_VERSION = 2
@@ -532,6 +536,28 @@ def verify_request_for_argv(argv: list[str]) -> dict[str, Any]:
     }
 
 
+def verify_argv_request(command: str) -> tuple[list[str], list[str]] | None:
+    """The argv and path globs of `click-gate verify [--paths GLOBS]... -- <argv>`.
+
+    ``--paths`` names the paths that replace ``{paths}`` in the argv; each value
+    may hold several whitespace-separated globs, and ``!glob`` excludes.
+    """
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return None
+    if len(tokens) < 4 or tokens[0] != CONTROL_COMMAND or tokens[1] != "verify":
+        return None
+    patterns: list[str] = []
+    index = 2
+    while index + 1 < len(tokens) and tokens[index] == "--paths":
+        patterns.extend(tokens[index + 1].split())
+        index += 2
+    if index + 1 >= len(tokens) or tokens[index] != "--":
+        return None
+    return tokens[index + 1 :], patterns
+
+
 def _control_request(command: str) -> tuple[str | None, str, str]:
     stripped = command.strip()
     receipt_verify_prefix = f"{CONTROL_COMMAND} receipt verify"
@@ -590,6 +616,18 @@ def _control_request(command: str) -> tuple[str | None, str, str]:
             f"`{CONTROL_COMMAND} sharding status`, or "
             f"`{CONTROL_COMMAND} sharding refresh`."
         )
+    if len(tokens) >= 3 and tokens[1] == "verify" and tokens[2] == "--paths":
+        request = verify_argv_request(command)
+        if (
+            request is None
+            or not request[1]
+            or not any(PATHS_TOKEN in item for item in request[0])
+        ):
+            return "", "", (
+                f"Use `{CONTROL_COMMAND} verify --paths '<globs>' -- <check argv with "
+                f"{PATHS_TOKEN}>`; Click replaces {PATHS_TOKEN} with the matching paths."
+            )
+        return "verify", json.dumps(verify_request_for_argv(request[0]), sort_keys=True), ""
     if len(tokens) >= 3 and tokens[1] == "verify" and tokens[2] == "--":
         if len(tokens) == 3:
             return "", "", (
@@ -747,6 +785,13 @@ def prompt_context(event: dict[str, Any]) -> str:
             "opts one task into Guarded approval; `click-gate default guarded` makes that "
             "persistent."
         )
+        if click_observed_check.available():
+            context += (
+                " When the check takes test files or packages as arguments, name them with "
+                "`--paths` and put `{paths}` where they go, for example `click-gate verify "
+                "--paths 'tests/test_*.py' -- python3 -m pytest -q {paths}`: Click then runs "
+                "only the paths whose observed inputs changed."
+            )
     if migrated_from:
         migrated_label = {
             "evidence": "Evidence",

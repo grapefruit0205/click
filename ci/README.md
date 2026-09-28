@@ -75,12 +75,18 @@ default branch still runs every path, group by group.
 The record is marked volatile, and the command always runs, when the command:
 
 - failed on the default branch;
-- changed or deleted a file it had read (tool caches such as `__pycache__`,
-  `.pytest_cache`, `.coverage` and npm's rotated debug logs excepted);
+- changed or deleted a tracked file in the checkout that it had read (tool
+  caches such as `__pycache__`, `.pytest_cache`, `.coverage` and
+  `node_modules/.vite` excepted). A file outside the checkout, or one git
+  ignores, that the command rewrites around its own reads (a build cache entry
+  it refreshes, Vitest's results cache, a usage counter, a log) is the
+  command's own state and counts neither as an input nor against the record;
 - connected to a non-loopback address or DNS, or to a local socket it did not
-  create (a database or Docker daemon);
+  bind itself (a database or Docker daemon);
 - left processes running after it exited;
 - used ptrace (a debugger, strace, or a leak checker inside the command);
+- executed a setuid or file-capability program (such as snap's launcher),
+  which runs without its privileges under a tracer;
 - produced a trace line the reducer could not place.
 
 The step summary and `$RUNNER_TEMP/click-ci-report.jsonl` state the reason,
