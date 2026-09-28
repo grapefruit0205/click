@@ -33,7 +33,7 @@ class ObserverTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(os.path.realpath(temporary.name))  # long names, as records spell them
 
     def write(self, name: str, text: str) -> None:
         path = self.root / name
@@ -298,7 +298,7 @@ class WindowsJobTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(os.path.realpath(temporary.name))  # long names, as records spell them
 
     def observe(self, *argv: str):
         return runtime.observe(list(argv), cwd=self.root, repo=str(self.root),

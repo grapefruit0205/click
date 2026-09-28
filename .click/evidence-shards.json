@@ -205,6 +205,7 @@
               "tests.test_runner_state_recovery",
               "tests.test_click_ci",
               "tests.test_click_observed_check",
+              "tests.test_click_runtime_trace",
               "-q"
             ]
           ],
@@ -233,6 +234,7 @@
             "tests/test_click_observer_macos.py",
             "tests/test_click_observer_runtime_memo.py",
             "tests/test_click_observer_windows.py",
+            "tests/test_click_runtime_trace.py",
             "tests/test_click_shadow_dashboard.py",
             "tests/test_click_shadow_intelligence.py",
             "tests/test_click_shared_runtime_index.py",

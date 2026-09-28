@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,12 @@ ENGINE = Path(observed.__file__).resolve()
 STRACE = sys.platform.startswith("linux") and click_syscall_trace.strace_available() is not None
 # Where Node commands are observed: strace on Linux, the Node observer on Windows.
 NODE_OBSERVED = bool(shutil.which("node")) and (STRACE or os.name == "nt")
+
+
+def _position(argv: list[str], script: Path) -> int:
+    """Where the engine script is in a runner argv, however the host shell spelled it."""
+    wanted = os.path.normcase(os.path.normpath(str(script)))
+    return next(index for index, item in enumerate(argv) if os.path.normcase(os.path.normpath(item)) == wanted)
 
 
 def _runner_arguments(command: str) -> list[str]:
@@ -60,6 +67,9 @@ class _Fixture(unittest.TestCase):
         self.project = base / self.project_name
         self.project.mkdir()
         self.store = base / "store"
+        # Runs before the directory is removed: Windows cannot remove a
+        # directory a worker still runs in.
+        self.addCleanup(self.stop_workers)
         _git_init(self.project)
         self.environment = {**os.environ, "CLICK_LANGUAGE": "en", "CLICK_OBSERVATION": "inline"}
         self.environment.pop("PYTHONPATH", None)
@@ -94,6 +104,25 @@ class _Fixture(unittest.TestCase):
             if time.monotonic() > deadline:
                 self.fail("timed out waiting for the background worker")
             time.sleep(0.05)
+
+    def stop_workers(self) -> None:
+        """End a background worker a failed test left running."""
+        if not self.store.exists():
+            return
+        for state in self.store.glob(f"*/{observed.WORKER_FILE}"):
+            try:
+                pid = int(json.loads(state.read_text(encoding="utf-8")).get("pid") or 0)
+            except (OSError, ValueError):
+                continue
+            if pid <= 0 or not observed._alive(pid):
+                continue
+            if os.name == "nt":
+                observed._windows().terminate(pid)
+            else:
+                os.kill(pid, signal.SIGTERM)
+            deadline = time.monotonic() + 10
+            while observed._alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.05)
 
     def wait_for_worker(self) -> dict:
         root = lambda: next((p for p in self.store.iterdir() if p.is_dir()), None) if self.store.exists() else None
@@ -143,9 +172,9 @@ class VerifyRequestTests(unittest.TestCase):
     def test_runner_command_names_the_store_and_globs(self) -> None:
         environment = {"PLUGIN_DATA": "/data"}
         argv = _runner_arguments(observed.runner_command(["pytest", "{paths}"], ["tests/*.py"], environment))
-        start = argv.index(str(ENGINE))
-        self.assertEqual(argv[start:], [str(ENGINE), "run", "--store", str(observed.store_root(environment)),
-                                        "--paths", "tests/*.py", "--", "pytest", "{paths}"])
+        start = _position(argv, ENGINE)
+        self.assertEqual(argv[start + 1:], ["run", "--store", str(observed.store_root(environment)),
+                                            "--paths", "tests/*.py", "--", "pytest", "{paths}"])
 
     def test_an_encoded_runner_reaches_the_check_it_names(self) -> None:
         encoded = click_runner_transport.encode_runner_transport(["run", "--", "node", "--test"])
@@ -187,7 +216,7 @@ class GateRoutingTests(ClickGateTestCase):
         with mock.patch.object(self.engine, "available", return_value=True):
             payload = self.pre_tool_in_process("click-gate verify -- python3 -m unittest -q verification_fixture")
         argv = _runner_arguments(payload["hookSpecificOutput"]["updatedInput"]["command"])
-        start = argv.index(str(Path(self.engine.__file__).resolve()))
+        start = _position(argv, Path(self.engine.__file__).resolve())
         self.assertEqual(argv[start + 1:start + 4], ["run", "--store", str(self.plugin_data / "observed-checks")])
         self.assertEqual(argv[start + 4:], ["--", "python3", "-m", "unittest", "-q", "verification_fixture"])
 

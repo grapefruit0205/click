@@ -187,8 +187,9 @@ def _within(path: str, root: str) -> bool:
 
 def _git(arguments: Sequence[str], cwd: Path) -> str:
     try:
+        # Git writes paths as UTF-8 whatever the console code page is.
         completed = subprocess.run(["git", *arguments], cwd=str(cwd), capture_output=True,
-                                   text=True, timeout=30, check=False)
+                                   encoding="utf-8", errors="surrogateescape", timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return ""
     return completed.stdout.strip() if completed.returncode == 0 else ""

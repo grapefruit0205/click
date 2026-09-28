@@ -960,6 +960,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
     run.add_argument("argv", nargs=argparse.REMAINDER)
     observe = sub.add_parser("observe", help="(internal) trace the units of a job file")
     observe.add_argument("--job", type=Path, required=True)
+    # Lines carry Korean and "→", which a console code page such as cp1252
+    # cannot encode; they are written as UTF-8 like the runner's.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")
     raw = list(sys.argv[1:] if arguments is None else arguments)
     if raw[:1] == ["--encoded-runner"]:
         # A Windows host renders the runner with its arguments encoded.
