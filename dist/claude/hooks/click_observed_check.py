@@ -1,7 +1,10 @@
 """Checks reused by what they observably read, for any command, observed in the background.
 
 In Evidence mode on a Linux host with strace, the hook rewrites
-``click-gate verify -- <command>`` to ``run`` here. Nothing about the project
+``click-gate verify -- <command>`` to ``run`` here; on Windows it does so for
+commands that run Node, which are observed from inside their Node processes
+(``click_runtime_trace``) since nothing traces system calls there without
+administrator rights. Nothing about the project
 is recognized or configured: the command runs as given, and a record of the
 files, directory listings, programs and failed lookups a passing run touched
 (``click_input_records``) decides the next request. When none of them changed,
@@ -49,7 +52,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 try:
     import fcntl
-except ImportError:  # Windows: the route is never taken there.
+except ImportError:  # Windows: msvcrt locks instead.
     fcntl = None  # type: ignore[assignment]
 
 if __package__:
@@ -57,9 +60,12 @@ if __package__:
 else:  # Executed directly from the bundled hooks directory.
     import click_import_bootstrap
 
-(click_input_records, click_status_summary, click_syscall_trace) = click_import_bootstrap.load_siblings(
-    __package__, "click_input_records", "click_status_summary", "click_syscall_trace"
+(click_input_records, click_runner_transport, click_runtime_trace, click_status_summary,
+ click_syscall_trace) = click_import_bootstrap.load_siblings(
+    __package__, "click_input_records", "click_runner_transport", "click_runtime_trace",
+    "click_status_summary", "click_syscall_trace"
 )
+WINDOWS = os.name == "nt"
 records = click_input_records
 
 # `CLICK_OBSERVED_CHECK=off` keeps `click-gate verify` on the runtime profiles.
@@ -115,12 +121,21 @@ def _switch(name: str, environment: Mapping[str, str]) -> str:
     return str(environment.get(name, "")).strip().lower()
 
 
-def available(environment: Mapping[str, str] | None = None) -> bool:
-    """Whether this host can observe checks, so `click-gate verify` comes here."""
+def available(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> bool:
+    """Whether this host can observe ``argv``, so `click-gate verify` comes here.
+
+    Linux with strace observes any command. Windows observes commands that run
+    Node; the others keep the runtime profiles, which know their runners.
+    """
     source = os.environ if environment is None else environment
     if _switch(ROUTE_VARIABLE, source) in OFF_VALUES:
         return False
-    if not sys.platform.startswith("linux") or fcntl is None or shutil.which("strace") is None:
+    if WINDOWS:
+        if argv is None or shutil.which("node", path=source.get("PATH")) is None:
+            return False
+        if not click_runtime_trace.node_command(argv, source):
+            return False
+    elif not sys.platform.startswith("linux") or fcntl is None or shutil.which("strace") is None:
         return False
     marker = _read_json(store_root(source) / UNUSABLE_FILE)
     return not marker or time.time() - float(marker.get("at", 0)) >= RETRY_VOLATILE_SECONDS
@@ -158,7 +173,8 @@ def runner_command(argv: Sequence[str], patterns: Sequence[str],
                  "--store", str(store_root(environment))]
     for pattern in patterns:
         arguments += ["--paths", pattern]
-    return shlex.join([*arguments, "--", *argv])
+    # The host's shell renders it (Git Bash, PowerShell or cmd.exe on Windows).
+    return click_runner_transport.render_runner_shell_command([*arguments, "--", *argv])
 
 
 # -- small helpers --------------------------------------------------------------
@@ -203,6 +219,8 @@ def _age(record: Mapping[str, Any] | None) -> float:
 
 
 def _alive(pid: int) -> bool:
+    if WINDOWS:
+        return _windows().process_alive(pid)
     try:
         fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -211,10 +229,36 @@ def _alive(pid: int) -> bool:
 
 
 def _runs(pid: int, marker: bytes) -> bool:
+    if WINDOWS:
+        command_line = _windows().describe(pid).command_line or ""
+        return marker.decode() in command_line
     try:
         return marker in Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
         return False
+
+
+def _windows() -> Any:
+    (module,) = click_import_bootstrap.load_siblings(__package__, "click_windows_job")
+    return module
+
+
+def _tracer() -> str | None:
+    """What observes a run on this host: strace's path, ``node`` on Windows, or None."""
+    if WINDOWS:
+        return "node" if shutil.which("node") else None
+    return click_syscall_trace.strace_available()
+
+
+def _trace(argv: Sequence[str], *, cwd: Path, places: Any, tracer: str, background: bool = False,
+           quiet: bool = False, timeout: float | None = None, started: Any = None) -> Any:
+    """Run ``argv`` once, observed, and return its Observation."""
+    output = subprocess.DEVNULL if quiet else None
+    if WINDOWS:
+        return click_runtime_trace.observe(argv, cwd=cwd, repo=places.repo, stdout=output, stderr=output,
+                                           timeout_seconds=timeout, on_start=started, idle=background)
+    return click_syscall_trace.observe(argv, cwd=cwd, strace=tracer, stdout=output, stderr=output,
+                                       timeout_seconds=timeout, on_start=started)
 
 
 # -- units ----------------------------------------------------------------------
@@ -302,7 +346,7 @@ def _call(argv: Sequence[str], checkout: Checkout) -> int:
     sys.stdout.flush()
     sys.stderr.flush()
     try:
-        return subprocess.call(list(argv), cwd=str(checkout.cwd))
+        return subprocess.call(click_runtime_trace.launchable(argv), cwd=str(checkout.cwd))
     except FileNotFoundError:
         print(f"{argv[0]}: command not found", file=sys.stderr)
         return 127
@@ -326,7 +370,10 @@ def _stop_worker(checkout: Checkout) -> dict[str, Any]:
         # Gone without removing its state: something outside ended it.
         deaths = _read_json(checkout.root / DEATHS_FILE)
         _write_json(checkout.root / DEATHS_FILE, {"count": int(deaths.get("count", 0)) + 1, "at": time.time()})
-    if worker:
+    if worker and WINDOWS:
+        # Its job object ends the observed tree when the worker's handle closes.
+        _windows().terminate(pid)
+    elif worker:
         # The worker stops its traced tree and removes its trace files itself.
         try:
             os.kill(pid, signal.SIGTERM)
@@ -335,12 +382,12 @@ def _stop_worker(checkout: Checkout) -> dict[str, Any]:
         deadline = time.monotonic() + STOP_WAIT_SECONDS
         while _alive(pid) and time.monotonic() < deadline:
             time.sleep(0.02)
-    if group > 0 and _alive(group) and _runs(group, b"strace"):
+    if not WINDOWS and group > 0 and _alive(group) and _runs(group, b"strace"):
         try:
             os.killpg(group, signal.SIGKILL)
         except OSError:
             pass
-    if worker and _alive(pid):
+    if worker and not WINDOWS and _alive(pid):
         try:
             os.kill(pid, signal.SIGKILL)
         except OSError:
@@ -383,14 +430,8 @@ def _schedule(checkout: Checkout, mode: str, units: Sequence[Unit], *, seconds: 
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
         json.dump(job, handle)
     try:
-        with open(checkout.root / "worker.log", "wb") as log:
-            # No descriptor of the tool call survives in the worker: the host
-            # waits for the command's output pipes to close.
-            process = subprocess.Popen(
-                [sys.executable, str(Path(__file__).resolve()), "observe", "--job", name],
-                cwd=str(checkout.cwd), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=log, close_fds=True, start_new_session=True,
-            )
+        process = _detach([sys.executable, str(Path(__file__).resolve()), "observe", "--job", name],
+                          cwd=checkout.cwd, log=checkout.root / "worker.log")
     except OSError:
         Path(name).unlink(missing_ok=True)
         return ""
@@ -402,7 +443,28 @@ def _schedule(checkout: Checkout, mode: str, units: Sequence[Unit], *, seconds: 
     return ""
 
 
+def _detach(argv: Sequence[str], *, cwd: Path, log: Path) -> subprocess.Popen:
+    """Start a worker that outlives the tool call."""
+    with open(log, "wb") as handle:
+        # No descriptor of the tool call survives in the worker: the host
+        # waits for the command's output pipes to close.
+        options: dict[str, Any] = dict(cwd=str(cwd), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                       stderr=handle, close_fds=True)
+        if not WINDOWS:
+            return subprocess.Popen(list(argv), start_new_session=True, **options)
+        job = _windows()
+        flags = job.DETACHED_PROCESS | job.CREATE_NEW_PROCESS_GROUP
+        try:
+            # Out of the host's job, which may end everything a command leaves behind.
+            return subprocess.Popen(list(argv), creationflags=flags | job.CREATE_BREAKAWAY_FROM_JOB, **options)
+        except OSError:
+            return subprocess.Popen(list(argv), creationflags=flags, **options)
+
+
 def _lower_priority() -> None:
+    if WINDOWS:
+        _windows().lower_priority()
+        return
     try:
         os.nice(19)
     except OSError:
@@ -422,7 +484,12 @@ def _lock(root: Path) -> Any:
     deadline = time.monotonic() + LOCK_WAIT_SECONDS
     while True:
         try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if fcntl is not None:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                import msvcrt
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
             return handle
         except OSError:
             if time.monotonic() >= deadline:
@@ -463,8 +530,8 @@ def work(job: Mapping[str, Any]) -> dict[str, Any]:
     pending = {"units": list(job["units"]), "validate": job.get("validate")}
     state = {"pid": os.getpid(), "group": 0, "pending": pending}
     try:
-        strace = click_syscall_trace.strace_available()
-        if strace is None:
+        tracer = _tracer()
+        if tracer is None:
             _write_json(Path(job["store"]) / UNUSABLE_FILE, {"at": time.time()})
             report["unusable"] = True
             return report
@@ -480,7 +547,7 @@ def work(job: Mapping[str, Any]) -> dict[str, Any]:
             def started(group: int) -> None:
                 _write_json(root / WORKER_FILE, {**state, "group": group})
 
-            entry = _observe(spec, cwd=cwd, places=places, strace=strace,
+            entry = _observe(spec, cwd=cwd, places=places, tracer=tracer,
                              timeout=float(job["timeout"]), started=started)
             key = spec["identity"]["key"]
             unit_reads = entry.pop("_reads", None)
@@ -502,7 +569,7 @@ def work(job: Mapping[str, Any]) -> dict[str, Any]:
     return report
 
 
-def _observe(spec: Mapping[str, Any], *, cwd: Path, places: Any, strace: str, timeout: float,
+def _observe(spec: Mapping[str, Any], *, cwd: Path, places: Any, tracer: str, timeout: float,
              started: Any) -> dict[str, Any]:
     argv = list(spec["argv"])
     identity = dict(spec["identity"])
@@ -516,10 +583,8 @@ def _observe(spec: Mapping[str, Any], *, cwd: Path, places: Any, strace: str, ti
         return {"command": shown, "result": "current"}
     before = _snapshot(places)
     started_ns = time.time_ns()
-    observation = click_syscall_trace.observe(
-        argv, cwd=cwd, strace=strace, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        timeout_seconds=timeout, on_start=started,
-    )
+    observation = _trace(argv, cwd=cwd, places=places, tracer=tracer, background=True, quiet=True,
+                         timeout=timeout, started=started)
     record = records.build_record(observation, identity=identity, places=places,
                                   digester=records.Digester(places), environment=environment,
                                   started_ns=started_ns, listings_before=before)
@@ -674,8 +739,8 @@ def _effective_mode(checkout: Checkout, mode: str) -> str:
 
 def _observe_foreground(unit: Unit, checkout: Checkout) -> tuple[int, str]:
     """Trace the run the agent waits for; return its exit code and the result tail."""
-    strace = click_syscall_trace.strace_available()
-    if strace is None:
+    tracer = _tracer()
+    if tracer is None:
         _write_json(checkout.store / UNUSABLE_FILE, {"at": time.time()})
         code = _call(unit.argv, checkout)
         return code, checkout.msg("strace를 쓸 수 없어 기록하지 못함")
@@ -683,7 +748,7 @@ def _observe_foreground(unit: Unit, checkout: Checkout) -> tuple[int, str]:
     sys.stdout.flush()
     sys.stderr.flush()
     started_ns = time.time_ns()
-    observation = click_syscall_trace.observe(unit.argv, cwd=checkout.cwd, strace=strace)
+    observation = _trace(unit.argv, cwd=checkout.cwd, places=checkout.places, tracer=tracer)
     record = records.build_record(observation, identity=unit.identity, places=checkout.places,
                                   digester=records.Digester(checkout.places),
                                   environment=checkout.environment, started_ns=started_ns,
@@ -895,7 +960,15 @@ def main(arguments: Sequence[str] | None = None) -> int:
     run.add_argument("argv", nargs=argparse.REMAINDER)
     observe = sub.add_parser("observe", help="(internal) trace the units of a job file")
     observe.add_argument("--job", type=Path, required=True)
-    options = parser.parse_args(arguments)
+    raw = list(sys.argv[1:] if arguments is None else arguments)
+    if raw[:1] == ["--encoded-runner"]:
+        # A Windows host renders the runner with its arguments encoded.
+        decoded, error = click_runner_transport.decode_runner_transport(raw[1] if len(raw) == 2 else "")
+        if error or decoded is None:
+            print(error or "Click runner transport was malformed.", file=sys.stderr)
+            return 2
+        raw = decoded
+    options = parser.parse_args(raw)
     if options.action == "observe":
         job = _read_json(options.job)
         options.job.unlink(missing_ok=True)

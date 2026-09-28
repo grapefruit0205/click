@@ -32,6 +32,9 @@ HOOK_FILES = (
     "click_observed_check.py",
     "click_input_records.py",
     "click_syscall_trace.py",
+    "click_runtime_trace.py",
+    "click_input_observer.cjs",
+    "click_windows_job.py",
     "click_observation_cache.py",
     "click_observer_runtime.py",
     "click_observer_profiles.py",
@@ -114,7 +117,7 @@ ANTIGRAVITY_HOOK_EXCLUDES = frozenset(
         "click_windows.py",
     }
 )
-ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c", "click_node_bootstrap.mjs", "click_node_controller.cjs", "click_node_value_probe.js", "click_node_state.cc"})
+ANTIGRAVITY_EXTRA_HOOK_SOURCES = frozenset({"click_observer_native.c", "click_node_bootstrap.mjs", "click_node_controller.cjs", "click_node_value_probe.js", "click_node_state.cc", "click_input_observer.cjs"})
 DASHBOARD_ASSETS = (
     "index.html", "styles.css", "app.js",
     "locales/ko.json", "locales/en.json", "locales/zh-CN.json",

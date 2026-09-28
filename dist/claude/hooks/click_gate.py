@@ -1177,19 +1177,17 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                 argv_request = click_lifecycle.verify_argv_request(str(command))
                 if argv_request is not None:
                     check_argv, path_patterns = argv_request
+                    observed_argv = click_observed_check.check_argv(str(command), check_argv)
                     # Evidence checks reuse by observed inputs wherever this host can
-                    # trace them; approved Guarded contracts keep their receipt runner.
+                    # observe them; approved Guarded contracts keep their receipt runner.
                     if (
                         evidence_active
                         and current_status != "passed"
                         and click_lifecycle.read_mode(event) != "strict"
-                        and click_observed_check.available()
+                        and click_observed_check.available(argv=observed_argv)
                     ):
                         _allow_rewritten(
-                            click_observed_check.runner_command(
-                                click_observed_check.check_argv(str(command), check_argv),
-                                path_patterns,
-                            )
+                            click_observed_check.runner_command(observed_argv, path_patterns)
                         )
                         return
                     if path_patterns:

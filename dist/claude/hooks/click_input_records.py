@@ -119,6 +119,7 @@ class Places:
         repo = os.path.realpath(repo)
         home = os.path.realpath(os.path.expanduser("~"))
         roots = {"/proc", "/sys", "/dev", "/run", "/var/run", "/tmp", "/var/tmp",
+                 os.path.realpath(tempfile.gettempdir())} if os.name != "nt" else {
                  os.path.realpath(tempfile.gettempdir())}
         for name in ("RUNNER_TEMP", "TMPDIR", "TEMP", "TMP"):
             value = os.environ.get(name)
@@ -134,7 +135,7 @@ class Places:
             extra = []
         ignores.extend(item for item in extra if isinstance(item, str) and item)
         return cls(repo=repo, home=home,
-                   volatile_roots=tuple(sorted(r for r in roots if r and r != "/")),
+                   volatile_roots=tuple(sorted(r for r in roots if r and r != os.path.dirname(r))),
                    ignores=tuple(ignores))
 
     def key(self, absolute: str) -> str | None:
@@ -160,9 +161,9 @@ class Places:
     def path(self, key: str) -> str:
         kind, _, rest = key.partition(":")
         if kind == "repo":
-            return os.path.join(self.repo, rest) if rest else self.repo
+            return os.path.join(self.repo, *rest.split("/")) if rest else self.repo
         if kind == "home":
-            return os.path.join(self.home, rest)
+            return os.path.join(self.home, *rest.split("/"))
         return rest
 
     def ignored(self, relative: str) -> bool:
@@ -179,7 +180,9 @@ class Places:
 
 
 def _within(path: str, root: str) -> bool:
-    return path == root or path.startswith(root.rstrip("/") + "/")
+    # Windows paths compare without case and with either separator.
+    path, root = os.path.normcase(path), os.path.normcase(root)
+    return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
 
 
 def _git(arguments: Sequence[str], cwd: Path) -> str:
@@ -326,11 +329,56 @@ def stat_signature(path: str) -> list[int] | None:
         info = os.lstat(path)
     except OSError:
         return None
+    if os.name == "nt":
+        # st_ctime is the creation time there; NTFS keeps a change time too.
+        changed = _windows_change_time_ns(path)
+        if changed is None:
+            return None
+        return [info.st_size, info.st_mtime_ns, changed, info.st_ino]
     return [info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_ino]
+
+
+_WINDOWS_EPOCH_100NS = 116_444_736_000_000_000
+_windows_file_api: Any = None
+
+
+def _windows_change_time_ns(path: str) -> int | None:
+    """NTFS ChangeTime (any change to content or metadata), in ns since the Unix epoch."""
+    global _windows_file_api
+    import ctypes
+    from ctypes import wintypes
+
+    if _windows_file_api is None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                         wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        kernel32.CreateFileW.restype = wintypes.HANDLE
+        kernel32.GetFileInformationByHandleEx.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                                          wintypes.DWORD]
+        kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        _windows_file_api = kernel32
+    kernel32 = _windows_file_api
+    read_attributes, share_all, open_existing = 0x80, 0x7, 3
+    backup_semantics, open_reparse_point = 0x02000000, 0x00200000
+    handle = kernel32.CreateFileW(path, read_attributes, share_all, None, open_existing,
+                                  backup_semantics | open_reparse_point, None)
+    if handle is None or handle == ctypes.c_void_p(-1).value:
+        return None
+    try:
+        # FILE_BASIC_INFO: creation, last access, last write and change times, attributes.
+        info = (ctypes.c_longlong * 5)()
+        if not kernel32.GetFileInformationByHandleEx(handle, 0, info, ctypes.sizeof(info)):
+            return None
+        return (info[3] - _WINDOWS_EPOCH_100NS) * 100
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _privileged(path: str) -> bool:
     """Whether executing ``path`` grants privileges, which a traced run silently loses."""
+    if os.name == "nt":
+        return False  # no setuid there; nothing traces the run from outside
     try:
         if os.stat(path).st_mode & (stat.S_ISUID | stat.S_ISGID):
             return True

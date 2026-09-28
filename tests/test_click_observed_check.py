@@ -16,11 +16,25 @@ from unittest import mock
 from hooks import click_input_records as records
 from hooks import click_lifecycle
 from hooks import click_observed_check as observed
+from hooks import click_runner_transport
 from hooks import click_syscall_trace
 from tests.click_gate_test_support import CLICK_GATE, ClickGateTestCase, split_runner_command
 
 ENGINE = Path(observed.__file__).resolve()
 STRACE = sys.platform.startswith("linux") and click_syscall_trace.strace_available() is not None
+# Where Node commands are observed: strace on Linux, the Node observer on Windows.
+NODE_OBSERVED = bool(shutil.which("node")) and (STRACE or os.name == "nt")
+
+
+def _runner_arguments(command: str) -> list[str]:
+    """The argv a rendered runner command starts, with a Windows transport decoded."""
+    argv = split_runner_command(command)
+    if "--encoded-runner" in argv:
+        index = argv.index("--encoded-runner")
+        decoded, error = click_runner_transport.decode_runner_transport(argv[index + 1])
+        assert decoded is not None, error
+        argv = [*argv[:index], *decoded]
+    return argv
 
 
 def _node_runs_typescript() -> bool:
@@ -126,11 +140,29 @@ class VerifyRequestTests(unittest.TestCase):
                          ["bash", "-o", "pipefail", "-c", "pytest {paths} | tail -3"])
         self.assertEqual(observed._shown(["bash", "-o", "pipefail", "-c", "pytest | tail"]), "pytest | tail")
 
-    @unittest.skipIf(os.name == "nt", "observed checks run on Linux only; their keys and commands are POSIX")
     def test_runner_command_names_the_store_and_globs(self) -> None:
-        command = observed.runner_command(["pytest", "{paths}"], ["tests/*.py"], {"PLUGIN_DATA": "/data"})
-        self.assertIn(f"{ENGINE} run --store /data/observed-checks --paths 'tests/*.py' -- pytest '{{paths}}'",
-                      command)
+        environment = {"PLUGIN_DATA": "/data"}
+        argv = _runner_arguments(observed.runner_command(["pytest", "{paths}"], ["tests/*.py"], environment))
+        start = argv.index(str(ENGINE))
+        self.assertEqual(argv[start:], [str(ENGINE), "run", "--store", str(observed.store_root(environment)),
+                                        "--paths", "tests/*.py", "--", "pytest", "{paths}"])
+
+    def test_an_encoded_runner_reaches_the_check_it_names(self) -> None:
+        encoded = click_runner_transport.encode_runner_transport(["run", "--", "node", "--test"])
+        with mock.patch.object(observed, "run_single", return_value=0) as run:
+            self.assertEqual(observed.main(["--encoded-runner", encoded]), 0)
+        self.assertEqual(run.call_args.args[0], ["node", "--test"])
+        self.assertEqual(observed.main(["--encoded-runner", "not base64!"]), 2)
+
+    def test_windows_observes_only_commands_that_run_node(self) -> None:
+        environment = {"PLUGIN_DATA": tempfile.mkdtemp(), "PATH": os.environ.get("PATH", "")}
+        self.addCleanup(shutil.rmtree, environment["PLUGIN_DATA"], True)
+        if os.name != "nt" or not shutil.which("node"):
+            self.skipTest("routing by program is Windows'")
+        self.assertTrue(observed.available(environment, ["npx", "vitest", "run"]))
+        self.assertTrue(observed.available(environment, [*observed.SHELL_PREFIX, "npm test 2>&1 | tail -5"]))
+        self.assertFalse(observed.available(environment, [sys.executable, "-m", "unittest"]))
+        self.assertFalse(observed.available(environment))
 
     def test_route_can_be_switched_off_and_remembers_an_unusable_strace(self) -> None:
         with tempfile.TemporaryDirectory() as data:
@@ -150,15 +182,14 @@ class GateRoutingTests(ClickGateTestCase):
     # The gate under test loads its own copy of the engine module.
     engine = CLICK_GATE.click_observed_check
 
-    @unittest.skipIf(os.name == "nt", "observed checks run on Linux only; their keys and commands are POSIX")
     def test_evidence_verify_goes_to_the_observed_check_where_strace_is(self) -> None:
         self.prompt_submit("run the tests", "turn-1")
         with mock.patch.object(self.engine, "available", return_value=True):
             payload = self.pre_tool_in_process("click-gate verify -- python3 -m unittest -q verification_fixture")
-        argv = split_runner_command(payload["hookSpecificOutput"]["updatedInput"]["command"])
-        self.assertEqual(argv[1:5], [str(Path(self.engine.__file__).resolve()), "run", "--store",
-                                     str(self.plugin_data / "observed-checks")])
-        self.assertEqual(argv[5:], ["--", "python3", "-m", "unittest", "-q", "verification_fixture"])
+        argv = _runner_arguments(payload["hookSpecificOutput"]["updatedInput"]["command"])
+        start = argv.index(str(Path(self.engine.__file__).resolve()))
+        self.assertEqual(argv[start + 1:start + 4], ["run", "--store", str(self.plugin_data / "observed-checks")])
+        self.assertEqual(argv[start + 4:], ["--", "python3", "-m", "unittest", "-q", "verification_fixture"])
 
     def test_guarded_or_unobservable_hosts_keep_the_receipt_runner(self) -> None:
         self.prompt_submit("run the tests", "turn-1")
@@ -248,7 +279,6 @@ class PruneTests(unittest.TestCase):
             self.assertGreater((fresh.root / "k.json.gz").stat().st_mtime, past + 60)
 
 
-@unittest.skipIf(os.name == "nt", "observed checks run on Linux only; their keys and commands are POSIX")
 class RecordFreshnessTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -676,7 +706,7 @@ class PythonCheckTests(_Fixture):
         observed._stop_worker(observed.Checkout(self.project, None, self.store, root, {}, "en"))
 
 
-@unittest.skipUnless(STRACE and shutil.which("node"), "needs strace and node")
+@unittest.skipUnless(NODE_OBSERVED, "needs node, and strace outside Windows")
 class NodeCheckTests(_Fixture):
     def test_node_test_runner(self) -> None:
         self.write("lib.js", "exports.twice = (x) => x * 2;\n")
@@ -691,8 +721,20 @@ class NodeCheckTests(_Fixture):
         self.write("lib.js", "exports.twice = (x) => x + x;\n")
         self.assertIn("inputs changed: lib.js", self.result(self.check(*argv)))
 
+    def test_observed_in_a_detached_background_worker(self) -> None:
+        self.write("lib.js", "exports.twice = (x) => x * 2;\n")
+        self.write("lib.test.js", "const test = require('node:test');\nconst assert = require('node:assert');\n"
+                   "const { twice } = require('./lib');\ntest('twice', () => assert.strictEqual(twice(2), 4));\n")
+        argv = ("node", "--test", "lib.test.js")
+        first = self.check(*argv, mode="background")
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        report = self.wait_for_worker()
+        self.assertEqual([entry["result"] for entry in report["entries"]], ["recorded"], report)
+        self.assertIn("reused:", self.result(self.check(*argv, mode="background")))
 
-@unittest.skipUnless(STRACE and _node_runs_typescript(), "needs strace and a Node that runs TypeScript")
+
+@unittest.skipUnless(NODE_OBSERVED and _node_runs_typescript(),
+                     "needs a Node that runs TypeScript, and strace outside Windows")
 class TypeScriptCheckTests(_Fixture):
     # strace escapes the UTF-8 bytes of this name in every descriptor path.
     project_name = "타입스크립트 프로젝트"
@@ -714,7 +756,9 @@ class TypeScriptCheckTests(_Fixture):
         self.write("test/socket.test.ts", header + 'import net from "node:net";\nimport os from "node:os";\n'
                    'import path from "node:path";\n'
                    'test("echo", async () => {\n'
-                   '  const where = path.join(os.tmpdir(), `click-ts-${process.pid}.sock`);\n'
+                   '  const where = process.platform === "win32"\n'
+                   r'    ? `\\\\.\\pipe\\click-ts-${process.pid}`' '\n'
+                   '    : path.join(os.tmpdir(), `click-ts-${process.pid}.sock`);\n'
                    '  const server = net.createServer((socket) => socket.pipe(socket));\n'
                    '  await new Promise<void>((done) => server.listen(where, done));\n'
                    '  const reply = await new Promise<string>((done) => {\n'

@@ -100,6 +100,23 @@ class PathState:
     modified_after_input: bool = False
 
 
+def mark_path(paths: dict[str, PathState], path: str, kind: str, operation: str = "") -> PathState:
+    """Fold one event on ``path`` into its state: the first event decides what it was."""
+    state = paths.get(path)
+    if state is None:
+        state = PathState(first=kind)
+        paths[path] = state
+    elif kind in {"produced", "touched", "deleted"} and state.first in {"input"}:
+        state.modified_after_input = True
+    elif kind in {"produced", "deleted"} and state.first == "opened":
+        # Replaced or removed: its birth time no longer tells whether the
+        # command created it.
+        state.modified_after_input = True
+    if operation:
+        state.operations.add(operation)
+    return state
+
+
 @dataclass
 class Observation:
     exit_code: int
@@ -317,18 +334,7 @@ class TraceReducer:
         if path is None:
             self.unplaced()
             return
-        state = self.paths.get(path)
-        if state is None:
-            state = PathState(first=kind)
-            self.paths[path] = state
-        elif kind in {"produced", "touched", "deleted"} and state.first in {"input"}:
-            state.modified_after_input = True
-        elif kind in {"produced", "deleted"} and state.first == "opened":
-            # Replaced or removed: its birth time no longer tells whether the
-            # command created it.
-            state.modified_after_input = True
-        if operation:
-            state.operations.add(operation)
+        mark_path(self.paths, path, kind, operation)
 
     # -- syscall semantics --------------------------------------------------
     def _event(self, pid: str, name: str, arguments: str, result: str) -> None:
@@ -728,6 +734,13 @@ def _statx():
 
 def birth_time(path: str) -> float | None:
     """When the file was created, or None when the filesystem does not say."""
+    if os.name == "nt":
+        try:
+            info = os.lstat(path)
+        except OSError:
+            return None
+        # Python 3.12 names it st_birthtime; before that st_ctime was the creation time there.
+        return float(getattr(info, "st_birthtime", info.st_ctime))
     statx = _statx()
     if statx is None:
         return None
