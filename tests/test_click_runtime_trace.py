@@ -306,10 +306,13 @@ class WindowsJobTests(unittest.TestCase):
 
     def test_node_started_through_cmd_is_covered(self) -> None:
         (self.root / "data.txt").write_text("x", encoding="utf-8")
-        observation = self.observe("cmd", "/d", "/c", "node -e \"require('fs').readFileSync('data.txt')\"")
+        # A script, not `node -e "..."`: cmd.exe does not unescape \" the way node's argv parser does.
+        (self.root / "read.js").write_text("require('fs').readFileSync('data.txt');\n", encoding="utf-8")
+        observation = self.observe("cmd", "/d", "/c", "node", "read.js")
         self.assertEqual(observation.exit_code, 0)
         self.assertEqual(observation.volatile_reasons, [])
-        self.assertEqual(_states(observation, self.root)["data.txt"][0], "input")
+        states = _states(observation, self.root)
+        self.assertEqual(states.get("data.txt", ("",))[0], "input", sorted(states))
         self.assertGreaterEqual(observation.process_count, 2)
 
     def test_a_program_that_is_not_node_makes_the_observation_volatile(self) -> None:

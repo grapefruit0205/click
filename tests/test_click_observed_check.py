@@ -85,7 +85,8 @@ class _Fixture(unittest.TestCase):
         command = [sys.executable, str(ENGINE), "run", "--store", str(self.store)]
         if paths:
             command += ["--paths", paths]
-        return subprocess.run([*command, "--", *argv], cwd=self.project, capture_output=True, text=True,
+        return subprocess.run([*command, "--", *argv], cwd=self.project, capture_output=True,
+                              encoding="utf-8", errors="replace",  # the engine writes UTF-8
                               env={**self.environment, "CLICK_OBSERVATION": mode, **(environment or {})},
                               timeout=300, check=False)
 
