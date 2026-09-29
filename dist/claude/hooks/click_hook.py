@@ -44,7 +44,7 @@ def normalize_event(event: dict[str, object], mode: str) -> dict[str, object]:
 
 
 def route_stdin_event(mode: str) -> None:
-    if mode not in {"pre-tool", "post-tool", "prompt-submit", "session-end"}:
+    if mode not in click_hook_transport.HOOK_MODES:
         return
     raw = sys.stdin.read()
     if not raw:

@@ -221,7 +221,7 @@ class ClaudePlatformManifestTests(unittest.TestCase):
                         # `py`, `python` and `python3`.
                         self.assertRegex(
                             hook["command"],
-                            r'^sh "\$\{CLAUDE_PLUGIN_ROOT\}/hooks/claude_hook\.sh" (prompt-submit|pre-tool|post-tool|session-end)$',
+                            r'^sh "\$\{CLAUDE_PLUGIN_ROOT\}/hooks/claude_hook\.sh" (session-start|prompt-submit|pre-tool|post-tool|session-end)$',
                         )
                         self.assertNotIn("args", hook)
                         self.assertNotIn("shell", hook)
@@ -444,6 +444,21 @@ class ClaudeHookProcessTests(unittest.TestCase):
             self.event("PreToolUse", tool_name="Bash", tool_input=bypass, tool_use_id="d"),
         )
         self.assertEqual(payload["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_session_start_carries_the_evidence_context_instead_of_each_prompt(self) -> None:
+        code, payload, stderr = self.hook(
+            "session-start", self.event("SessionStart", prompt_id=None, source="startup")
+        )
+        self.assertEqual((code, stderr), (0, ""))
+        self.assertEqual(payload["hookSpecificOutput"]["hookEventName"], "SessionStart")
+        self.assertIn(
+            "Run every test or check command through Click instead of directly",
+            payload["hookSpecificOutput"]["additionalContext"],
+        )
+        code, payload, stderr = self.hook(
+            "prompt-submit", self.event("UserPromptSubmit", prompt="Run the tests.")
+        )
+        self.assertEqual((code, payload, stderr), (0, {}, ""))
 
     def test_plan_tools_and_session_end_stay_silent_in_evidence_mode(self) -> None:
         self.hook("prompt-submit", self.event("UserPromptSubmit", prompt="Plan it."))

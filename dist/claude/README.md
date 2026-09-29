@@ -30,6 +30,11 @@ Code's per-prompt `prompt_id`, maps native editor and plan tools onto Click's
 canonical names, and merges a rewritten command back over the original tool
 input because Claude Code replaces `updatedInput` wholesale.
 
+Claude Code keeps `SessionStart` context for the whole conversation and fires
+the event again after compaction, so Click states its current mode there once
+instead of on every prompt; the prompt hook adds only per-turn facts and
+repeats the mode text once when the mode changes.
+
 ## Modes
 
 - **Evidence** is the default: Claude Code retains host authority while Click

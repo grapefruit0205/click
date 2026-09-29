@@ -40,6 +40,7 @@ def hook_command(mode: str) -> str:
         "pre-tool": "PreToolUse",
         "post-tool": "PostToolUse",
         "session-end": "SessionEnd",
+        "session-start": "SessionStart",
     }[mode]
     return config["hooks"][event_name][0]["hooks"][0]["command"]
 
@@ -83,7 +84,7 @@ class LauncherScriptTests(unittest.TestCase):
         )
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
         self.assertIn("*.sh text eol=lf", attributes)
-        for mode in ("prompt-submit", "pre-tool", "post-tool", "session-end"):
+        for mode in ("session-start", "prompt-submit", "pre-tool", "post-tool", "session-end"):
             self.assertEqual(
                 hook_command(mode), f'sh "${{CLAUDE_PLUGIN_ROOT}}/hooks/claude_hook.sh" {mode}'
             )

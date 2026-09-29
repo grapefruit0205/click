@@ -18,18 +18,17 @@ class ClickHostRouterTests(unittest.TestCase):
                 post_tool=handler("post-tool"),
                 prompt_submit=handler("prompt-submit"),
                 session_end=handler("session-end"),
+                session_start=handler("session-start"),
             ),
             set_output_adapter=lambda adapter: adapter,
             set_output_sink=lambda sink: sink,
         )
 
-        for action in ("pre-tool", "post-tool", "prompt-submit", "session-end"):
+        actions = ["pre-tool", "post-tool", "prompt-submit", "session-end", "session-start"]
+        for action in actions:
             router.dispatch(action, {"action": action})
 
-        self.assertEqual(
-            [name for name, _ in calls],
-            ["pre-tool", "post-tool", "prompt-submit", "session-end"],
-        )
+        self.assertEqual([name for name, _ in calls], actions)
 
     def test_capture_scopes_adapter_and_sink_then_restores_both(self) -> None:
         active: dict[str, object] = {

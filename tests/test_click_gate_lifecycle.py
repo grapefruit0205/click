@@ -198,6 +198,76 @@ class ClickGateLifecycleTests(ClickGateTestCase):
         self.assertIn("Off mode is enabled", off)
         self.assertIn("explicitly selects", off)
 
+    def session_start(self, source: str = "startup") -> str | None:
+        event = {key: value for key, value in self.base_event.items() if key != "turn_id"}
+        result, payload = self.run_hook(
+            "session-start", {**event, "hook_event_name": "SessionStart", "source": source}
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        if payload is None:
+            return None
+        self.assertEqual(payload["hookSpecificOutput"]["hookEventName"], "SessionStart")
+        return payload["hookSpecificOutput"]["additionalContext"]
+
+    def prompt_context(self, turn_id: str, prompt: str = "continue") -> str | None:
+        result, payload = self.run_hook(
+            "prompt-submit",
+            {
+                **self.base_event,
+                "turn_id": turn_id,
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": prompt,
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.submitted_turns.add(turn_id)
+        return None if payload is None else payload["hookSpecificOutput"]["additionalContext"]
+
+    def test_session_start_delivers_the_mode_context_once_per_context(self) -> None:
+        # Without a session start (Codex, or an older Claude Code hook set)
+        # every prompt still carries the mode text.
+        for turn_id in ("turn-a", "turn-b"):
+            self.assertIn("Evidence mode is enabled", self.prompt_context(turn_id))
+
+        started = self.session_start()
+        self.assertIn("Run every test or check command through Click", started)
+        self.assertIsNone(self.prompt_context("turn-1"))
+        self.assertIsNone(self.prompt_context("turn-2"))
+
+        # Turn-scoped additions still arrive without the mode text.
+        bypass = self.prompt_context("turn-3", "@Click bypass\nskip Click here")
+        self.assertTrue(bypass.startswith("The user's exact first-line `@Click bypass`"))
+        self.assertNotIn("Evidence mode is enabled", bypass)
+
+        # A changed mode reaches the model once, in either direction.
+        self.assertIsNone(self.prompt_context("turn-4"))
+        self.set_default("off", "turn-4")
+        self.assertIn("Off mode is enabled", self.prompt_context("turn-5"))
+        self.assertIsNone(self.prompt_context("turn-6"))
+        self.set_default("evidence", "turn-6")
+        self.assertIn("Evidence mode is enabled", self.prompt_context("turn-7"))
+        self.assertIsNone(self.prompt_context("turn-8"))
+
+        # Compaction drops the delivered text; Claude Code starts the
+        # compacted context with another SessionStart that carries it again.
+        self.assertIn("Evidence mode is enabled", self.session_start("compact"))
+        self.assertIsNone(self.prompt_context("turn-10"))
+
+    def test_guarded_text_stays_on_every_prompt_after_a_session_start(self) -> None:
+        self.set_default("guarded", "turn-0")
+        self.assertIsNone(self.session_start())
+        for turn_id in ("turn-1", "turn-2"):
+            self.assertIn("Guarded mode is enabled", self.prompt_context(turn_id))
+        self.set_default("evidence", "turn-3")
+        self.assertIn("Evidence mode is enabled", self.prompt_context("turn-4"))
+        self.assertIsNone(self.prompt_context("turn-5"))
+
+    def test_session_start_without_a_session_id_keeps_per_prompt_context(self) -> None:
+        self.base_event["session_id"] = ""
+        self.assertIsNone(self.session_start())
+        for turn_id in ("turn-1", "turn-2"):
+            self.assertIn("Evidence mode is enabled", self.prompt_context(turn_id))
+
     def test_uninvoked_plan_and_exploration_remain_fail_open(self) -> None:
         self.assertIsNone(self.pre_tool("update_plan", ""))
         inspection = self.pre_tool("Bash", "rg --files")

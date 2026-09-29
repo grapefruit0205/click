@@ -173,7 +173,7 @@ class ClickHostCoverageTests(unittest.TestCase):
         assert spec is not None
 
         self.assertEqual(
-            set(spec["lifecycle"]), {"UserPromptSubmit", "SessionEnd"}
+            set(spec["lifecycle"]), {"SessionStart", "UserPromptSubmit", "SessionEnd"}
         )
         self.assertEqual(
             set(config["hooks"]),

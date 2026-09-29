@@ -20,7 +20,9 @@ import time
 
 
 PROTOCOL_VERSION = 1
-HOOK_MODES = frozenset({"pre-tool", "post-tool", "prompt-submit", "session-end"})
+HOOK_MODES = frozenset(
+    {"pre-tool", "post-tool", "prompt-submit", "session-start", "session-end"}
+)
 MAX_EVENT_BYTES = 8 * 1024 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_STATE_BYTES = 4096

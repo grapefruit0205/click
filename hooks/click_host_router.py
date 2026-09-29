@@ -2,7 +2,7 @@
 """Named host-routing boundary for Click Hook adapters.
 
 The router owns no contract, state, evidence, or capability behavior. It binds
-the four canonical Hook events to their runtime handlers and provides a scoped
+the canonical Hook events to their runtime handlers and provides a scoped
 output-capture mechanism for adapters such as Google Antigravity. This keeps
 host adapters from reaching through ``click_gate`` private globals.
 """
@@ -27,6 +27,8 @@ class HostHandlers:
     post_tool: EventHandler
     prompt_submit: EventHandler
     session_end: EventHandler
+    # Only hosts that keep session-start context register this event.
+    session_start: EventHandler = lambda _event: None
 
 
 class HostRouter:
@@ -49,6 +51,7 @@ class HostRouter:
             "post-tool": self._handlers.post_tool,
             "prompt-submit": self._handlers.prompt_submit,
             "session-end": self._handlers.session_end,
+            "session-start": self._handlers.session_start,
         }
         try:
             handler = handlers[action]

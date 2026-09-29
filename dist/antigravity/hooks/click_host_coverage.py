@@ -135,7 +135,7 @@ _HOST_SPECS: dict[str, dict[str, object]] = {
     "claude": {
         "assurance": KNOWN_SURFACES_ASSURANCE,
         "limitations": (HOST_EVENT_OMISSION_LIMITATION,),
-        "lifecycle": ("UserPromptSubmit", "SessionEnd"),
+        "lifecycle": ("SessionStart", "UserPromptSubmit", "SessionEnd"),
         "canonical_tool_map": tuple(sorted(CLAUDE_TOOL_MAP.items())),
         "pre_tool": {
             "mutation": tuple(sorted(CLAUDE_MUTATION_TOOL_NAMES)),

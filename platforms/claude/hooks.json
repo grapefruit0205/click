@@ -1,6 +1,17 @@
 {
   "description": "Use approval-free Evidence mode by default for incremental verification and honest host-authorized receipts; rerun affected checks, retain authoritative passing evidence, offer opt-in Guarded approval boundaries, and keep Shadow observation non-authoritative and off by default.",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.sh\" session-start",
+            "timeout": 7
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

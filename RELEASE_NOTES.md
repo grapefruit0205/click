@@ -1,5 +1,20 @@
 # Release notes
 
+## Unreleased v1.4 candidate
+
+- On Claude Code the mode text arrives once per context instead of on every
+  prompt. A new `SessionStart` hook delivers the Evidence (or Off) text when a
+  session starts, resumes, clears or compacts, and records which text it
+  delivered; the prompt hook then leaves it out and sends only what changes per
+  turn (a staged or approved contract id, a one-turn `@Click` authorization, a
+  migration or recovery notice). A changed default mode, locale or wording is
+  sent once on the next prompt. Guarded text still rides on every prompt of an
+  approval boundary. Codex and Antigravity, which have no session-start
+  context, and a Claude Code session started under an older hook set keep the
+  per-prompt text. The Claude Code coverage identity now lists `SessionStart`,
+  so Claude Code evidence recorded before the update is not reused once after
+  it.
+
 ## v1.3.0 — 2026-09-13 — Conditional JS reuse on Windows
 
 Both marketplaces pin `v1.3.0`; updating v1.2.0 installs it.

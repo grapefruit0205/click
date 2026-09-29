@@ -788,8 +788,16 @@ def _handle_post_tool(event: dict[str, Any]) -> None:
     )
 
 
+def _handle_session_start(event: dict[str, Any]) -> None:
+    context = click_lifecycle.session_context(event)
+    if context:
+        _emit(_OUTPUT_ADAPTER.session_context(context))
+
+
 def _handle_prompt_submit(event: dict[str, Any]) -> None:
-    _emit(_OUTPUT_ADAPTER.context(click_lifecycle.prompt_context(event)))
+    context = click_lifecycle.prompt_context(event)
+    if context:
+        _emit(_OUTPUT_ADAPTER.context(context))
 
 
 def _handle_session_end(event: dict[str, Any]) -> None:
@@ -1408,6 +1416,7 @@ _HOST_ROUTER = click_host_router.HostRouter(
         post_tool=_handle_post_tool,
         prompt_submit=_handle_prompt_submit,
         session_end=_handle_session_end,
+        session_start=_handle_session_start,
     ),
     set_output_adapter=_set_output_adapter,
     set_output_sink=_set_output_sink,
@@ -1841,9 +1850,10 @@ def main() -> int:
         "pre-tool",
         "prompt-submit",
         "session-end",
+        "session-start",
     }:
         sys.stderr.write(
-            "usage: click_gate.py pre-tool|post-tool|prompt-submit|session-end\n"
+            "usage: click_gate.py pre-tool|post-tool|prompt-submit|session-start|session-end\n"
         )
         return 1
     event: dict[str, Any] | None = None

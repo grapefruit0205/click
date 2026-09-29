@@ -134,6 +134,12 @@ def prompt_path(event: dict[str, Any]) -> Path:
     return identity_path(event, "session-prompt")
 
 
+def session_context_path(event: dict[str, Any]) -> Path:
+    # Keyed by the session alone: the host's cwd follows the shell, and a
+    # delivered session context stays in the conversation wherever it moves.
+    return identity_path({"session_id": event.get("session_id", "")}, "session-context")
+
+
 def review_path(event: dict[str, Any]) -> Path:
     return identity_path(event, "review")
 
