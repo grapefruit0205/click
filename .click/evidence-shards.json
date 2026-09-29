@@ -203,6 +203,7 @@
               "tests.test_click_shadow_dashboard",
               "tests.test_click_shadow_intelligence",
               "tests.test_runner_state_recovery",
+              "tests.test_click_ci",
               "-q"
             ]
           ],
@@ -213,6 +214,7 @@
             "tests/test_click_authoritative_observer.py",
             "tests/test_click_authoritative_reuse.py",
             "tests/test_click_automatic_observation.py",
+            "tests/test_click_ci.py",
             "tests/test_click_conditional_observation.py",
             "tests/test_click_conditional_windows.py",
             "tests/test_click_dashboard_projection.py",
