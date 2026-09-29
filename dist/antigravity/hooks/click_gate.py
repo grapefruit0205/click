@@ -40,10 +40,12 @@ else:  # Executed directly from the bundled hooks directory.
     click_host_coverage,
     click_host_router,
     click_incremental,
+    click_input_records,
     click_inspection,
     click_lifecycle,
     click_mutation,
     click_observation,
+    click_observed_check,
     click_observer_control,
     click_process,
     click_prompt,
@@ -67,10 +69,12 @@ else:  # Executed directly from the bundled hooks directory.
     "click_host_coverage",
     "click_host_router",
     "click_incremental",
+    "click_input_records",
     "click_inspection",
     "click_lifecycle",
     "click_mutation",
     "click_observation",
+    "click_observed_check",
     "click_observer_control",
     "click_process",
     "click_prompt",
@@ -1170,6 +1174,36 @@ def _handle_pre_tool(event: dict[str, Any]) -> None:
                         event=event, code="approval-required",
                     )
                     return
+                argv_request = click_lifecycle.verify_argv_request(str(command))
+                if argv_request is not None:
+                    check_argv, path_patterns = argv_request
+                    observed_argv = click_observed_check.check_argv(str(command), check_argv)
+                    # Evidence checks reuse by observed inputs wherever this host can
+                    # observe them; approved Guarded contracts keep their receipt runner.
+                    if (
+                        evidence_active
+                        and current_status != "passed"
+                        and click_lifecycle.read_mode(event) != "strict"
+                        and click_observed_check.available(argv=observed_argv)
+                    ):
+                        _allow_rewritten(
+                            click_observed_check.runner_command(observed_argv, path_patterns)
+                        )
+                        return
+                    if path_patterns:
+                        # Nothing can decide the groups here: the check covers every path.
+                        paths = click_input_records.expand_paths(
+                            path_patterns, Path(str(event.get("cwd") or "."))
+                        )
+                        if not paths:
+                            _deny(f"No path matches `{' '.join(path_patterns)}`.")
+                            return
+                        value = json.dumps(
+                            click_lifecycle.verify_request_for_argv(
+                                click_input_records.substitute(check_argv, paths)
+                            ),
+                            sort_keys=True,
+                        )
                 (
                     rewritten,
                     verification_error,

@@ -77,6 +77,7 @@ class StatusSummaryLocaleTests(unittest.TestCase):
                 "click_incremental.py",
                 "click_verification_prepare.py",
                 "click_lifecycle.py",
+                "click_observed_check.py",
             )
         )
         keys = {

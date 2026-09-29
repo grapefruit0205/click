@@ -10,7 +10,8 @@ import tempfile
 import time
 import unittest
 
-from ci import click_ci, click_ci_trace
+from ci import click_ci
+from hooks import click_syscall_trace as click_ci_trace
 
 
 ROOT = Path(__file__).parents[1]
@@ -85,6 +86,56 @@ class TraceReducerTests(unittest.TestCase):
         # Opened for update with O_CREAT: product or input is settled later.
         self.assertEqual(paths["/work/state.db"].first, "opened")
         self.assertEqual(paths["/work/debug.log"].first, "opened")
+
+    def test_calls_no_thread_returned_from_and_empty_lookups_place_nothing(self) -> None:
+        # Go: one thread ends the process while others are still in exit_group
+        # or signalling; a stat of "" without AT_EMPTY_PATH fails before lookup.
+        reducer = reduce('''
+400 newfstatat(AT_FDCWD</work>, "", 0x21e6, 0) = -1 ENOENT (No such file or directory)
+401 exit_group(0 <unfinished ...>
+402 tgkill(400, 403, SIGURG <unfinished ...>
+400 +++ exited with 0 +++
+''')
+        reducer.finish()
+        self.assertEqual(reducer.unresolved, 0, reducer.unresolved_examples)
+        reducer = reduce('''
+500 openat(AT_FDCWD</work>, "a.txt", O_RDONLY <unfinished ...>
+500 +++ exited with 0 +++
+''')
+        reducer.finish()
+        self.assertEqual(reducer.unresolved, 1)
+
+    def test_descriptor_paths_decode_escaped_utf8_names(self) -> None:
+        # strace -y escapes bytes that are not printable ASCII in <...> paths too
+        # (a Korean directory, a CA certificate named in Hungarian).
+        reducer = reduce(r"""
+100 openat(AT_FDCWD</work/\355\225\234>, "src/a.ts", O_RDONLY) = 3</work/\355\225\234/src/a.ts>
+100 getdents64(4</work/\355\225\234/test>, 0x55 /* 4 entries */, 32768) = 112
+100 openat(AT_FDCWD</work>, "/etc/ssl/certs/988a38cb.0", O_RDONLY) = 5</usr/share/ca/F\305\221.crt>
+100 +++ exited with 0 +++
+""")
+        self.assertEqual(reducer.unresolved, 0, reducer.unresolved_examples)
+        self.assertEqual(reducer.paths["/work/한/src/a.ts"].operations, {"read"})
+        self.assertEqual(reducer.paths["/work/한/test"].operations, {"enumerate"})
+        self.assertEqual(reducer.paths["/usr/share/ca/Fő.crt"].operations, {"read"})
+        self.assertEqual(reducer.paths["/etc/ssl/certs/988a38cb.0"].operations, {"metadata"})
+
+    def test_sockets_the_command_bound_itself_are_not_services(self) -> None:
+        # Verbatim shape from tsx: the CLI listens on a pipe its child connects to.
+        reducer = reduce("""
+100 bind(21<socket:[1]>, {sa_family=AF_UNIX, sun_path="/tmp/tsx-1000/100.pipe"}, 110) = 0
+101 connect(21<socket:[2]>, {sa_family=AF_UNIX, sun_path="/tmp/tsx-1000/100.pipe"}, 110) = 0
+101 connect(22<socket:[3]>, {sa_family=AF_UNIX, sun_path="/tmp/tsx-1000/101.pipe"}, 110) = -1 ENOENT (No such file or directory)
+102 bind(3<socket:[4]>, {sa_family=AF_UNIX, sun_path=@"worker-7"}, 12) = 0
+102 connect(4<socket:[5]>, {sa_family=AF_UNIX, sun_path=@"worker-7"}, 12) = 0
+""")
+        self.assertEqual(reducer.volatile, [])
+        self.assertEqual(reducer.paths["/tmp/tsx-1000/100.pipe"].first, "produced")
+        reducer = reduce("""
+100 connect(3<socket:[1]>, {sa_family=AF_UNIX, sun_path="/run/docker.sock"}, 110) = 0
+100 connect(4<socket:[2]>, {sa_family=AF_UNIX, sun_path=@"/tmp/.X11-unix/X0"}, 20) = 0
+""")
+        self.assertEqual(reducer.volatile, ["socket:/run/docker.sock", "socket:abstract"])
 
     def test_opened_files_are_products_only_when_born_during_the_run(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
