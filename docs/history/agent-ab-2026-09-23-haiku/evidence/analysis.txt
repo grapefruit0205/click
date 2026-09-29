@@ -1,0 +1,46 @@
+model=claude-haiku-4-5-20251001 order=ABBAABBA rounds=300000 plugin=8d4ec6161b5de046 2.1.280 (Claude Code)
+session       arm          wall s  test s  exec  turns  cost $  direct  routed  gate    ok
+session-01-A  click-off     458.6   395.0    24     15   0.122       6       0     0  True
+session-02-B  click-on      142.4    52.2     8     19   0.141       0       4     0  True
+session-03-B  click-on      185.7    86.5    14     21   0.158       0       1     4  True
+session-04-A  click-off     395.8   329.1    20     16   0.127       5       0     0  True
+session-05-A  click-off     251.9   200.6    12     12   0.094       3       0     0  True
+session-06-B  click-on      200.4    88.3    14     22   0.169       0       1     4  True
+session-07-B  click-on      193.3    89.2    16     25   0.176       0       6     2  True
+session-08-A  click-off     401.8   333.2    22     19   0.139       7       0     0  True
+
+per-request trajectory (executed modules or shards / wall s; r = routed, g = click-gate, * = all reused):
+  session-01-A: 4/67s, 4/65s, 4/66s, 4/65s, 4/65s, 4/66s
+  session-02-B: 4/17sr, 3/17sr, 1/18sr, 0/0sr*
+  session-03-B: 4/17sr, 3/17sg, 2/17sg, 1/18sg, 4/17sg
+  session-04-A: 4/66s, 4/65s, 4/67s, 4/65s, 4/66s
+  session-05-A: 4/68s, 4/66s, 4/66s
+  session-06-B: 4/19sr, 3/17sg, 2/17sg, 1/18sg, 4/17sg
+  session-07-B: 4/18sr, 1/1sg, 1/1sg, 3/17sr, 2/17sr, 1/18sr, 4/17sr, 0/0sr*
+  session-08-A: 4/66s, 4/67s, 4/67s, 1/0s, 1/0s, 4/67s, 4/66s
+
+median (min–max) | mean                            A click-off                      B click-on  median Δ
+session wall time s                        399 (252–459) | 377             190 (142–200) | 180    -52.5%
+test wall time s                           331 (201–395) | 314                 87 (52–89) | 79    -73.6%
+test module executions                         21 (12–24) | 20                  14 (8–16) | 13    -33.3%
+test requests                                      6 (3–7) | 5                     5 (4–8) | 6     -9.1%
+turns                                          16 (12–19) | 16                 22 (19–25) | 22    +38.7%
+cost USD                           0.124 (0.094–0.139) | 0.120     0.163 (0.141–0.176) | 0.161    +31.4%
+output tokens                          5488 (4329–6375) | 5420         7375 (6894–7891) | 7384    +34.4%
+cache-read input tokens        490803 (347247–606531) | 483846 708739 (586895–835131) | 709876    +44.4%
+
+tool calls per session (from each session's stream.jsonl):
+session       arm          total  tests other Bash       Edit       Read
+session-01-A  click-off       14      6          1          4          3
+session-02-B  click-on        18      4          1          5          8
+session-03-B  click-on        20      5          3          5          7
+session-04-A  click-off       15      5          1          4          5
+session-05-A  click-off       11      3          1          3          4
+session-06-B  click-on        21      5          3          6          7
+session-07-B  click-on        24      8          3          6          7
+session-08-A  click-off       18      7          3          4          4
+  click-off: total tool calls median 14.5 (min 11–max 18)
+  click-on: total tool calls median 20.5 (min 18–max 24)
+
+all final suites pass: True | tests/ untouched everywhere: True
+Click-on requests handled by Click (routed + click-gate) / all test requests: ['4/4', '5/5', '5/5', '8/8']

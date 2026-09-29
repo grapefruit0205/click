@@ -50,6 +50,25 @@ click-gate default guarded
 click-gate default off
 ```
 
+## Automatic routing of test commands
+
+In Evidence mode the `PreToolUse` Hook routes a plain Bash command that Click
+recognizes as a check (unittest, pytest, Jest, Vitest, `go test`, `cargo test`,
+`npm test`, `npm run build`, linters, type checkers and the rest of the
+verification profiles) through `click-gate verify -- <argv>`, so a model that
+runs `python3 -m pytest -q` directly still gets a receipt and later reuse. The
+command's own `2>&1` and output filters (`| tail`, `| grep`, `| sed` without a
+file write) run after Click's runner exactly as written, with raw reporting so
+they see the format they were written for. A routed check that changes
+repository files keeps its own exit status and is recorded as a workspace
+change (the revision advances, nothing is reusable), not as a failed
+verification that blocks the next one. Environment prefixes, shell expansion,
+`&&`/`;` lists, other redirections and filters that write a file or run a
+command run unchanged, as does anything Click cannot prepare. The rewrite
+carries the same `allow` as a typed `click-gate verify`: Claude Code skips the
+permission prompt and a `dontAsk` allowlist for it, while deny and ask rules
+still apply. Set `CLICK_AUTO_ROUTE=0` to turn routing off.
+
 ## Storage
 
 Click keeps its ledger under Claude Code's persistent plugin data directory,

@@ -270,6 +270,100 @@ class ClickGateVerificationTests(ClickGateTestCase):
         self.assertIn("updatedInput", payload["hookSpecificOutput"])
         self.assertEqual(self.run_rewritten(payload).returncode, 0)
 
+    def test_evidence_routes_a_plain_test_runner_command_through_click(self) -> None:
+        (self.workspace / ".gitignore").write_text(
+            "__pycache__/\n", encoding="utf-8"
+        )
+        self.initialize_git(".gitignore", "verification_fixture.py")
+        self.prompt_submit("테스트를 돌려줘", "turn-1")
+        argv = shlex.join(self.verification_argv())
+        # A POSIX shell applies the agent's own filter after the runner; the
+        # Windows runner form runs without a shell here, so it gets none.
+        suffix = "" if os.name == "nt" else " 2>&1 | tail -3"
+        command = argv + suffix
+
+        routed = self.pre_tool(
+            "Bash", command, "turn-1", submit_prompt=False, tool_use_id="raw-1"
+        )
+        self.assert_verification_advisory(routed, f"`click-gate verify -- {argv}`")
+        assert routed is not None
+        self.assertTrue(routed["hookSpecificOutput"]["updatedInput"]["command"].endswith(suffix))
+        completed = self.run_rewritten(routed)
+        self.assertEqual(completed.returncode, 0)
+        if suffix:
+            # The agent's own filter still shapes what it reads.
+            self.assertLessEqual(len(completed.stdout.splitlines()), 3)
+
+        # The same plain command again is the same check: reused, not re-run.
+        again = self.pre_tool(
+            "Bash", command, "turn-1", submit_prompt=False, tool_use_id="raw-2"
+        )
+        assert again is not None
+        self.assertNotIn(
+            "run-verification",
+            split_runner_command(again["hookSpecificOutput"]["updatedInput"]["command"]),
+        )
+        status = self.pre_tool(
+            "Bash", "click-gate status --json", "turn-1",
+            submit_prompt=False, tool_use_id="status",
+        )
+        assert status is not None
+        report = json.loads(self.run_rewritten(status).stdout)
+        self.assertEqual(report["summary"]["reused_check_count"], 1)
+        # A routed check is a check, not a host mutation of the revision.
+        self.assertEqual(report["task"]["mutation_revision"], 0)
+
+        # A command the argv runner would not reproduce stays with the host,
+        # which records it as a mutation like any unrecognized command.
+        self.assertIsNone(
+            self.pre_tool(
+                "Bash", argv + "; ls", "turn-1",
+                submit_prompt=False, tool_use_id="raw-3",
+            )
+        )
+
+    def test_evidence_records_a_routed_check_that_writes_the_tree_as_a_host_change(self) -> None:
+        (self.workspace / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+        (self.workspace / "writer_fixture.py").write_text(
+            "import pathlib\n"
+            "import time\n"
+            "import unittest\n\n\n"
+            "class Writer(unittest.TestCase):\n"
+            "    def test_writes_a_tracked_file(self):\n"
+            "        pathlib.Path('generated.txt').write_text(str(time.time_ns()))\n",
+            encoding="utf-8",
+        )
+        (self.workspace / "generated.txt").write_text("initial\n", encoding="utf-8")
+        self.initialize_git(".gitignore", "writer_fixture.py", "generated.txt")
+        self.prompt_submit("빌드처럼 파일을 쓰는 검사를 돌려줘", "turn-1")
+        command = shlex.join(
+            [sys.executable, "-m", "unittest", "writer_fixture.Writer.test_writes_a_tracked_file"]
+        )
+
+        for tool_use_id in ("write-1", "write-2"):
+            with self.subTest(tool_use_id=tool_use_id):
+                # Routed both times: the first run's change did not block the second.
+                routed = self.pre_tool(
+                    "Bash", command, "turn-1", submit_prompt=False, tool_use_id=tool_use_id
+                )
+                self.assert_verification_advisory(routed, "`click-gate verify -- ")
+                assert routed is not None
+                completed = self.run_rewritten(routed)
+                # The command's own success stands; it is not turned into exit 3.
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertIn("recorded it as a workspace change", completed.stderr)
+                self.assertNotIn("changed protected repository content", completed.stderr)
+
+        status = self.pre_tool(
+            "Bash", "click-gate status --json", "turn-1",
+            submit_prompt=False, tool_use_id="status",
+        )
+        assert status is not None
+        report = json.loads(self.run_rewritten(status).stdout)
+        # Each run changed the tree: the revision advanced and nothing was reused.
+        self.assertEqual(report["task"]["mutation_revision"], 2)
+        self.assertEqual(report["summary"]["reused_check_count"], 0)
+
     def test_evidence_status_distinguishes_execution_reuse_and_invalidation(self) -> None:
         (self.workspace / ".gitignore").write_text(
             "__pycache__/\n", encoding="utf-8"

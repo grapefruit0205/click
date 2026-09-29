@@ -371,17 +371,59 @@ class ClaudeHookProcessTests(unittest.TestCase):
             ],
         )
 
+        # A plain check command is routed through Click, as a model that
+        # ignored the directive would otherwise run it with no receipt. The
+        # running interpreter keeps the check resolvable on every CI host.
+        check = shlex.join([sys.executable, "-m", "pytest", "-q"])
+        tool_input = {
+            "command": f"{check} 2>&1 | tail -5",
+            "description": "Run tests",
+            "timeout": 300000,
+        }
         code, payload, stderr = self.hook(
             "pre-tool",
-            self.event(
-                "PreToolUse",
-                tool_name="Bash",
-                tool_input={"command": "python3 -m pytest -q", "description": "Run tests"},
-                tool_use_id="toolu_2",
-            ),
+            self.event("PreToolUse", tool_name="Bash", tool_input=tool_input, tool_use_id="toolu_2"),
         )
-        self.assertEqual((code, payload, stderr), (0, {}, ""))
+        self.assertEqual((code, stderr), (0, ""))
+        specific = payload["hookSpecificOutput"]
+        self.assertEqual(specific["permissionDecision"], "allow")
+        self.assertEqual(specific["updatedInput"]["description"], "Run tests")
+        self.assertEqual(specific["updatedInput"]["timeout"], 300000)
+        # The command's own `2>&1 | tail -5` follows the runner unchanged.
+        rewritten = specific["updatedInput"]["command"]
+        self.assertTrue(rewritten.endswith(" 2>&1 | tail -5"))
+        runner = rewritten.removesuffix(" 2>&1 | tail -5")
+        self.assertIn("run-verification", _runner_argv(runner))
+        self.assertIn(f"`click-gate verify -- {check}`", specific["additionalContext"])
         self.assertTrue((self.plugin_data / "plugin-data" / "gate-state").is_dir())
+        # The host runs the rewritten command next, which settles the reservation;
+        # the workspace has no tests, so only its completion matters here.
+        subprocess.run(
+            _runner_argv(runner),
+            capture_output=True,
+            env=self.environment,
+            cwd=str(self.workspace),
+            check=False,
+        )
+
+        # Anything the argv runner would not reproduce stays with the host, and
+        # CLICK_AUTO_ROUTE=0 turns routing off.
+        for command, environment in (
+            ("python3 -m pytest -q; ls", {}),
+            ("python3 -m pytest -q", {"CLICK_AUTO_ROUTE": "0"}),
+        ):
+            with self.subTest(command=command, environment=environment):
+                self.environment.update(environment)
+                code, payload, stderr = self.hook(
+                    "pre-tool",
+                    self.event(
+                        "PreToolUse",
+                        tool_name="Bash",
+                        tool_input={"command": command},
+                        tool_use_id="toolu_3",
+                    ),
+                )
+                self.assertEqual((code, payload, stderr), (0, {}, ""))
 
     def test_native_editors_record_mutation_boundaries(self) -> None:
         self.hook("prompt-submit", self.event("UserPromptSubmit", prompt="Edit calc."))

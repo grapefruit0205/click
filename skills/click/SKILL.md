@@ -17,7 +17,7 @@ None of this needs a contract, an approval, or a dependency declaration from you
 
 ## Run checks through `click-gate verify`
 
-Choose concrete checks from repository evidence while you work. The plain form names one check after its exact command:
+Choose concrete checks from repository evidence while you work. A plain check command you run directly is routed through Click automatically; the explicit plain form names one check after its exact command:
 
 ```text
 click-gate verify -- python3 -m pytest -q
